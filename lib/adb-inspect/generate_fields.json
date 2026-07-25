@@ -1,0 +1,183 @@
+{
+ "_generated_by": "scripts/update_generate_fields.py \u2014 do not edit by hand",
+ "fields": {
+  "best_of": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Generates best_of completions server-side and returns the 'best' (the one with the highest log probability per token). vLLM only."
+  },
+  "effort": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   },
+   "description": "Control how many tokens are used for a response, trading off between response thoroughness and token efficiency. Anthropic Claude Opus 4.5+ only (`max` only supported on 4.6 and 4.7, `xhigh` supported only on 4.7)."
+  },
+  "frequency_penalty": {
+   "type": {
+    "kind": "float"
+   },
+   "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim. OpenAI, Google, Grok, Groq, vLLM, and SGLang only."
+  },
+  "internal_tools": {
+   "type": {
+    "kind": "bool"
+   },
+   "description": "Whether to automatically map tools to model internal implementations (e.g. 'computer' for anthropic)."
+  },
+  "logprobs": {
+   "type": {
+    "kind": "bool"
+   },
+   "description": "Return log probabilities of the output tokens. OpenAI, Grok, TogetherAI, Huggingface, llama-cpp-python, vLLM, and SGLang only."
+  },
+  "max_tokens": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "The maximum number of tokens that can be generated in the completion (default is model specific)."
+  },
+  "max_tool_output": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Maximum tool output (in bytes). Defaults to 16 * 1024."
+  },
+  "num_choices": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "How many chat completion choices to generate for each input message. OpenAI, Grok, Google, TogetherAI, vLLM, and SGLang only."
+  },
+  "parallel_tool_calls": {
+   "type": {
+    "kind": "bool"
+   },
+   "description": "Whether to enable parallel function calling during tool use (defaults to True). OpenAI and Groq only."
+  },
+  "presence_penalty": {
+   "type": {
+    "kind": "float"
+   },
+   "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics. OpenAI, Google, Grok, Groq, vLLM, and SGLang only."
+  },
+  "prompt_logprobs": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Number of log probabilities to return per prompt token (1-20). When greater than 1, top-N alternative tokens are also returned. vLLM only."
+  },
+  "reasoning_effort": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "none",
+     "minimal",
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   },
+   "description": "Constrains effort on reasoning. Defaults vary by provider and model and not all models support all values (please consult provider documentation for details)."
+  },
+  "reasoning_history": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "none",
+     "all",
+     "last",
+     "auto"
+    ]
+   },
+   "description": "Include reasoning in chat message history sent to generate."
+  },
+  "reasoning_mode": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "standard",
+     "pro"
+    ]
+   },
+   "description": "Reasoning mode. \"pro\" performs more model work for greater reliability on difficult tasks, at higher latency and token usage. OpenAI GPT-5.6+ models only (\"standard\" is the default)."
+  },
+  "reasoning_summary": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "none",
+     "concise",
+     "detailed",
+     "auto"
+    ]
+   },
+   "description": "Provide summary of reasoning steps (OpenAI reasoning models only). Use 'auto' to access the most detailed summarizer available for the current model (defaults to 'auto' if your organization is verified by OpenAI)."
+  },
+  "reasoning_tokens": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Maximum number of tokens to use for reasoning. Anthropic Claude models only."
+  },
+  "stop_seqs": {
+   "type": {
+    "kind": "list",
+    "of": {
+     "kind": "str"
+    }
+   },
+   "description": "Sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence."
+  },
+  "system_message": {
+   "type": {
+    "kind": "str"
+   },
+   "description": "Override the default system message."
+  },
+  "temperature": {
+   "type": {
+    "kind": "float"
+   },
+   "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic."
+  },
+  "top_k": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Randomly sample the next word from the top_k most likely next words. Anthropic, Google, HuggingFace, vLLM, and SGLang only."
+  },
+  "top_logprobs": {
+   "type": {
+    "kind": "int"
+   },
+   "description": "Number of most likely tokens (0-20) to return at each token position, each with an associated log probability. OpenAI, Grok, Huggingface, vLLM, and SGLang only."
+  },
+  "top_p": {
+   "type": {
+    "kind": "float"
+   },
+   "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass."
+  },
+  "verbosity": {
+   "type": {
+    "kind": "enum",
+    "values": [
+     "low",
+     "medium",
+     "high"
+    ]
+   },
+   "description": "Constrains the verbosity of the model's response. Lower values will result in more concise responses, while higher values will result in more verbose responses. GPT 5.x models only (defaults to \"medium\" for OpenAI models)."
+  }
+ }
+}

@@ -1,0 +1,1174 @@
+{
+ "_generated_by": "lib/model-catalog/update.py \u2014 do not edit by hand",
+ "sources": [
+  "https://models.dev/api.json",
+  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+ ],
+ "providers": {
+  "anthropic": {
+   "credential_hint": "Needs ANTHROPIC_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "claude-opus-5",
+     "name": "Claude Opus 5",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "claude-sonnet-5",
+     "name": "Claude Sonnet 5",
+     "release_date": "2026-06-29"
+    },
+    {
+     "id": "claude-fable-5",
+     "name": "Claude Fable 5",
+     "release_date": "2026-06-07"
+    },
+    {
+     "id": "claude-opus-4-8",
+     "name": "Claude Opus 4.8",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "claude-opus-4-7",
+     "name": "Claude Opus 4.7",
+     "release_date": "2026-04-14"
+    },
+    {
+     "id": "claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "claude-opus-4-6",
+     "name": "Claude Opus 4.6",
+     "release_date": "2026-02-04"
+    },
+    {
+     "id": "claude-opus-4-5-20251101",
+     "name": "Claude Opus 4.5 (latest)",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "claude-haiku-4-5-20251001",
+     "name": "Claude Haiku 4.5",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "claude-sonnet-4-5-20250929",
+     "name": "Claude Sonnet 4.5",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "claude-opus-4-1-20250805",
+     "name": "Claude Opus 4.1",
+     "release_date": "2025-08-05"
+    }
+   ]
+  },
+  "openai": {
+   "credential_hint": "Needs OPENAI_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "gpt-5.6-terra",
+     "name": "GPT-5.6 Terra",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "gpt-5.6-sol",
+     "name": "GPT-5.6 Sol",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "gpt-5.6-luna",
+     "name": "GPT-5.6 Luna",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "gpt-5.6",
+     "name": "GPT-5.6",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "gpt-5.5-pro",
+     "name": "GPT-5.5 Pro",
+     "release_date": "2026-04-23"
+    },
+    {
+     "id": "gpt-5.5",
+     "name": "GPT-5.5",
+     "release_date": "2026-04-23"
+    },
+    {
+     "id": "gpt-5.4-nano-2026-03-17",
+     "name": "GPT-5.4 nano",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "gpt-5.4-mini-2026-03-17",
+     "name": "GPT-5.4 mini",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "gpt-5.4-pro",
+     "name": "GPT-5.4 Pro",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "gpt-5.4",
+     "name": "GPT-5.4",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "gpt-5.3-chat-latest",
+     "name": "GPT-5.3 Chat (latest)",
+     "release_date": "2026-03-03"
+    },
+    {
+     "id": "gpt-5.3-codex-spark",
+     "name": "GPT-5.3 Codex Spark",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "gpt-5.3-codex",
+     "name": "GPT-5.3 Codex",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "gpt-5.2-pro-2025-12-11",
+     "name": "GPT-5.2 Pro",
+     "release_date": "2025-12-11"
+    },
+    {
+     "id": "gpt-5.2-chat-latest",
+     "name": "GPT-5.2 Chat",
+     "release_date": "2025-12-11"
+    },
+    {
+     "id": "gpt-5.2-2025-12-11",
+     "name": "GPT-5.2",
+     "release_date": "2025-12-11"
+    },
+    {
+     "id": "gpt-5.1-2025-11-13",
+     "name": "GPT-5.1",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "gpt-5-pro",
+     "name": "GPT-5 Pro",
+     "release_date": "2025-10-06"
+    },
+    {
+     "id": "gpt-5-nano-2025-08-07",
+     "name": "GPT-5 Nano",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "gpt-5-mini-2025-08-07",
+     "name": "GPT-5 Mini",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "gpt-5-2025-08-07",
+     "name": "GPT-5",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "o3-pro",
+     "name": "o3-pro",
+     "release_date": "2025-06-10"
+    },
+    {
+     "id": "o4-mini-2025-04-16",
+     "name": "o4-mini",
+     "release_date": "2025-04-16"
+    },
+    {
+     "id": "o3-2025-04-16",
+     "name": "o3",
+     "release_date": "2025-04-16"
+    },
+    {
+     "id": "gpt-4.1-nano-2025-04-14",
+     "name": "GPT-4.1 nano",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "gpt-4.1-mini-2025-04-14",
+     "name": "GPT-4.1 mini",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "gpt-4.1-2025-04-14",
+     "name": "GPT-4.1",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "o1-pro",
+     "name": "o1-pro",
+     "release_date": "2025-03-19"
+    },
+    {
+     "id": "o3-mini-2025-01-31",
+     "name": "o3-mini",
+     "release_date": "2024-12-20"
+    },
+    {
+     "id": "o1-2024-12-17",
+     "name": "o1",
+     "release_date": "2024-12-05"
+    },
+    {
+     "id": "gpt-4o-2024-11-20",
+     "name": "GPT-4o (2024-11-20)",
+     "release_date": "2024-11-20"
+    },
+    {
+     "id": "gpt-4o-2024-08-06",
+     "name": "GPT-4o (2024-11-20)",
+     "release_date": "2024-08-06"
+    },
+    {
+     "id": "gpt-4o-mini-2024-07-18",
+     "name": "GPT-4o mini",
+     "release_date": "2024-07-18"
+    },
+    {
+     "id": "gpt-4o-2024-05-13",
+     "name": "GPT-4o (2024-11-20)",
+     "release_date": "2024-05-13"
+    },
+    {
+     "id": "text-embedding-3-small",
+     "name": "text-embedding-3-small",
+     "release_date": "2024-01-25"
+    },
+    {
+     "id": "text-embedding-3-large",
+     "name": "text-embedding-3-large",
+     "release_date": "2024-01-25"
+    },
+    {
+     "id": "gpt-4-turbo-2024-04-09",
+     "name": "GPT-4 Turbo",
+     "release_date": "2023-11-06"
+    },
+    {
+     "id": "gpt-4",
+     "name": "GPT-4",
+     "release_date": "2023-11-06"
+    },
+    {
+     "id": "gpt-3.5-turbo",
+     "name": "GPT-3.5-turbo",
+     "release_date": "2023-03-01"
+    },
+    {
+     "id": "text-embedding-ada-002",
+     "name": "text-embedding-ada-002",
+     "release_date": "2022-12-15"
+    }
+   ]
+  },
+  "google": {
+   "credential_hint": "Needs GOOGLE_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "gemini-3.6-flash",
+     "name": "Gemini 3.6 Flash",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "gemini-3.5-flash-lite",
+     "name": "Gemini 3.5 Flash Lite",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "gemini-flash-latest",
+     "name": "Gemini Flash Latest",
+     "release_date": "2026-05-19"
+    },
+    {
+     "id": "gemini-3.5-flash",
+     "name": "Gemini 3.5 Flash",
+     "release_date": "2026-05-19"
+    },
+    {
+     "id": "gemini-flash-lite-latest",
+     "name": "Gemini Flash-Lite Latest",
+     "release_date": "2026-05-07"
+    },
+    {
+     "id": "gemini-3.1-flash-lite",
+     "name": "Gemini 3.1 Flash Lite",
+     "release_date": "2026-05-07"
+    },
+    {
+     "id": "gemini-embedding-2",
+     "name": "Gemini Embedding 2",
+     "release_date": "2026-04-22"
+    },
+    {
+     "id": "gemini-robotics-er-1.6-preview",
+     "name": "Gemini Robotics-ER 1.6 Preview",
+     "release_date": "2026-04-14"
+    },
+    {
+     "id": "gemma-4-31b-it",
+     "name": "Gemma 4 31B IT",
+     "release_date": "2026-04-02"
+    },
+    {
+     "id": "gemma-4-26b-a4b-it",
+     "name": "Gemma 4 26B A4B IT",
+     "release_date": "2026-04-02"
+    },
+    {
+     "id": "gemini-3.1-flash-lite-preview",
+     "name": "Gemini 3.1 Flash Lite Preview",
+     "release_date": "2026-03-03"
+    },
+    {
+     "id": "gemini-3.1-pro-preview-customtools",
+     "name": "Gemini 3.1 Pro Preview Custom Tools",
+     "release_date": "2026-02-19"
+    },
+    {
+     "id": "gemini-3.1-pro-preview",
+     "name": "Gemini 3.1 Pro Preview",
+     "release_date": "2026-02-19"
+    },
+    {
+     "id": "gemini-3-flash-preview",
+     "name": "Gemini 3 Flash Preview",
+     "release_date": "2025-12-17"
+    },
+    {
+     "id": "gemini-3-pro-preview",
+     "name": "Gemini 3 Pro Preview",
+     "release_date": "2025-11-18"
+    },
+    {
+     "id": "gemini-2.5-computer-use-preview-10-2025",
+     "name": "Gemini 2.5 Computer Use Preview 10-2025",
+     "release_date": "2025-10-07"
+    },
+    {
+     "id": "gemini-2.5-pro",
+     "name": "Gemini 2.5 Pro",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "gemini-2.5-flash-lite",
+     "name": "Gemini 2.5 Flash-Lite",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "gemini-2.5-flash",
+     "name": "Gemini 2.5 Flash",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "gemini-embedding-001",
+     "name": "Gemini Embedding 001",
+     "release_date": "2025-05-20"
+    },
+    {
+     "id": "gemini-2.0-flash-lite",
+     "name": "Gemini 2.0 Flash-Lite",
+     "release_date": "2024-12-11"
+    },
+    {
+     "id": "gemini-2.0-flash",
+     "name": "Gemini 2.0 Flash",
+     "release_date": "2024-12-11"
+    }
+   ]
+  },
+  "groq": {
+   "credential_hint": "Needs GROQ_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "openai/gpt-oss-safeguard-20b",
+     "name": "Safety GPT OSS 20B",
+     "release_date": "2025-10-29"
+    },
+    {
+     "id": "groq/compound-mini",
+     "name": "Compound Mini",
+     "release_date": "2025-09-04"
+    },
+    {
+     "id": "groq/compound",
+     "name": "Compound",
+     "release_date": "2025-09-04"
+    },
+    {
+     "id": "openai/gpt-oss-20b",
+     "name": "GPT OSS 20B",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai/gpt-oss-120b",
+     "name": "GPT OSS 120B",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "qwen/qwen3-32b",
+     "name": "Qwen3-32B",
+     "release_date": "2025-06-11"
+    },
+    {
+     "id": "meta-llama/llama-prompt-guard-2-86m",
+     "name": "Prompt Guard 2 86M",
+     "release_date": "2025-05-29"
+    },
+    {
+     "id": "meta-llama/llama-prompt-guard-2-22m",
+     "name": "Llama Prompt Guard 2 22M",
+     "release_date": "2025-05-29"
+    },
+    {
+     "id": "meta-llama/llama-4-scout-17b-16e-instruct",
+     "name": "Llama 4 Scout 17B 16E",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "llama-3.3-70b-versatile",
+     "name": "Llama 3.3 70B",
+     "release_date": "2024-12-06"
+    },
+    {
+     "id": "llama-3.1-8b-instant",
+     "name": "Llama 3.1 8B",
+     "release_date": "2024-07-23"
+    }
+   ]
+  },
+  "mistral": {
+   "credential_hint": "Needs MISTRAL_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "mistral-medium-2604",
+     "name": "Mistral Medium 3.5",
+     "release_date": "2026-04-29"
+    },
+    {
+     "id": "mistral-small-2603",
+     "name": "Mistral Small 4",
+     "release_date": "2026-03-16"
+    },
+    {
+     "id": "labs-devstral-small-2512",
+     "name": "Devstral Small 2",
+     "release_date": "2025-12-09"
+    },
+    {
+     "id": "devstral-2512",
+     "name": "Devstral 2",
+     "release_date": "2025-12-09"
+    },
+    {
+     "id": "devstral-medium-latest",
+     "name": "Devstral 2 (latest)",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "devstral-small-2507",
+     "name": "Devstral Small",
+     "release_date": "2025-07-10"
+    },
+    {
+     "id": "magistral-small",
+     "name": "Magistral Small",
+     "release_date": "2025-03-17"
+    },
+    {
+     "id": "magistral-medium-latest",
+     "name": "Magistral Medium (latest)",
+     "release_date": "2025-03-17"
+    },
+    {
+     "id": "mistral-large-2411",
+     "name": "Mistral Large 2.1",
+     "release_date": "2024-11-18"
+    },
+    {
+     "id": "pixtral-large-latest",
+     "name": "Pixtral Large (latest)",
+     "release_date": "2024-11-01"
+    },
+    {
+     "id": "ministral-8b-latest",
+     "name": "Ministral 8B (latest)",
+     "release_date": "2024-10-01"
+    },
+    {
+     "id": "ministral-3b-latest",
+     "name": "Ministral 3B (latest)",
+     "release_date": "2024-10-01"
+    },
+    {
+     "id": "pixtral-12b",
+     "name": "Pixtral 12B",
+     "release_date": "2024-09-01"
+    },
+    {
+     "id": "open-mistral-nemo",
+     "name": "Open Mistral Nemo",
+     "release_date": "2024-07-01"
+    },
+    {
+     "id": "mistral-nemo",
+     "name": "Mistral Nemo",
+     "release_date": "2024-07-01"
+    },
+    {
+     "id": "codestral-latest",
+     "name": "Codestral (latest)",
+     "release_date": "2024-05-29"
+    },
+    {
+     "id": "open-mixtral-8x22b",
+     "name": "Mixtral 8x22B",
+     "release_date": "2024-04-17"
+    },
+    {
+     "id": "open-mixtral-8x7b",
+     "name": "Mixtral 8x7B",
+     "release_date": "2023-12-11"
+    },
+    {
+     "id": "mistral-embed",
+     "name": "Mistral Embed",
+     "release_date": "2023-12-11"
+    },
+    {
+     "id": "open-mistral-7b",
+     "name": "Mistral 7B",
+     "release_date": "2023-09-27"
+    }
+   ]
+  },
+  "grok": {
+   "credential_hint": "Needs GROK_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "grok-4.5",
+     "name": "Grok 4.5",
+     "release_date": "2026-07-08"
+    },
+    {
+     "id": "grok-4.3",
+     "name": "Grok 4.3",
+     "release_date": "2026-04-17"
+    },
+    {
+     "id": "grok-build-0.1",
+     "name": "Grok Build 0.1",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "grok-4.20-multi-agent-0309",
+     "name": "Grok 4.20 Multi-Agent",
+     "release_date": "2026-03-09"
+    },
+    {
+     "id": "grok-4.20-0309-reasoning",
+     "name": "Grok 4.20 (Reasoning)",
+     "release_date": "2026-03-09"
+    },
+    {
+     "id": "grok-4.20-0309-non-reasoning",
+     "name": "Grok 4.20 (Non-Reasoning)",
+     "release_date": "2026-03-09"
+    }
+   ]
+  },
+  "bedrock": {
+   "credential_hint": "Uses your AWS credentials (AWS_ACCESS_KEY_ID / profile) and region.",
+   "models": [
+    {
+     "id": "us.anthropic.claude-opus-5",
+     "name": "Claude Opus 5 (US)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "jp.anthropic.claude-opus-5",
+     "name": "Claude Opus 5 (JP)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "global.anthropic.claude-opus-5",
+     "name": "Claude Opus 5 (Global)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "eu.anthropic.claude-opus-5",
+     "name": "Claude Opus 5 (EU)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "au.anthropic.claude-opus-5",
+     "name": "Claude Opus 5 (AU)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "anthropic.claude-opus-5",
+     "name": "Claude Opus 5",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "openai.gpt-5.6-terra",
+     "name": "GPT-5.6 Terra",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai.gpt-5.6-sol",
+     "name": "GPT-5.6 Sol",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai.gpt-5.6-luna",
+     "name": "GPT-5.6 Luna",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "us.anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5 (US)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "jp.anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5 (JP)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "global.anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5 (Global)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "eu.anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5 (EU)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "au.anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5 (AU)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "anthropic.claude-sonnet-5",
+     "name": "Claude Sonnet 5",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "us.anthropic.claude-fable-5",
+     "name": "Claude Fable 5 (US)",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "global.anthropic.claude-fable-5",
+     "name": "Claude Fable 5 (Global)",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "eu.anthropic.claude-fable-5",
+     "name": "Claude Fable 5 (EU)",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "anthropic.claude-fable-5",
+     "name": "Claude Fable 5",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "us.anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8 (US)",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "jp.anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8 (JP)",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "global.anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8 (Global)",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "eu.anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8 (EU)",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "au.anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8 (AU)",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "anthropic.claude-opus-4-8",
+     "name": "Claude Opus 4.8",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "openai.gpt-5.5",
+     "name": "GPT-5.5",
+     "release_date": "2026-04-23"
+    },
+    {
+     "id": "xai.grok-4.3",
+     "name": "Grok 4.3",
+     "release_date": "2026-04-17"
+    },
+    {
+     "id": "us.anthropic.claude-opus-4-7",
+     "name": "Claude Opus 4.7 (US)",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "jp.anthropic.claude-opus-4-7",
+     "name": "Claude Opus 4.7 (JP)",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "global.anthropic.claude-opus-4-7",
+     "name": "Claude Opus 4.7 (Global)",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "eu.anthropic.claude-opus-4-7",
+     "name": "Claude Opus 4.7 (EU)",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "anthropic.claude-opus-4-7",
+     "name": "Claude Opus 4.7",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "zai.glm-5",
+     "name": "GLM-5",
+     "release_date": "2026-03-18"
+    },
+    {
+     "id": "minimax.minimax-m2.5",
+     "name": "MiniMax M2.5",
+     "release_date": "2026-03-18"
+    },
+    {
+     "id": "nvidia.nemotron-super-3-120b",
+     "name": "NVIDIA Nemotron 3 Super 120B A12B",
+     "release_date": "2026-03-11"
+    },
+    {
+     "id": "openai.gpt-5.4",
+     "name": "GPT-5.4",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "us.anthropic.claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6 (US)",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "mistral.devstral-2-123b",
+     "name": "Devstral 2 123B",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "jp.anthropic.claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6 (JP)",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "global.anthropic.claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6 (Global)",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "eu.anthropic.claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6 (EU)",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "au.anthropic.claude-sonnet-4-6",
+     "name": "AU Anthropic Claude Sonnet 4.6",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "anthropic.claude-sonnet-4-6",
+     "name": "Claude Sonnet 4.6",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "qwen.qwen3-coder-next",
+     "name": "Qwen3 Coder Next",
+     "release_date": "2026-02-06"
+    },
+    {
+     "id": "moonshotai.kimi-k2.5",
+     "name": "Kimi K2.5",
+     "release_date": "2026-02-06"
+    },
+    {
+     "id": "deepseek.v3.2",
+     "name": "DeepSeek-V3.2",
+     "release_date": "2026-02-06"
+    },
+    {
+     "id": "us.anthropic.claude-opus-4-6-v1",
+     "name": "Claude Opus 4.6 (US)",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "global.anthropic.claude-opus-4-6-v1",
+     "name": "Claude Opus 4.6 (Global)",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "eu.anthropic.claude-opus-4-6-v1",
+     "name": "Claude Opus 4.6 (EU)",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "au.anthropic.claude-opus-4-6-v1",
+     "name": "AU Anthropic Claude Opus 4.6",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "anthropic.claude-opus-4-6-v1",
+     "name": "Claude Opus 4.6",
+     "release_date": "2026-02-05"
+    },
+    {
+     "id": "zai.glm-4.7-flash",
+     "name": "GLM-4.7-Flash",
+     "release_date": "2026-01-19"
+    },
+    {
+     "id": "nvidia.nemotron-nano-3-30b",
+     "name": "NVIDIA Nemotron Nano 3 30B",
+     "release_date": "2025-12-23"
+    },
+    {
+     "id": "minimax.minimax-m2.1",
+     "name": "MiniMax M2.1",
+     "release_date": "2025-12-23"
+    },
+    {
+     "id": "zai.glm-4.7",
+     "name": "GLM-4.7",
+     "release_date": "2025-12-22"
+    },
+    {
+     "id": "moonshot.kimi-k2-thinking",
+     "name": "Kimi K2 Thinking",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistral.mistral-large-3-675b-instruct",
+     "name": "Mistral Large 3",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistral.ministral-3-3b-instruct",
+     "name": "Ministral 3 3B",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistral.magistral-small-2509",
+     "name": "Magistral Small 1.2",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+     "name": "Claude Opus 4.5 (US)",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "global.anthropic.claude-opus-4-5-20251101-v1:0",
+     "name": "Claude Opus 4.5 (Global)",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "eu.anthropic.claude-opus-4-5-20251101-v1:0",
+     "name": "Claude Opus 4.5 (EU)",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "anthropic.claude-opus-4-5-20251101-v1:0",
+     "name": "Claude Opus 4.5",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "openai.gpt-oss-safeguard-20b",
+     "name": "GPT OSS Safeguard 20B",
+     "release_date": "2025-10-29"
+    },
+    {
+     "id": "openai.gpt-oss-safeguard-120b",
+     "name": "GPT OSS Safeguard 120B",
+     "release_date": "2025-10-29"
+    },
+    {
+     "id": "minimax.minimax-m2",
+     "name": "MiniMax M2",
+     "release_date": "2025-10-27"
+    },
+    {
+     "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5 (US)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5 (JP)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5 (Global)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5 (EU)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "au.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5 (AU)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "anthropic.claude-haiku-4-5-20251001-v1:0",
+     "name": "Claude Haiku 4.5",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "qwen.qwen3-vl-235b-a22b",
+     "name": "Qwen/Qwen3-VL-235B-A22B-Instruct",
+     "release_date": "2025-10-04"
+    },
+    {
+     "id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5 (US)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5 (JP)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5 (Global)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5 (EU)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "au.anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5 (AU)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+     "name": "Claude Sonnet 4.5",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "qwen.qwen3-next-80b-a3b",
+     "name": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "qwen.qwen3-coder-480b-a35b-v1:0",
+     "name": "Qwen3 Coder 480B A35B Instruct",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "qwen.qwen3-coder-30b-a3b-v1:0",
+     "name": "Qwen3 Coder 30B A3B Instruct",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "qwen.qwen3-32b-v1:0",
+     "name": "Qwen3 32B (dense)",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "qwen.qwen3-235b-a22b-2507-v1:0",
+     "name": "Qwen3 235B A22B 2507",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "deepseek.v3-v1:0",
+     "name": "DeepSeek-V3.1",
+     "release_date": "2025-09-18"
+    },
+    {
+     "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
+     "name": "Claude Opus 4.1 (US)",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai.gpt-oss-20b-1:0",
+     "name": "gpt-oss-20b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai.gpt-oss-20b",
+     "name": "gpt-oss-20b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai.gpt-oss-120b-1:0",
+     "name": "gpt-oss-120b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai.gpt-oss-120b",
+     "name": "gpt-oss-120b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "anthropic.claude-opus-4-1-20250805-v1:0",
+     "name": "Claude Opus 4.1",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "google.gemma-3-27b-it",
+     "name": "Google Gemma 3 27B Instruct",
+     "release_date": "2025-07-27"
+    },
+    {
+     "id": "mistral.voxtral-small-24b-2507",
+     "name": "Voxtral Small 24B 2507",
+     "release_date": "2025-07-01"
+    },
+    {
+     "id": "writer.palmyra-x5-v1:0",
+     "name": "Palmyra X5",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "writer.palmyra-x4-v1:0",
+     "name": "Palmyra X4",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "mistral.pixtral-large-2502-v1:0",
+     "name": "Pixtral Large (25.02)",
+     "release_date": "2025-04-08"
+    },
+    {
+     "id": "us.meta.llama4-scout-17b-instruct-v1:0",
+     "name": "Llama 4 Scout 17B Instruct (US)",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "us.meta.llama4-maverick-17b-instruct-v1:0",
+     "name": "Llama 4 Maverick 17B Instruct (US)",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "meta.llama4-scout-17b-instruct-v1:0",
+     "name": "Llama 4 Scout 17B Instruct",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "meta.llama4-maverick-17b-instruct-v1:0",
+     "name": "Llama 4 Maverick 17B Instruct",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "us.deepseek.r1-v1:0",
+     "name": "DeepSeek-R1 (US)",
+     "release_date": "2025-01-20"
+    },
+    {
+     "id": "deepseek.r1-v1:0",
+     "name": "DeepSeek-R1",
+     "release_date": "2025-01-20"
+    },
+    {
+     "id": "meta.llama3-3-70b-instruct-v1:0",
+     "name": "Llama 3.3 70B Instruct",
+     "release_date": "2024-12-06"
+    },
+    {
+     "id": "amazon.nova-pro-v1:0",
+     "name": "Nova Pro",
+     "release_date": "2024-12-03"
+    },
+    {
+     "id": "amazon.nova-micro-v1:0",
+     "name": "Nova Micro",
+     "release_date": "2024-12-03"
+    },
+    {
+     "id": "amazon.nova-lite-v1:0",
+     "name": "Nova Lite",
+     "release_date": "2024-12-03"
+    },
+    {
+     "id": "nvidia.nemotron-nano-9b-v2",
+     "name": "NVIDIA Nemotron Nano 9B v2",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "nvidia.nemotron-nano-12b-v2",
+     "name": "NVIDIA Nemotron Nano 12B v2 VL BF16",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "mistral.voxtral-mini-3b-2507",
+     "name": "Voxtral Mini 3B 2507",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "mistral.ministral-3-8b-instruct",
+     "name": "Ministral 3 8B",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "mistral.ministral-3-14b-instruct",
+     "name": "Ministral 14B 3.0",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "google.gemma-3-4b-it",
+     "name": "Gemma 3 4B IT",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "google.gemma-3-12b-it",
+     "name": "Google Gemma 3 12B",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "amazon.nova-2-lite-v1:0",
+     "name": "Nova 2 Lite",
+     "release_date": "2024-12-01"
+    },
+    {
+     "id": "meta.llama3-1-8b-instruct-v1:0",
+     "name": "Llama 3.1 8B Instruct",
+     "release_date": "2024-07-23"
+    },
+    {
+     "id": "meta.llama3-1-70b-instruct-v1:0",
+     "name": "Llama 3.1 70B Instruct",
+     "release_date": "2024-07-23"
+    }
+   ]
+  }
+ }
+}

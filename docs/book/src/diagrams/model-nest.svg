@@ -1,0 +1,18 @@
+<svg viewBox="0 0 620 252" width="620" role="img" aria-label="An experiment contains conditions; a condition contains runs, which accumulate and are never deduplicated." style="max-width:100%;height:auto;display:block;margin:1.4em auto;font-family:inherit">
+  <rect x="10" y="10" width="600" height="232" rx="8" fill="none" stroke="var(--table-border-color, #999)"/>
+  <text x="28" y="34" font-size="13" font-weight="600" fill="var(--fg, #333)">experiment</text>
+  <text x="118" y="34" font-family="'Source Code Pro', Menlo, monospace" font-size="11.5" fill="var(--fg, #333)" fill-opacity="0.65">impossiblebench-swebench @ content hash of its subtree</text>
+  <rect x="30" y="48" width="560" height="176" rx="7" fill="var(--quote-bg, rgba(128,128,128,.06))" stroke="var(--links, #4183c4)"/>
+  <text x="48" y="72" font-size="13" font-weight="600" fill="var(--links, #4183c4)">condition</text>
+  <text x="122" y="72" font-family="'Source Code Pro', Menlo, monospace" font-size="11.5" fill="var(--fg, #333)" fill-opacity="0.65">sha256({experiment, source, params-as-written})</text>
+  <g font-family="'Source Code Pro', Menlo, monospace" font-size="11.5">
+    <rect x="50" y="88" width="520" height="30" rx="5" fill="var(--bg, #fff)" stroke="var(--table-border-color, #999)"/>
+    <text x="64" y="103" dominant-baseline="central" fill="var(--fg, #333)">run 01J9XYZ…</text>
+    <text x="556" y="103" text-anchor="end" dominant-baseline="central" fill="var(--fg, #333)" fill-opacity="0.6">params · events · artifacts</text>
+    <rect x="50" y="126" width="520" height="30" rx="5" fill="var(--bg, #fff)" stroke="var(--table-border-color, #999)"/>
+    <text x="64" y="141" dominant-baseline="central" fill="var(--fg, #333)">run 01J9XZ0…</text>
+    <rect x="50" y="164" width="520" height="30" rx="5" fill="var(--bg, #fff)" stroke="var(--table-border-color, #999)"/>
+    <text x="64" y="179" dominant-baseline="central" fill="var(--fg, #333)">run 01J9XZ1…</text>
+  </g>
+  <text x="310" y="212" text-anchor="middle" font-size="12" font-style="italic" fill="var(--fg, #333)" fill-opacity="0.65">n accumulates — never deduplicated</text>
+</svg>

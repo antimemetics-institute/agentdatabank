@@ -1,0 +1,71 @@
+{
+  description = "ADB — Agent Databank: reusable agent experiments + a databank of runs";
+
+  # channel tarball, not github: channels.nixos.org serves an immutable-link header, so
+  # the lock pins the permanent release URL (and it's what nix-channel users mirror).
+  # Stable, not unstable: experiment closures and env fingerprints should churn on
+  # NixOS releases (~6 months), not on every channel advance.
+  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.xz";
+
+  outputs = { self, nixpkgs }:
+    let
+      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system:
+        f (import nixpkgs { inherit system; }));
+    in
+    {
+      # Namespace policy (nixpkgs-flat, like `nixpkgs#dig`): experiments get bare names —
+      # they are the product and the headline oneliner (`nix run adb#inspect-hello`).
+      # ADB's own tools carry the `adb-` prefix (`adb-web`, `adb-runner`), so the bare
+      # namespace belongs to the registry and name collisions are a curation duty, as
+      # in nixpkgs.
+      apps = forAllSystems (pkgs:
+        let
+          adbPkgs = import ./pkgs/top-level { inherit pkgs self; };
+        in
+        builtins.mapAttrs
+          (name: exp: {
+            type = "app";
+            program = "${exp.app}/bin/adb-${name}";
+          })
+          adbPkgs.experiments
+        # `nix run .#adb-runner -- providers …` to manage local model credentials
+        # (endpoints + keys), which the runner injects into experiments so they never
+        # land in params or on the command line.
+        // {
+          adb-runner = {
+            type = "app";
+            program = "${adbPkgs.adb-runner}/bin/adb-runner";
+          };
+        }
+        // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
+          adb-web = {
+            type = "app";
+            program = "${adbPkgs.adb-web}/bin/adb-web";
+          };
+        });
+
+      packages = forAllSystems (pkgs:
+        let
+          adbPkgs = import ./pkgs/top-level { inherit pkgs self; };
+        in
+        {
+          inherit (adbPkgs) adb-runner;
+          manifests = pkgs.linkFarm "adb-manifests"
+            (nixpkgs.lib.mapAttrsToList
+              (name: exp: { name = "${name}.json"; path = exp.manifest; })
+              adbPkgs.experiments);
+        }
+        // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
+          inherit (adbPkgs) adb-web;
+          # the bare dist (frontend + server.cjs) — used by scripts/docs-screenshots.sh
+          inherit (adbPkgs) adb-web-dist;
+        }
+        // nixpkgs.lib.mapAttrs' (name: exp: nixpkgs.lib.nameValuePair "experiment-${name}" exp.app)
+          adbPkgs.experiments);
+
+      devShells = forAllSystems (pkgs: {
+        default = import ./shell.nix { inherit pkgs; };
+      });
+    };
+}

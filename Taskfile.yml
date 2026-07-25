@@ -1,0 +1,151 @@
+# Dev targets — run inside the devshell (`nix develop`), which provides task, pnpm,
+# node, python, jq, mdbook. Data lands in the tools' default $ADB_HOME
+# (~/.local/share/adb); override with ADB_HOME=... — but never point it inside this
+# repo (a dirty-tree flake hashes its whole directory, so an in-repo data dir mints a
+# new condition every run).
+version: "3"
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  hello:
+    desc: fire one keyless run of the bundled inspect-hello task (mock model, offline)
+    cmds:
+      - nix run .#inspect-hello -- --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
+
+  describe:
+    desc: print the impossiblebench-livecodebench schema JSON
+    cmds:
+      - nix run .#impossiblebench-livecodebench -- --describe | jq .
+
+  test:
+    desc: run python unit tests (runner, the shared inspect wrapper, concordia) via uv, then the web suite
+    cmds:
+      - cd runner && uv run -q pytest -q
+      - cd lib/adb-inspect && uv run -q pytest -q
+      - cd experiments/concordia && uv run -q pytest -q
+      - task: web:test
+
+  web:test:
+    desc: web unit tests + render guard, with the nix-built manifests so the oneliner sweep runs against every real experiment
+    cmds:
+      - ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" pnpm --dir web test
+
+  web:build:
+    desc: build the web dist (vite frontend + server bundle) into web/dist
+    cmds:
+      - bash web/build.sh
+
+  web:
+    desc: build once, then serve the local GUI (auto-picks a free port from 8340)
+    deps: [web:build]
+    cmds:
+      # serve the frontend + the experiment manifests (nix builds the manifests dir)
+      # so the run-config builder works here too. --host 0.0.0.0 so a
+      # code-server/reverse proxy on another host can reach it (same stance as the
+      # docs task; the nix adb-web wrapper stays loopback-only by default).
+      - ADB_WEB_STATIC=web/dist ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" node web/dist/server.cjs --host 0.0.0.0 --no-open
+
+  web:dev:
+    desc: vite dev server (HMR, /api proxied) + auto-restarting API server — same as `pnpm dev` in web/
+    cmds:
+      - bash web/dev.sh
+
+  docs:
+    desc: serve the mdbook user guide on 0.0.0.0:3000 (binds IPv4 so a code-server/reverse proxy on 127.0.0.1 can reach it; mdbook's default localhost binds IPv6 ::1 only)
+    dir: docs/book
+    cmds:
+      - mdbook serve -n 0.0.0.0 -p 3000
+
+  docs:build:
+    desc: build the mdbook user guide into docs/book/book
+    dir: docs/book
+    cmds:
+      - mdbook build
+
+  docs:media:
+    desc: regenerate ALL media the docs embed — screenshots and video clips (light + dark)
+    cmds:
+      - task: docs:screenshots
+      - task: docs:clips
+
+  docs:screenshots:
+    desc: regenerate the GUI screenshots the docs embed (light + dark), into docs/book/src/images
+    cmds:
+      - bash scripts/docs-screenshots.sh
+
+  docs:clips:
+    desc: re-record the GUI video clips the docs embed (playwright-scripted, light + dark), into docs/book/src/images
+    cmds:
+      - bash scripts/docs-clips.sh
+
+  docker:up:
+    desc: sudo-start the docker daemon on the default socket (inspect's docker sandbox needs one; a dev shell can't provide a system service, so the devshell ships the engine and this starts it)
+    cmds:
+      - |
+        if docker info >/dev/null 2>&1; then
+          echo "docker: already running"
+          exit 0
+        fi
+        # rootful, data on the persistent host share: virtiofs accepts root's chowns
+        # but refuses an unprivileged user's subuid ones (which rootless layer
+        # extraction needs). fuse-overlayfs because kernel overlayfs refuses a
+        # virtiofs upperdir. --group so the socket is usable without sudo.
+        sudo mkdir -p /var/lib/dev/docker
+        (sudo env "PATH=$PATH" setsid dockerd --data-root /var/lib/dev/docker --storage-driver fuse-overlayfs --group "$(id -gn)" --pidfile /run/dockerd-adb.pid >/tmp/dockerd-adb.log 2>&1 &)
+        for _ in $(seq 50); do
+          docker info >/dev/null 2>&1 && break
+          sleep 0.2
+        done
+        docker info >/dev/null 2>&1 && echo "docker: up" || {
+          echo "docker: failed to start; log tail (/tmp/dockerd-adb.log):" >&2
+          sudo tail -20 /tmp/dockerd-adb.log >&2
+          exit 1
+        }
+
+  docker:down:
+    desc: stop the docker daemon started by docker:up (images and containers survive in /var/lib/dev/docker)
+    cmds:
+      - |
+        sudo kill "$(sudo cat /run/dockerd-adb.pid 2>/dev/null)" 2>/dev/null && echo "docker: stopped" || echo "docker: was not running"
+
+  lock:check:
+    desc: verify every uv.lock is current with its pyproject (catches an edited dependency list shipped without a relock — nix builds strictly from the lock, so drift only surfaces at runtime)
+    cmds:
+      - |
+        for dir in $(git ls-files '*uv.lock' | xargs -n1 dirname); do
+          echo "uv lock --check: $dir"
+          (cd "$dir" && uv lock --check) || exit 1
+        done
+
+  models:update:
+    desc: regenerate lib/model-catalog/model_catalog.json (the types.llm model hints — provider knowledge, wrapper-agnostic) from first-party id sources + public catalogs
+    dir: lib/model-catalog
+    cmds:
+      - python3 update.py
+
+  tasks:update:
+    desc: regenerate experiments/inspect_evals/task_catalog.json (one experiment per runnable task, typed params from each task's signature) from the pinned inspect_evals registry + its declared per-eval metadata
+    dir: experiments/inspect_evals
+    cmds:
+      - uv run -q python scripts/update_task_catalog.py
+
+  genconfig:update:
+    desc: regenerate lib/adb-inspect/generate_fields.json (the generate_args typed sub-form) from the pinned inspect_ai's GenerateConfig
+    dir: lib/adb-inspect
+    cmds:
+      - uv run -q python scripts/update_generate_fields.py
+
+  check:
+    desc: nix flake check + uv lock freshness
+    cmds:
+      - nix flake check
+      - task: lock:check
+
+  update-deps:
+    desc: update the flake.lock pin (tracks the nixos-26.05 channel tarball; bump the channel in flake.nix at each NixOS release)
+    cmds:
+      - nix flake update

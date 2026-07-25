@@ -1,0 +1,25 @@
+[book]
+title = "ADB — Agent Databank User Guide"
+authors = ["Antimemetics Institute"]
+description = "How the Agent Databank MVP works and how to use it: running inspect evals, setting secrets, and browsing runs in the web GUI."
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/antimemetics-institute/adb"
+edit-url-template = "https://github.com/antimemetics-institute/adb/edit/main/docs/book/{path}"
+no-section-label = false
+additional-css = ["theme/adb-commands.css", "theme/adb-theme-images.css", "theme/adb-tabs.css"]
+additional-js = ["theme/adb-commands.js", "theme/adb-media.js"]
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.search]
+enable = true
