@@ -6,8 +6,15 @@
 #   nix-build https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz \
 #     -A experiment-inspect-hello
 #
-# Classic builds carry no fetchable flake rev, so runs made this way record a
-# `dirty:` fetch_ref — fine locally; the flake path is the canonical one.
+# Provenance: git stamps the commit hash into .git-revision when generating an
+# archive (export-subst — GitHub tarballs included), so tarball builds know their
+# rev and runs record a real fetchable ref. In a checkout the placeholder stays
+# unexpanded and runs record `dirty:` — correct, a working tree has no rev. The
+# `adbRev` argument overrides the stamp (the fetchGit flow states its own rev).
+#
+# `experiments` is the authoring door: a path to an external experiment directory
+# (see the book's "Writing experiments") joins the registry beside the in-tree
+# ones — same bare names, same manifests linkFarm, same web catalog.
 let
   lock = builtins.fromJSON (builtins.readFile ./flake.lock);
   locked = lock.nodes.nixpkgs.locked;
@@ -15,13 +22,20 @@ let
     url = locked.url;
     sha256 = locked.narHash;
   };
+  stampRev =
+    let m = builtins.match "([0-9a-f]{40})[[:space:]]*" (builtins.readFile ./.git-revision);
+    in if m == null then null else builtins.head m;
 in
 { system ? builtins.currentSystem
 , pkgs ? import nixpkgsSrc { inherit system; }
+, adbRev ? null
 }:
 let
   inherit (pkgs) lib;
-  adbPkgs = import ./pkgs/top-level { inherit pkgs; self = { }; };
+  adbPkgs = import ./pkgs/top-level {
+    inherit pkgs experiments;
+    rev = if adbRev != null then adbRev else stampRev;
+  };
 
   runnables =
     { inherit (adbPkgs) adb-runner; }

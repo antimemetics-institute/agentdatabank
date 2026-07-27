@@ -3,11 +3,12 @@
 # dependencies; the scope injects them by argument name and makes everything
 # overridable.
 #
-# The registry convention (family packages):
+# The registry convention:
 #
-#   experiments/<family>/package.nix → an attrset of experiments, one attr per
-#   experiment name (a family with a single experiment still returns a one-attr set).
-#   Each value is an adb.mkExperiment result ({ app, manifest, name }).
+#   experiments/<dir>/package.nix → an attrset of experiments, one attr per
+#   experiment name. One directory usually declares one experiment, but may declare
+#   several backed by the same code (impossiblebench, inspect_evals). Each value is
+#   an adb.mkExperiment result ({ app, manifest, name }).
 #
 # experiments/ holds experiment code only; everything ADB-specific (this wiring,
 # build-support, tool packaging) lives under pkgs/ and the tools' own source trees
@@ -16,6 +17,8 @@
 
 let
   inherit (pkgs) lib;
+
+  origin = "github:antimemetics-institute/agentdatabank";
 
   experimentsDir = ../../experiments;
   familyNames =
@@ -30,8 +33,7 @@ let
     {
       # build support — the `adb` attrset experiment declarations take as an argument.
       adb = final.callPackage ../build-support {
-        inherit self;
-        origin = "github:antimemetics-institute/agentdatabank";
+        inherit origin rev narHash;
       };
 
       # ADB's own tools; the adb- prefix keeps them out of the registry's bare namespace.

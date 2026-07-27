@@ -21,7 +21,7 @@
       # in nixpkgs.
       apps = forAllSystems (pkgs:
         let
-          adbPkgs = import ./pkgs/top-level { inherit pkgs self; };
+          adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         builtins.mapAttrs
           (name: exp: {
@@ -47,7 +47,7 @@
 
       packages = forAllSystems (pkgs:
         let
-          adbPkgs = import ./pkgs/top-level { inherit pkgs self; };
+          adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
           inherit (adbPkgs) adb-runner;

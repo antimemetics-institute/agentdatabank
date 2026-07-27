@@ -2,11 +2,13 @@
 # Types are authored here as nix values and rendered to plain JSON descriptors at eval
 # time (ADB_MANIFEST); the runner and GUI consume JSON and never evaluate nix.
 #
-# `self` is the flake self (for source identity); `origin` is the fetchable flake ref
-# without a rev — a flake cannot know its own URL, so it is stated once at the call
-# site. `adb-runner` arrives by argument, so overriding the runner reaches every
+# `rev`/`narHash` describe the source tree being evaluated (null = unknown): the
+# flake door passes them from its own sourceInfo, the classic door from the
+# .git-revision stamp or the adbRev argument. `origin` is the fetchable ref without
+# a rev — a source cannot know its own URL, so it is stated once at the call site.
+# `adb-runner` arrives by argument, so overriding the runner reaches every
 # experiment.
-{ pkgs, self, origin, adb-runner }:
+{ pkgs, origin, adb-runner, rev ? null, narHash ? null }:
 
 let
   inherit (pkgs) lib;
@@ -17,11 +19,11 @@ let
   # re-run from a pinned source.
   refParts = lib.splitString "?" origin;
   fetchRef =
-    if self ? rev then
-      builtins.head refParts + "/${self.rev}"
+    if rev != null then
+      builtins.head refParts + "/${rev}"
       + lib.optionalString (builtins.length refParts > 1)
         "?${lib.concatStringsSep "?" (builtins.tail refParts)}"
-    else "dirty:${self.narHash or "unknown"}";
+    else "dirty:${if narHash != null then narHash else "unknown"}";
 
   # types.llm governs its own hints: every llm-typed param gets the shared model
   # catalog (lib/model-catalog) appended to its suggestions at eval time, so no
