@@ -10,6 +10,7 @@ import { OverviewPage } from "@/pages/overview";
 import { ExperimentPage } from "@/pages/experiment";
 import { RunResolver, RunsPage } from "@/pages/runs";
 import { RunPage } from "@/pages/run";
+import { DevDiagramsPage } from "@/pages/dev-diagrams";
 import { widgets } from "@/widget";
 
 if (widgets.length) console.debug(`adb: ${widgets.length} widget(s) registered`);
@@ -55,6 +56,9 @@ export function App() {
   } else if (parts[0] === "runs") {
     section = "runs";
     page = <RunsPage />;
+  } else if (import.meta.env.DEV && parts[0] === "dev" && parts[1] === "diagrams") {
+    /* prototype gallery — dev builds only, not linked from the sidebar */
+    page = <DevDiagramsPage />;
   } else {
     page = <OverviewPage />;
   }

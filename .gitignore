@@ -1,5 +1,6 @@
 # build outputs
 docs/book/book/
+web/test/diagram-renders/
 result
 result-*
 web/dist/
