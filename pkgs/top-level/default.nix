@@ -13,7 +13,7 @@
 # experiments/ holds experiment code only; everything ADB-specific (this wiring,
 # build-support, tool packaging) lives under pkgs/ and the tools' own source trees
 # (runner/, web/).
-{ pkgs, self }:
+{ pkgs, experiments ? null, rev ? null, narHash ? null }:
 
 let
   inherit (pkgs) lib;
@@ -21,7 +21,14 @@ let
   origin = "github:antimemetics-institute/agentdatabank";
 
   experimentsDir = ../../experiments;
-  familyNames =
+
+  # the authoring door: an external experiment directory (a dir holding package.nix)
+  # joins the registry beside the in-tree ones — same shape, same names
+  externalPackageNix =
+    if experiments == null then null
+    else if builtins.pathExists (experiments + "/package.nix") then experiments + "/package.nix"
+    else experiments;
+  dirNames =
     if builtins.pathExists experimentsDir then
       lib.attrNames
         (lib.filterAttrs
@@ -39,6 +46,9 @@ let
       # ADB's own tools; the adb- prefix keeps them out of the registry's bare namespace.
       # The runner packages itself from its own uv.lock (uv2nix) — see runner/default.nix.
       adb-runner = final.callPackage ../../runner { };
+
+      # the authoring CLI (init/bump/pin) — built knowing which adb it came from
+      adb-dev = final.callPackage ../adb-dev { inherit origin rev; };
     }
     # web tooling appears once web/ lands (see the adb-web block below)
     // lib.optionalAttrs (builtins.pathExists ../../web) {
@@ -73,7 +83,7 @@ let
       adb-web-manifests = pkgs.linkFarm "adb-web-manifests"
         (lib.mapAttrsToList
           (name: exp: { name = "${name}.json"; path = exp.manifest; })
-          experiments);
+          registry);
 
       # the user-facing entrypoint: node runs the bundled server, which serves the
       # bundled frontend from the same dist
@@ -87,28 +97,40 @@ let
         '';
       };
     }
-    # families: experiments/<family>/package.nix → { <experiment-name> = mkExperiment …; }
+    # experiments/<dir>/package.nix → { <experiment-name> = mkExperiment …; }
     // lib.mapAttrs'
-      (name: _: lib.nameValuePair "family-${name}"
+      (name: _: lib.nameValuePair "experiments-${name}"
         (final.callPackage (experimentsDir + "/${name}/package.nix") { }))
-      (lib.genAttrs familyNames (_: null)));
+      (lib.genAttrs dirNames (_: null))
+    // lib.optionalAttrs (externalPackageNix != null) {
+      # the external directory's fetch_ref must NOT claim adb's origin/rev — its
+      # code doesn't live here. Until a scaffold can state its own origin
+      # (--flakes), external runs record `dirty:` — honest for a working directory.
+      experiments-external = final.callPackage externalPackageNix {
+        adb = final.callPackage ../build-support {
+          origin = "external"; rev = null; narHash = null;
+        };
+      };
+    });
 
-  # flatten families into the experiment registry, refusing name collisions
-  # (callPackage decorates each family set with override/overrideDerivation — drop those)
-  experiments = lib.foldl'
-    (acc: familyRaw:
+  # flatten the per-directory sets into the experiment registry, refusing name
+  # collisions (callPackage decorates each set with override/overrideDerivation —
+  # drop those)
+  registry = lib.foldl'
+    (acc: setRaw:
       let
-        family = removeAttrs familyRaw [ "override" "overrideDerivation" ];
-        dup = builtins.attrNames (builtins.intersectAttrs acc family);
+        set = removeAttrs setRaw [ "override" "overrideDerivation" ];
+        dup = builtins.attrNames (builtins.intersectAttrs acc set);
       in
       if dup != [ ] then throw "duplicate experiment name(s): ${toString dup}"
-      else acc // family)
+      else acc // set)
     { }
-    (map (name: scope."family-${name}") familyNames);
+    (map (name: scope."experiments-${name}") dirNames
+      ++ lib.optional (externalPackageNix != null) scope.experiments-external);
 in
 {
-  inherit experiments;
-  inherit (scope) adb-runner;
+  experiments = registry;
+  inherit (scope) adb-runner adb-dev;
 }
 // lib.optionalAttrs (builtins.pathExists ../../web) {
   inherit (scope) adb-web adb-web-dist;

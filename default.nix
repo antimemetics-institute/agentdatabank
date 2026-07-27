@@ -28,6 +28,7 @@ let
 in
 { system ? builtins.currentSystem
 , pkgs ? import nixpkgsSrc { inherit system; }
+, experiments ? null
 , adbRev ? null
 }:
 let
@@ -38,7 +39,7 @@ let
   };
 
   runnables =
-    { inherit (adbPkgs) adb-runner; }
+    { inherit (adbPkgs) adb-runner adb-dev; }
     // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web; }
     // lib.mapAttrs' (name: exp: lib.nameValuePair "experiment-${name}" exp.app)
       adbPkgs.experiments;
@@ -58,7 +59,7 @@ runnables
   #   $(nix-build --no-out-link -A exec.inspect-hello) --set …
   exec = lib.mapAttrs
     (name: drv: pkgs.runCommand "exec-${name}" { } "ln -s ${lib.getExe drv} $out")
-    ({ inherit (adbPkgs) adb-runner; }
+    ({ inherit (adbPkgs) adb-runner adb-dev; }
       // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web; }
       // lib.mapAttrs (_: exp: exp.app) adbPkgs.experiments);
 }

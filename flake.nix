@@ -37,6 +37,12 @@
             type = "app";
             program = "${adbPkgs.adb-runner}/bin/adb-runner";
           };
+          # authoring CLI: `nix run adb#adb-dev -- init my-exp` scaffolds an
+          # external experiment repo pinned to this adb
+          adb-dev = {
+            type = "app";
+            program = "${adbPkgs.adb-dev}/bin/adb-dev";
+          };
         }
         // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
           adb-web = {
@@ -50,7 +56,7 @@
           adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
-          inherit (adbPkgs) adb-runner;
+          inherit (adbPkgs) adb-runner adb-dev;
           manifests = pkgs.linkFarm "adb-manifests"
             (nixpkgs.lib.mapAttrsToList
               (name: exp: { name = "${name}.json"; path = exp.manifest; })

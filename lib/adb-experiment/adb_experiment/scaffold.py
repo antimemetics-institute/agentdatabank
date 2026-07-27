@@ -1,10 +1,12 @@
 """The runner-protocol scaffold for Python experiments.
 
-The protocol (runner side: adb_runner/protocol.py): params arrive as a JSON (or
-YAML) config file named on argv, ``ADB_RUN_DIR``/``ADB_SEED`` ride in the env,
-events leave as JSON lines on stdout, and failure at any stage is data — the run
-finishes with a fallback summary and exit 0; only an unreadable config exits
-nonzero. Every experiment repeats that scaffold verbatim, so it lives here:
+The protocol (runner side: adb_runner/protocol.py): realized params arrive as
+JSON on stdin, ``ADB_RUN_DIR``/``ADB_SEED`` ride in the env, events leave as
+JSON lines on stdout, and failure at any stage is data — the run finishes with
+a fallback summary and exit 0; only unreadable params exit nonzero. A config
+file named on argv overrides stdin — the hand-run/debug path, and the seam an
+adapter uses when it reshapes params first (concordia). Every experiment
+repeats that scaffold verbatim, so it lives here:
 
     def main() -> int:
         return experiment_main(Params, run, prog="my-experiment",
@@ -45,15 +47,20 @@ def experiment_main(params_model, run, *, prog: str,
                     description: str | None = None,
                     fallback_summary: dict[str, Any] | None = None,
                     argv: list[str] | None = None) -> int:
-    """The whole main(): parse argv, validate params (any object with a pydantic-
-    style ``model_validate``), default ``ADB_RUN_DIR``, call ``run(params)``.
-    A `run` that raises is data — the traceback goes to stderr, each entry of
-    `fallback_summary` is emitted as a metric, and the exit code stays 0."""
+    """The whole main(): read params (stdin, or a config file named on argv),
+    validate them (any object with a pydantic-style ``model_validate``), default
+    ``ADB_RUN_DIR``, call ``run(params)``. A `run` that raises is data — the
+    traceback goes to stderr, each entry of `fallback_summary` is emitted as a
+    metric, and the exit code stays 0."""
     parser = argparse.ArgumentParser(prog=prog, description=description)
-    parser.add_argument("config", help="path to a JSON (or YAML) config file")
+    parser.add_argument(
+        "config", nargs="?",
+        help="path to a JSON (or YAML) config file; omitted = params JSON on stdin (the runner protocol)",
+    )
     args = parser.parse_args(argv)
     try:
-        params = params_model.model_validate(_load_config(Path(args.config)))
+        raw = json.load(sys.stdin) if args.config is None else _load_config(Path(args.config))
+        params = params_model.model_validate(raw)
     except Exception:
         traceback.print_exc()
         return 1

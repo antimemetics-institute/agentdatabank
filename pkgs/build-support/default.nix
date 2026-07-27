@@ -81,7 +81,7 @@ in
     , workspaceRoot
     , python ? pkgs.python313
     , sourcePreference ? "wheel"
-      # extra pythonSet overlay for per-family fixes (e.g. a git dep that ships a
+      # extra pythonSet overlay for per-experiment-directory fixes (e.g. a git dep that ships a
       # legacy setup.py and needs setuptools injected as a build system). Receives
       # (final: prev: …) with uv2nix's pythonSet, where `final.resolveBuildSystem`
       # is available.
@@ -107,15 +107,28 @@ in
         })
         { inherit pyproject-nix uv2nix lib; };
       workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
-      inRepoOverlay = _final: prev:
+      # External repos lock the libs as git+subdirectory sources; the override
+      # must then also (a) clear uv2nix's postUnpack subdir descent — the
+      # replacement src IS the package root — and (b) inject hatchling: build
+      # systems are resolved from a path source's pyproject at eval, but a git
+      # source's isn't readable then, so none get attached.
+      inRepoOverlay = final: prev:
+        let
+          inRepo = name: src: prev.${name}.overrideAttrs (old: {
+            inherit src;
+            postUnpack = "";
+            nativeBuildInputs =
+              (old.nativeBuildInputs or [ ]) ++ final.resolveBuildSystem { hatchling = [ ]; };
+          });
+        in
         lib.optionalAttrs (prev ? adb-events) {
-          adb-events = prev.adb-events.overrideAttrs (_: { src = ../../lib/adb-events; });
+          adb-events = inRepo "adb-events" ../../lib/adb-events;
         }
         // lib.optionalAttrs (prev ? adb-experiment) {
-          adb-experiment = prev.adb-experiment.overrideAttrs (_: { src = ../../lib/adb-experiment; });
+          adb-experiment = inRepo "adb-experiment" ../../lib/adb-experiment;
         }
         // lib.optionalAttrs (prev ? adb-inspect) {
-          adb-inspect = prev.adb-inspect.overrideAttrs (_: { src = ../../lib/adb-inspect; });
+          adb-inspect = inRepo "adb-inspect" ../../lib/adb-inspect;
         };
       pythonSet =
         (pkgs.callPackage pyproject-nix.build.packages { inherit python; }).overrideScope
@@ -153,7 +166,7 @@ in
       # Per-experiment content identity. The condition hash's `source` is a content
       # hash of THIS experiment's declared sources — each re-imported via builtins.path
       # so its hash depends ONLY on that subtree's content, never on the whole-repo
-      # rev. So editing one experiment family cannot change another's condition_id.
+      # rev. So editing one experiment's directory cannot change another's condition_id.
       # The shared runner, wrapper lib, interpreter, and platform are NOT in identity;
       # they are recorded as run covariates. The fetchable rev (`fetchRef`) is recorded
       # separately for reproducibility — also not identity.
