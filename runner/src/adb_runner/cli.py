@@ -163,7 +163,6 @@ def main() -> int:
     home.mkdir(parents=True, exist_ok=True)
     _log(f"{manifest['name']}: {replicates} replicate(s) of condition "
          f"{abbrev(cond['cid'])}, base seed {base_seed}")
-    _log(f"writing to {home / 'runs' / cond['cid']}")
     _log(f"watch runs live at {VIEWER_URL} — start the viewer with: nix run .#adb-web")
 
     json_out = (lambda e: print(json.dumps(e, separators=(",", ":")), flush=True)) if args.json else None
@@ -208,6 +207,7 @@ def main() -> int:
             run_id = ulid()
             store = RunStore(home, cond["cid"], run_id)
             label = f"[{abbrev(cond['cid'])} r{replicate}]"
+            _log(f"{label} {run_id} writing to {store.dir}")
 
             def on_event(envelope, _label=label):
                 # an experiment's error-level log is the "why it failed" — say it on
