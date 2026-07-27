@@ -21,7 +21,7 @@ export type CmdPrefs = {
    enabled globally. nixRun:false likewise: the wrapped nix-shell form works
    without anything installed. */
 export const CMD_PREFS_DEFAULTS: CmdPrefs = {
-  mode: "flakes",
+  mode: "nix-build",
   source: "github",
   flakes: false,
   registry: false,

@@ -22,7 +22,7 @@ let
 
   experimentsDir = ../../experiments;
 
-  # the authoring door: an external experiment directory (a dir holding package.nix)
+  # the authoring entrypoint: an external experiment directory (a dir holding package.nix)
   # joins the registry beside the in-tree ones — same shape, same names
   externalPackageNix =
     if experiments == null then null

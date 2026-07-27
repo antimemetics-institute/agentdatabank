@@ -116,8 +116,8 @@ export function CmdSettings() {
             <Seg
               value={p.mode}
               options={[
-                { value: "flakes", label: "flakes" },
                 { value: "nix-build", label: "nix-build" },
+                { value: "flakes", label: "flakes" },
                 { value: "nix-run", label: "nix-run" },
               ]}
               onChange={(v) => set({ mode: v })}

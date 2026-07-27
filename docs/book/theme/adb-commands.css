@@ -56,8 +56,8 @@
 .adb-pop-note { margin: 0.55em 0 0; font-size: 0.88em; opacity: 0.7; }
 
 /* Palette-conditional prose (writing/): variants shown per the With tab.
-   Default (no JS) is the flakes variant; adb-commands.js stamps html.adb-flakeless
-   when a flakeless tab is active. */
-.adb-when-flakeless { display: none; }
-html.adb-flakeless .adb-when-flakes { display: none; }
-html.adb-flakeless .adb-when-flakeless { display: block; }
+   Default (no JS) is the plain/flakeless variant, matching the palette's
+   nix-build default; adb-commands.js stamps html.adb-flakes on the flakes tab. */
+.adb-when-flakes { display: none; }
+html.adb-flakes .adb-when-flakes { display: block; }
+html.adb-flakes .adb-when-flakeless { display: none; }

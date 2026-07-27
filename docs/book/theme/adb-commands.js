@@ -15,15 +15,15 @@
   var KEY = "adb-cmd-prefs";
   var GITHUB = "github:antimemetics-institute/agentdatabank";
   var TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
-  // flakes:false by default — commands must work on a stock Nix install, so they carry
-  // an explicit --extra-experimental-features until the reader says it's enabled
-  // globally. nixRun:false likewise: the wrapped nix-shell form works without
-  // anything installed.
+  // mode:"nix-build" by default — commands must work on a stock Nix install with
+  // zero configuration, and the exec one-liner is the only form that does.
+  // flakes:false likewise (armor flag until the reader enables them globally);
+  // nixRun:false (the wrapped nix-shell form works without anything installed).
   var DEFAULTS = {
-    // mode tabs: "flakes" (nix run, armored until flakes are global), "nix-build"
-    // (stock-nix $(nix-build …)/exec one-liner), "nix-run" (classic runner;
+    // mode tabs: "nix-build" (stock-nix $(nix-build …)/exec one-liner), "flakes"
+    // (nix run, armored until flakes are global), "nix-run" (classic runner;
     // nixRun = installed globally, else nix-shell-wrapped)
-    mode: "flakes",
+    mode: "nix-build",
     source: "github", flakes: false, registry: false, nixRun: false,
   };
 
@@ -107,38 +107,13 @@
   }
   function preview(p) { return rewrite("nix run .#inspect-hello -- …", p); }
 
-  // ```bash,repo-local — commands run in the READER'S experiment repo (writing/),
-  // where `.#` means THEIR flake (adb as an input), not an adb ref. Flakes mode:
-  // only the armor toggle applies — their repo is by definition local, so the
-  // From toggle is moot. Flakeless tabs: their flake is out of the picture; the
-  // command goes through ADB's classic entrypoint with the family dir as an
-  // argument (nix-build and nix-run both thread --arg). $PWD expands in the
-  // OUTER shell even inside the nix-shell wrap — the \" nesting is deliberate.
-  // Repo-local commands are authored single-line, so no continuation spans here.
-  // (No cmd-rewrite.ts port: the webui emits no repo-local commands today.)
+  // ```bash,repo-local — commands run in the READER'S experiment repo (writing/).
+  // `adb-dev init` gives that repo its own default.nix (and --flakes will add a
+  // flake.nix), so every command form works verbatim with the source pinned to
+  // "local": their repo IS the checkout, the From toggle doesn't apply. (No
+  // cmd-rewrite.ts port: the webui emits no repo-local commands today.)
   function rewriteLocal(text, p) {
-    var famArg = ' --arg family "$PWD"';
-    return text.split("\n").map(function (line) {
-      var idx = line.indexOf("nix run .#");
-      if (idx === -1) return line;
-      var before = line.slice(0, idx), cmd = line.slice(idx);
-      if (p.mode === "flakes") {
-        if (!p.flakes) cmd = cmd.replace(/^(nix run \.#\S+)/, "$1" + ARMOR);
-        return before + cmd;
-      }
-      if (p.mode === "nix-build") {
-        cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
-          return "$(nix-build --no-out-link " + TARBALL + " -A exec." + name + famArg + ")";
-        });
-        return before + cmd.replace(/("\$PWD"\)) --(?=\s|$)/, "$1");
-      }
-      cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
-        var pkg = name.indexOf("adb-") === 0 ? name : "experiment-" + name;
-        return "nix-run " + TARBALL + " -A " + pkg + famArg;
-      });
-      if (!p.nixRun) cmd = 'nix-shell -p nix-run --run "' + cmd.replace(/"/g, '\\"') + '"';
-      return before + cmd;
-    }).join("\n");
+    return rewrite(text, Object.assign({}, p, { source: "local" }));
   }
 
   function collectBlocks() {
@@ -161,8 +136,8 @@
     });
     // prose variants (adb-commands.css): .adb-when-flakes / .adb-when-flakeless
     // divs swap with the With tab, so pages can e.g. drop flake.nix from the
-    // story entirely for classic-Nix readers
-    document.documentElement.classList.toggle("adb-flakeless", p.mode !== "flakes");
+    // story entirely for plain-Nix readers (the no-JS/default state)
+    document.documentElement.classList.toggle("adb-flakes", p.mode === "flakes");
   }
 
   // --- the gear menu -----------------------------------------------------------------
@@ -220,8 +195,8 @@
       var r0 = el("div", { class: "adb-row" });
       r0.appendChild(el("span", { class: "adb-row-label" }, ["With"]));
       r0.appendChild(seg("mode", p.mode, [
-        { value: "flakes", label: "flakes" },
         { value: "nix-build", label: "nix-build" },
+        { value: "flakes", label: "flakes" },
         { value: "nix-run", label: "nix-run" }
       ], function (v) { update({ mode: v }); }));
       pop.appendChild(r0);

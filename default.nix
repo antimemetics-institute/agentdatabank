@@ -12,7 +12,7 @@
 # unexpanded and runs record `dirty:` — correct, a working tree has no rev. The
 # `adbRev` argument overrides the stamp (the fetchGit flow states its own rev).
 #
-# `experiments` is the authoring door: a path to an external experiment directory
+# `experiments` is the authoring entrypoint: a path to an external experiment directory
 # (see the book's "Writing experiments") joins the registry beside the in-tree
 # ones — same bare names, same manifests linkFarm, same web catalog.
 let

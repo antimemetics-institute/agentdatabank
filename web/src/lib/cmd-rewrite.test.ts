@@ -12,27 +12,34 @@ const GITHUB = "github:antimemetics-institute/agentdatabank";
 const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";
 
-test("defaults: github ref, armored for stock nix", () => {
+test("defaults: stock nix-build exec one-liner from the tarball", () => {
   assert.equal(
     rewriteCmd("nix run .#inspect-hello -- --set model=m", p({})),
+    `$(nix-build --no-out-link ${TARBALL} -A exec.inspect-hello) --set model=m`,
+  );
+});
+
+test("flakes mode: github ref, armored for stock nix", () => {
+  assert.equal(
+    rewriteCmd("nix run .#inspect-hello -- --set model=m", p({ mode: "flakes" })),
     `nix run ${GITHUB}#inspect-hello${ARMOR} -- --set model=m`,
   );
 });
 
 test("flakes enabled globally drops the armor; registry shortens the ref", () => {
   assert.equal(
-    rewriteCmd("nix run .#foo", p({ flakes: true })),
+    rewriteCmd("nix run .#foo", p({ mode: "flakes", flakes: true })),
     `nix run ${GITHUB}#foo`,
   );
   assert.equal(
-    rewriteCmd("nix run .#foo", p({ flakes: true, registry: true })),
+    rewriteCmd("nix run .#foo", p({ mode: "flakes", flakes: true, registry: true })),
     "nix run adb#foo",
   );
 });
 
 test("local checkout with global flakes is the canonical identity", () => {
   const cmd = "nix run .#foo -- --set a=1";
-  assert.equal(rewriteCmd(cmd, p({ source: "local", flakes: true })), cmd);
+  assert.equal(rewriteCmd(cmd, p({ mode: "flakes", source: "local", flakes: true })), cmd);
 });
 
 test("nix-build mode: $(nix-build …) head, `--` separator dropped", () => {
@@ -72,11 +79,14 @@ test("nix-run not installed wraps the whole span in nix-shell --run", () => {
 test("non-command text and indentation are preserved", () => {
   assert.equal(rewriteCmd("echo hello", p({})), "echo hello");
   assert.equal(
-    rewriteCmd("  nix run .#foo", p({ flakes: true })),
+    rewriteCmd("  nix run .#foo", p({ mode: "flakes", flakes: true })),
     `  nix run ${GITHUB}#foo`,
   );
 });
 
 test("preview follows the prefs", () => {
-  assert.equal(previewCmd(p({ source: "local", flakes: true })), "nix run .#inspect-hello -- …");
+  assert.equal(
+    previewCmd(p({ mode: "flakes", source: "local", flakes: true })),
+    "nix run .#inspect-hello -- …",
+  );
 });

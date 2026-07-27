@@ -1,132 +1,70 @@
 # Writing an experiment
 
-Experiments are packaged in **family directories**: one folder, one `package.nix`, declaring one *or more* experiments backed by the same code (ADB's `impossiblebench/` directory declares two; `inspect_evals/` declares one per task; usually it's just one). ADB's registry is all family directories flattened into one flat namespace of experiment names — the directory is the code and review boundary, the experiment names are the runnable ones.
+An experiment is a directory: one `package.nix` declaring it — params, results, and the program that runs it. One directory can declare several experiments backed by the same code (ADB's `impossiblebench/` declares two; `inspect_evals/` one per task), but usually it's one. ADB's registry is all these declarations flattened into one flat namespace of experiment names — and your directory lives in **your own repo**, permanently: you develop and run it there, and [contributing](contributing.md) later means packaging it into the registry, not moving it.
 
-The directories in this repo's `experiments/` are the reference examples — yours has exactly the same shape, it just lives in your own repo. The directory is the whole artifact, which is what makes [contributing it later](contributing.md) a verbatim copy.
+## Scaffold one
 
-<div class="adb-when-flakes">
+```bash
+nix run .#adb-dev -- init my-exp
+```
+
+That writes a working experiment, pinned to the ADB it came from:
 
 ```
 my-exp/
-├── flake.nix        scaffolding: hands the directory to ADB — never part of identity
-├── package.nix      declares the experiment: params, results, program
-├── pyproject.toml   depends on adb-experiment (a git source on the ADB repo)
+├── default.nix      the adb pin — `adb-dev bump` moves it; never part of identity
+├── package.nix      the declaration: params, results, and the program
+├── pyproject.toml   a normal Python project; adb libraries at the same rev as the pin
 ├── uv.lock
 └── my_exp/
-    └── main.py
+    └── main.py      a working example: a few chat turns via the instrumented client
 ```
-
-</div>
 
 <div class="adb-when-flakeless">
 
-```
-my-exp/
-├── package.nix      declares the experiment: params, results, program
-├── pyproject.toml   depends on adb-experiment (a git source on the ADB repo)
-├── uv.lock
-└── my_exp/
-    └── main.py
-```
+`default.nix` is the entire Nix story — a `fetchGit` pin on ADB (URL, branch, exact commit) and one line handing your directory over. Plain `nix-build` is all you ever need.
 
 </div>
-
-## The declaration
-
-`package.nix` is a function over `adb` (the build support) returning one attr per experiment:
-
-```nix
-{ adb, lib }:
-let
-  env = adb.mkPythonEnv { name = "my-exp-env"; workspaceRoot = ./.; };
-in
-{
-  my-exp = adb.mkExperiment {
-    name = "my-exp";
-    summary = "One line, shown in the GUI and the catalog.";
-    src = [ ./package.nix ./pyproject.toml ./uv.lock ./my_exp ];
-    params = with adb.types; {
-      model = param llm { initial = "mock/model"; order = 1000; };
-      steps = param int { initial = 10; order = 1; };
-    };
-    results = with adb.types; { status = str; };
-    program = lib.getExe' env "my-exp";
-  };
-}
-```
-
-`src` is **condition identity**: the content hash of exactly those paths versions your conditions. List what defines behavior (declaration, lock, code) and nothing else — tests, CI files, READMEs, and scaffolding like a `flake.nix` don't belong, so editing them doesn't re-version your experiment.
-
-## The program
-
-The program speaks the runner protocol: params arrive as a JSON config file named on argv, events leave as JSON lines on stdout, `ADB_SEED` and `ADB_RUN_DIR` ride in the env. In Python, `adb-experiment` (with `adb-events`; add `[llm]` for the instrumented model client, or `adb-inspect` to wrap an Inspect task) is that protocol packaged. The libraries aren't on PyPI — your `pyproject.toml` takes them straight from the ADB repo, pinned to a release tag (bumping the tag is a deliberate line-edit; at build time they're overridden to the ADB you build against, regardless):
-
-```toml
-[tool.uv.sources]
-adb-events = { git = "https://github.com/{{repo}}", subdirectory = "lib/adb-events", tag = "libs-v0" }
-adb-experiment = { git = "https://github.com/{{repo}}", subdirectory = "lib/adb-experiment", tag = "libs-v0" }
-```
-
-```python
-from adb_events.emit import metric
-from adb_experiment.scaffold import experiment_main
-from pydantic import BaseModel
-
-class Params(BaseModel):
-    model: str
-    steps: int
-
-def run(params: Params) -> None:
-    metric("status", "completed")
-
-def main() -> int:
-    return experiment_main(Params, run, prog="my-exp")
-```
-
-## Building and running
 
 <div class="adb-when-flakes">
 
-One scaffolding file, `flake.nix`, hands your directory to ADB. `origin` is your repo's fetchable ref, stated once because a flake cannot know its own URL:
-
-```nix
-{
-  inputs.adb.url = "github:{{repo}}";
-  outputs = { self, adb }: adb.lib.familyOutputs {
-    inherit self;
-    origin = "github:you/my-exp";
-    family = ./.;
-  };
-}
-```
-
-That gives your repo the same commands ADB itself has:
+The scaffold is plain Nix — it works fine with flakes enabled, through `nix run -f`-style commands or the exec forms below. A `--flakes` scaffold (a `flake.nix` that also gives your pushed commits fetchable run provenance) is planned; until it lands, plain is the one shape.
 
 </div>
 
-<div class="adb-when-flakeless">
+## Run it
 
-Your repo needs no Nix files of its own — ADB's classic entrypoint takes your directory as an argument (`--arg family`), straight from the tarball:
-
-</div>
+Every param binds explicitly — the run *is* its command line (run it bare and it prints the completed command to copy). `mock/model` is keyless and offline:
 
 ```bash,repo-local
-nix run .#my-exp -- --set model=mock/model --set steps=10
+nix run .#my-exp -- --set 'prompt=In one sentence: something surprising about agent experiments.' --set turns=3 --set model=mock/model --set temperature=0.7
+```
+
+And the web GUI, with your experiment in its catalog next to the built-in ones — runs land in the shared databank home either way:
+
+```bash,repo-local
 nix run .#adb-web
 ```
 
-`adb-web` here serves the union: the built-in catalog plus your family, so your run-config form is right there. Runs land in the shared databank home either way, so the run browser is always complete.
+## Make it yours
 
-<div class="adb-when-flakes">
+`my_exp/main.py` is the whole program: a pydantic `Params`, a `run()` that does the work, and `experiment_main` wiring it to the runner protocol. The scaffold's example drives `ChatClient` — an OpenAI-shaped client where the model id's provider prefix picks the endpoint and credentials, every call emits an `llm.call` event, and `mock/` runs without keys. Replace `run()` with your design; mirror any params/results change in `package.nix`.
 
-Because `origin` is declared, runs from pushed commits record a real fetchable ref (`github:you/my-exp/<rev>`) — re-runnable before your experiment is ever contributed. Uncommitted changes record `dirty:`, as everywhere.
+Two things worth knowing as you edit:
 
-</div>
+- **The protocol is the contract, Python is just packaged.** Params arrive as JSON, events leave as JSON lines — any language can speak it; `program` in `package.nix` is any executable that does.
+- **`src` is condition identity**: the content hash of exactly those paths versions your conditions. List what defines behavior (declaration, lock, code) — tests, CI files, and the scaffolding stay out, so editing them re-versions nothing.
 
-<div class="adb-when-flakeless">
+New Python dependencies are ordinary uv: `uv add whatever` (grab uv from `nix-shell -p uv` if you don't have it), and the next build picks up the lock.
 
-Runs record a `dirty:` fetch ref — a classic build carries no fetchable rev to record.
+## The pin
 
-</div>
+Your repo pins ADB in exactly one version, stated twice: the commit in `default.nix`'s pin block, and the same commit on the adb libraries in `pyproject.toml` — so your editor and your builds see the same code. `adb-dev bump` moves both together and relocks:
 
-Condition identity hashes content only, so the runs you record now [stay comparable after the merge](contributing.md).
+```bash,repo-local
+nix run .#adb-dev -- bump --latest
+```
+
+(`bump --rev <sha>` targets a specific commit; `adb-dev pin` prints the current one.)
+
+While you develop, runs record a `dirty:` fetch ref — honest, since your working directory isn't fetchable by anyone. Condition identity hashes content, not addresses, so the runs you record now collate with runs of the same content forever — including [after your experiment joins the registry](contributing.md).

@@ -4,7 +4,7 @@
 
 <div class="warning">
 
-**The [⚙ command settings](#adb-cmd-settings) do all of this for you.** Pick where you're running **from** (GitHub or a local checkout) and what you're running **with** — the `flakes`, `nix-build`, or `nix-run` tab — and every command in this guide rewrites itself to match your setup. The web GUI's bottom-left settings menu offers the same choices, stored in the same place. This chapter explains what each choice changes.
+**The [⚙ command settings](#adb-cmd-settings) do all of this for you.** Pick where you're running **from** (GitHub or a local checkout) and what you're running **with** — the `nix-build` (default), `flakes`, or `nix-run` tab — and every command in this guide rewrites itself to match your setup. The web GUI's bottom-left settings menu offers the same choices, stored in the same place. This chapter explains what each choice changes.
 
 </div>
 
