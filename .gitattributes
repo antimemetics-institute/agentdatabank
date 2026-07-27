@@ -1,0 +1,4 @@
+# git substitutes the commit hash into .git-revision when generating archives
+# (GitHub archive/*.tar.gz included) — how classic tarball imports learn their rev.
+# In a checkout the placeholder stays literal, which default.nix reads as "dirty".
+.git-revision export-subst
