@@ -70,6 +70,14 @@
         // nixpkgs.lib.mapAttrs' (name: exp: nixpkgs.lib.nameValuePair "experiment-${name}" exp.app)
           adbPkgs.experiments);
 
+      # lean by design: pure builds only (registry-wide manifest eval + the tools).
+      # The impure acceptance tests — entrypoint identity, the authoring smoke —
+      # can't be derivations (they invoke nix itself / need network) and live in
+      # scripts/ + CI instead.
+      checks = nixpkgs.lib.genAttrs systems (system: {
+        inherit (self.packages.${system}) manifests adb-dev adb-runner;
+      });
+
       devShells = forAllSystems (pkgs: {
         default = import ./shell.nix { inherit pkgs; };
       });
