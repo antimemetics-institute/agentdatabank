@@ -8,11 +8,17 @@ src = "src"
 [build]
 create-missing = false
 
+# expands {{repo}} to the owner/name slug derived from git-repository-url below —
+# the ONE place the repository is named (vars.py; adb-commands.js necessarily
+# repeats it as its GITHUB/TARBALL constants)
+[preprocessor.vars]
+command = "python3 vars.py"
+
 [output.html]
 default-theme = "rust"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/antimemetics-institute/adb"
-edit-url-template = "https://github.com/antimemetics-institute/adb/edit/main/docs/book/{path}"
+git-repository-url = "https://github.com/antimemetics-institute/agentdatabank"
+edit-url-template = "https://github.com/antimemetics-institute/agentdatabank/edit/main/docs/book/{path}"
 no-section-label = false
 additional-css = ["theme/adb-commands.css", "theme/adb-theme-images.css", "theme/adb-tabs.css"]
 additional-js = ["theme/adb-commands.js", "theme/adb-media.js"]

@@ -8,8 +8,8 @@ import { CMD_PREFS_DEFAULTS, previewCmd, rewriteCmd, type CmdPrefs } from "./cmd
 
 const p = (over: Partial<CmdPrefs>): CmdPrefs => ({ ...CMD_PREFS_DEFAULTS, ...over });
 
-const GITHUB = "github:antimemetics-institute/adb";
-const TARBALL = "https://github.com/antimemetics-institute/adb/archive/main.tar.gz";
+const GITHUB = "github:antimemetics-institute/agentdatabank";
+const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";
 
 test("defaults: github ref, armored for stock nix", () => {

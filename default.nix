@@ -3,7 +3,7 @@
 # to the SAME revision by reading flake.lock (one lock, two entrypoints).
 #
 #   nix-build -A experiment-inspect-hello && ./result/bin/adb-inspect-hello …
-#   nix-build https://github.com/antimemetics-institute/adb/archive/main.tar.gz \
+#   nix-build https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz \
 #     -A experiment-inspect-hello
 #
 # Classic builds carry no fetchable flake rev, so runs made this way record a

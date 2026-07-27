@@ -17,6 +17,11 @@
 - [ImpossibleBench](catalog/impossiblebench.md)
 - [Concordia](catalog/concordia.md)
 
+# Writing experiments
+
+- [Writing an experiment](writing/external.md)
+- [Contributing an experiment](writing/contributing.md)
+
 # Reference
 
 - [CLI reference](reference/cli.md)

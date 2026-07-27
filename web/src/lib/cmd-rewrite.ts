@@ -28,8 +28,8 @@ export const CMD_PREFS_DEFAULTS: CmdPrefs = {
   nixRun: false,
 };
 
-const GITHUB = "github:antimemetics-institute/adb";
-const TARBALL = "https://github.com/antimemetics-institute/adb/archive/main.tar.gz";
+const GITHUB = "github:antimemetics-institute/agentdatabank";
+const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";
 
 function ref(p: CmdPrefs): string {

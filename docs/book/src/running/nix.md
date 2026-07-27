@@ -15,16 +15,16 @@ The same run has several spellings. They differ only in ceremony, not in what th
 | Form | Looks like | When |
 |---|---|---|
 | **Local checkout** | `nix run .#inspect-hello -- …` | you cloned the repo and are inside it |
-| **GitHub, full** | `nix run github:antimemetics-institute/adb#inspect-hello -- …` | you don't have the repo — works with nothing else set up |
+| **GitHub, full** | `nix run github:{{repo}}#inspect-hello -- …` | you don't have the repo — works with nothing else set up |
 | **GitHub, registered** | `nix run adb#inspect-hello -- …` | you added `adb` to your flake registry (below) |
-| **Pinned** | `nix run github:antimemetics-institute/adb/<rev>#inspect-hello -- …` | reproducibility — this is what you paste into a paper's appendix |
+| **Pinned** | `nix run github:{{repo}}/<rev>#inspect-hello -- …` | reproducibility — this is what you paste into a paper's appendix |
 
 ## Making them shorter: the flake registry
 
 Registering `adb` once lets you write `adb#…` instead of the full GitHub URL — the same way `nixpkgs` is already registered for you:
 
 ```bash
-nix registry add adb github:antimemetics-institute/adb
+nix registry add adb github:{{repo}}
 ```
 
 The registry ref floats to the latest commit, which is fine: the runner records the *resolved* revision, so your run is still exactly identified.
@@ -34,7 +34,7 @@ The registry ref floats to the latest commit, which is fine: the runner records 
 `nix run` needs two experimental features, `nix-command` and `flakes`. The commands in this guide **opt in explicitly, per command** — nothing global to configure, works on a stock install:
 
 ```bash
-nix run github:antimemetics-institute/adb#adb-web --extra-experimental-features 'nix-command flakes'
+nix run github:{{repo}}#adb-web --extra-experimental-features 'nix-command flakes'
 ```
 
 (The flag rides with the `nix run` invocation, before the `--` that separates the experiment's own arguments.)
@@ -48,7 +48,7 @@ If you'd rather not enable flakes at all, the repo's `default.nix` is a plain cl
 **Via [`nix-run`](https://tangled.org/weethet.eurosky.social/nix-run)** (in nixpkgs) — a classic-Nix runner that, like `nix run`, resolves a package's `meta.mainProgram` and passes program arguments after `--`. Point it at a tarball of the repo (or `.` inside a checkout):
 
 ```bash
-nix-run https://github.com/antimemetics-institute/adb/archive/main.tar.gz \
+nix-run https://github.com/{{repo}}/archive/main.tar.gz \
     -A experiment-inspect-hello -- \
   --set model=mockllm/model \
   --set limit=0 \
@@ -65,7 +65,7 @@ nix-shell -p nix-run --run "nix-run … -A experiment-inspect-hello -- …"
 **Via stock `nix-build`** — nothing installed beyond Nix itself. The `exec.<name>` attributes (bare app names, same names `nix run` uses) have outputs that *are* the executables, resolved through `meta.mainProgram`, so it's a one-liner with no `./result` litter and no binary-name knowledge:
 
 ```bash
-$(nix-build --no-out-link https://github.com/antimemetics-institute/adb/archive/main.tar.gz \
+$(nix-build --no-out-link https://github.com/{{repo}}/archive/main.tar.gz \
     -A exec.inspect-hello) \
   --set model=mockllm/model \
   --set limit=0 \

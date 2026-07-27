@@ -31,7 +31,7 @@ let
       # build support — the `adb` attrset experiment declarations take as an argument.
       adb = final.callPackage ../build-support {
         inherit self;
-        origin = "github:antimemetics-institute/adb";
+        origin = "github:antimemetics-institute/agentdatabank";
       };
 
       # ADB's own tools; the adb- prefix keeps them out of the registry's bare namespace.

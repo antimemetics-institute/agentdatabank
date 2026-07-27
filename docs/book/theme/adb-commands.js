@@ -13,8 +13,8 @@
   "use strict";
 
   var KEY = "adb-cmd-prefs";
-  var GITHUB = "github:antimemetics-institute/adb";
-  var TARBALL = "https://github.com/antimemetics-institute/adb/archive/main.tar.gz";
+  var GITHUB = "github:antimemetics-institute/agentdatabank";
+  var TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
   // flakes:false by default — commands must work on a stock Nix install, so they carry
   // an explicit --extra-experimental-features until the reader says it's enabled
   // globally. nixRun:false likewise: the wrapped nix-shell form works without
@@ -107,6 +107,40 @@
   }
   function preview(p) { return rewrite("nix run .#inspect-hello -- …", p); }
 
+  // ```bash,repo-local — commands run in the READER'S experiment repo (writing/),
+  // where `.#` means THEIR flake (adb as an input), not an adb ref. Flakes mode:
+  // only the armor toggle applies — their repo is by definition local, so the
+  // From toggle is moot. Flakeless tabs: their flake is out of the picture; the
+  // command goes through ADB's classic entrypoint with the family dir as an
+  // argument (nix-build and nix-run both thread --arg). $PWD expands in the
+  // OUTER shell even inside the nix-shell wrap — the \" nesting is deliberate.
+  // Repo-local commands are authored single-line, so no continuation spans here.
+  // (No cmd-rewrite.ts port: the webui emits no repo-local commands today.)
+  function rewriteLocal(text, p) {
+    var famArg = ' --arg family "$PWD"';
+    return text.split("\n").map(function (line) {
+      var idx = line.indexOf("nix run .#");
+      if (idx === -1) return line;
+      var before = line.slice(0, idx), cmd = line.slice(idx);
+      if (p.mode === "flakes") {
+        if (!p.flakes) cmd = cmd.replace(/^(nix run \.#\S+)/, "$1" + ARMOR);
+        return before + cmd;
+      }
+      if (p.mode === "nix-build") {
+        cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
+          return "$(nix-build --no-out-link " + TARBALL + " -A exec." + name + famArg + ")";
+        });
+        return before + cmd.replace(/("\$PWD"\)) --(?=\s|$)/, "$1");
+      }
+      cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
+        var pkg = name.indexOf("adb-") === 0 ? name : "experiment-" + name;
+        return "nix-run " + TARBALL + " -A " + pkg + famArg;
+      });
+      if (!p.nixRun) cmd = 'nix-shell -p nix-run --run "' + cmd.replace(/"/g, '\\"') + '"';
+      return before + cmd;
+    }).join("\n");
+  }
+
   function collectBlocks() {
     var blocks = [];
     document.querySelectorAll("pre > code").forEach(function (code) {
@@ -121,7 +155,14 @@
     return blocks;
   }
   function apply(p) {
-    collectBlocks().forEach(function (code) { code.textContent = rewrite(code.getAttribute("data-adb-orig"), p); });
+    collectBlocks().forEach(function (code) {
+      var fn = code.classList.contains("repo-local") ? rewriteLocal : rewrite;
+      code.textContent = fn(code.getAttribute("data-adb-orig"), p);
+    });
+    // prose variants (adb-commands.css): .adb-when-flakes / .adb-when-flakeless
+    // divs swap with the With tab, so pages can e.g. drop flake.nix from the
+    // story entirely for classic-Nix readers
+    document.documentElement.classList.toggle("adb-flakeless", p.mode !== "flakes");
   }
 
   // --- the gear menu -----------------------------------------------------------------
