@@ -108,12 +108,26 @@
   function preview(p) { return rewrite("nix run .#inspect-hello -- …", p); }
 
   // ```bash,repo-local — commands run in the READER'S experiment repo (writing/).
-  // `adb-dev init` gives that repo its own default.nix (and --flakes will add a
-  // flake.nix), so every command form works verbatim with the source pinned to
-  // "local": their repo IS the checkout, the From toggle doesn't apply. (No
-  // cmd-rewrite.ts port: the webui emits no repo-local commands today.)
+  // `adb-dev init` gives that repo its own default.nix — and only that: the scaffold
+  // is plain-shape by design, no flake.nix ever. So the flakeless forms work verbatim
+  // with the source pinned to "local" (their repo IS the checkout, the From toggle
+  // doesn't apply), while the flakes tab must swap `.#name` for `nix run -f .` on the
+  // classic attrs — same names nix-run uses. (No cmd-rewrite.ts port: the webui emits
+  // no repo-local commands today.)
   function rewriteLocal(text, p) {
-    return rewrite(text, Object.assign({}, p, { source: "local" }));
+    if (p.mode !== "flakes") return rewrite(text, Object.assign({}, p, { source: "local" }));
+    return text.split("\n").map(function (line) {
+      var idx = line.indexOf("nix run .#");
+      if (idx === -1) return line;
+      var before = line.slice(0, idx), cmd = line.slice(idx);
+      cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
+        var pkg = name.indexOf("adb-") === 0 ? name : "experiment-" + name;
+        var head = "nix run -f . " + pkg;
+        if (!p.flakes) head += ARMOR;
+        return head;
+      });
+      return before + cmd;
+    }).join("\n");
   }
 
   function collectBlocks() {

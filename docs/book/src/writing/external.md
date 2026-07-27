@@ -5,7 +5,8 @@ An experiment is a directory: one `package.nix` declaring it — params, results
 ## Scaffold one
 
 ```bash
-nix run .#adb-dev -- init my-exp
+nix run .#adb-dev -- \
+  init my-exp
 ```
 
 That writes a working experiment, pinned to the ADB it came from:
@@ -28,7 +29,7 @@ my-exp/
 
 <div class="adb-when-flakes">
 
-The scaffold is plain Nix — it works fine with flakes enabled, through `nix run -f`-style commands or the exec forms below. A `--flakes` scaffold (a `flake.nix` that also gives your pushed commits fetchable run provenance) is planned; until it lands, plain is the one shape.
+The scaffold is plain Nix, and that's the one shape — there is no flake scaffold. With flakes enabled everything on this page still works as written: commands in your repo take the `nix run -f .` form, which drives the same packages without a `flake.nix`. If you want `.#` ergonomics anyway, wrap `default.nix` in a small flake of your own — the attrset it returns is the whole package set.
 
 </div>
 
@@ -37,7 +38,11 @@ The scaffold is plain Nix — it works fine with flakes enabled, through `nix ru
 Every param binds explicitly — the run *is* its command line (run it bare and it prints the completed command to copy). `mock/model` is keyless and offline:
 
 ```bash,repo-local
-nix run .#my-exp -- --set 'prompt=In one sentence: something surprising about agent experiments.' --set turns=3 --set model=mock/model --set temperature=0.7
+nix run .#my-exp -- \
+  --set 'prompt=In one sentence: something surprising about agent experiments.' \
+  --set turns=3 \
+  --set model=mock/model \
+  --set temperature=0.7
 ```
 
 And the web GUI, with your experiment in its catalog next to the built-in ones — runs land in the shared databank home either way:
@@ -62,7 +67,8 @@ New Python dependencies are ordinary uv: `uv add whatever` (grab uv from `nix-sh
 Your repo pins ADB in exactly one version, stated twice: the commit in `default.nix`'s pin block, and the same commit on the adb libraries in `pyproject.toml` — so your editor and your builds see the same code. `adb-dev bump` moves both together and relocks:
 
 ```bash,repo-local
-nix run .#adb-dev -- bump --latest
+nix run .#adb-dev -- \
+  bump --latest
 ```
 
 (`bump --rev <sha>` targets a specific commit; `adb-dev pin` prints the current one.)
