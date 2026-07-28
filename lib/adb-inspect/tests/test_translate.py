@@ -111,10 +111,12 @@ def test_full_translation_shape(capsys):
     assert "raw" not in calls[1]["response"]                   # none recorded → absent
     assert calls[0]["usage"] == {"input_tokens": 2, "output_tokens": 33}
 
-    # per-sample scores mapped C/I -> 1.0/0.0
-    per = [e["value"] for e in events
-           if e["type"] == "metric" and e["name"] == "score:includes"]
-    assert per == [1.0, 0.0]
+    # per-sample scores ride the sample agent.event, NOT metric events (a metric
+    # has no sample scope — N same-named metrics buried the run header)
+    assert [e["data"]["scores"] for e in ae if e["kind"] == "sample"] == \
+        [{"includes": "C"}, {"includes": "I"}]
+    assert not [e for e in events
+                if e["type"] == "metric" and e["name"].startswith("score:")]
 
     # aggregate metric surfaced
     assert any(e["type"] == "metric" and e["name"] == "includes/accuracy"
@@ -170,7 +172,7 @@ def test_emit_sample_skips_what_was_streamed_live(capsys):
     translate.emit_sample(s, "m", seen_messages={"m-user", "m-asst"},
                           seen_events={"ev-1"})
     events = _capture(capsys)
-    # only the per-sample score + closing agent.event remain
+    # only the closing agent.event remains
     assert not [e for e in events if e["type"] in ("message", "llm.call")]
     assert [e["type"] for e in events if e["type"] == "agent.event"] == ["agent.event"]
 

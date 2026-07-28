@@ -63,21 +63,25 @@ def status(detail: str) -> None:
     _emit("status", Status(detail=detail))
 
 
-def log(message: str, level: str = "info") -> None:
+def log(message: str, *, level: str = "info") -> None:
     _emit("log", Log(message=message, level=level))
 
 
-def metric(name: str, value: Any, step: int | None = None, unit: str | None = None) -> None:
+# Every emitter with more than one field is fully keyword-only: same-typed payload
+# args (which string is the channel? name or value first?) make positional calls a
+# silent-swap hazard, and consumers shouldn't need per-function rules. Only a lone
+# required payload (status/log/emit_raw's first arg) may be positional.
+def metric(*, name: str, value: Any, step: int | None = None, unit: str | None = None) -> None:
     _emit("metric", Metric(name=name, value=value, step=step, unit=unit))
 
 
-def message(from_: str, content: str, channel: str, to: str | None = None,
+def message(*, from_: str, content: str, channel: str, to: str | None = None,
             visible_to: list[str] | None = None, **meta: Any) -> None:
     _emit("message", Message(from_=from_, content=content, channel=channel,
                              to=to, visible_to=visible_to, meta=meta or None))
 
 
-def llm_call(agent: str | None, model: str, request: Any, response: Any = None,
+def llm_call(*, agent: str | None, model: str, request: Any, response: Any = None,
              usage: Any = None, latency_ms: Any = None, error: Any = None,
              **meta: Any) -> None:
     # convert dict args into the typed Structs (validates request.messages etc.)
@@ -89,10 +93,10 @@ def llm_call(agent: str | None, model: str, request: Any, response: Any = None,
     _emit("llm.call", ev)
 
 
-def agent_event(agent: str, kind: str, **data: Any) -> None:
+def agent_event(*, agent: str, kind: str, **data: Any) -> None:
     _emit("agent.event", AgentEvent(agent=agent, kind=kind, data=data))
 
 
-def artifact(name: str, path: str, media_type: str | None = None,
+def artifact(*, name: str, path: str, media_type: str | None = None,
              size: int | None = None) -> None:
     _emit("artifact", Artifact(name=name, path=path, media_type=media_type, bytes=size))

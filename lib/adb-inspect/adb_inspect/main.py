@@ -81,8 +81,8 @@ def deposit_log(log_obj, run_dir: Path) -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / "run.eval"
     shutil.copyfile(src, dest)
-    artifact("run.eval", "artifacts/run.eval",
-             "application/octet-stream", dest.stat().st_size)
+    artifact(name="run.eval", path="artifacts/run.eval",
+             media_type="application/octet-stream", size=dest.stat().st_size)
 
 
 class PrintStream(io.TextIOBase):
@@ -216,7 +216,7 @@ def run(params: Params) -> None:
 
 def _emit_zero() -> None:
     for k, v in _ZERO.items():
-        metric(k, v)
+        metric(name=k, value=v)
     status("done: status=error (eval did not run)")
 
 

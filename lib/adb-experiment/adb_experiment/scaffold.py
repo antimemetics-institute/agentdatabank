@@ -70,7 +70,7 @@ def experiment_main(params_model, run, *, prog: str,
     except Exception:
         traceback.print_exc()
         for name, value in (fallback_summary or {}).items():
-            metric(name, value)
+            metric(name=name, value=value)
     return 0
 
 

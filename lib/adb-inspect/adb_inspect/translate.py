@@ -3,8 +3,10 @@
 Full per-sample translation: every chat turn becomes a `message` (channel per
 sample, so the transcript viewer reads one conversation per row), every model
 call becomes an `llm.call` (verbatim provider request/response when Inspect
-recorded it), every score becomes a `metric`, and each sample closes with an
-`agent.event`. Aggregate scorer metrics and token totals are emitted last.
+recorded it), and each sample closes with an `agent.event` carrying its scores.
+`metric` events are run-level only — aggregate scorer metrics and token totals,
+emitted last. (Per-sample scores are NOT metrics: a metric has no sample scope,
+so N same-named events are unreadable — that's what buried the agentharm UI.)
 
 Inspect telemetry is secondary data (transcript-derived), so callers may weigh
 it accordingly — same posture as the harness normalizers in specs/harness.md.
@@ -54,7 +56,7 @@ def emit_provenance(log: Any, agent: str) -> None:
     ds = getattr(e, "dataset", None)
     rev = getattr(e, "revision", None)
     agent_event(
-        agent, "provenance",
+        agent=agent, kind="provenance",
         packages=e.packages or {},
         task=e.task,
         task_version=e.task_version,
@@ -108,7 +110,8 @@ def emit_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any) -> None:
         response = None
     latency = round(ev.working_time * 1000) if ev.working_time else None
     err = str(ev.error) if ev.error else None
-    llm_call(agent, ev.model, request, response, usage, latency, err,
+    llm_call(agent=agent, model=ev.model, request=request, response=response,
+             usage=usage, latency_ms=latency, error=err,
              sample_id=sample_id, epoch=epoch)
 
 
@@ -126,7 +129,7 @@ def emit_live_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any,
         if mid is None or mid in seen_messages:
             continue
         seen_messages.add(mid)
-        message(m.role, m.text or "", channel, role=m.role,
+        message(from_=m.role, content=m.text or "", channel=channel, role=m.role,
                 sample_id=sample_id, epoch=epoch)
     emit_model_event(ev, agent, sample_id, epoch)
 
@@ -143,18 +146,15 @@ def emit_sample(sample: Any, agent: str, *,
     for msg in sample.messages or []:
         if seen_messages and getattr(msg, "id", None) in seen_messages:
             continue
-        message(msg.role, msg.text or "", channel, role=msg.role, **meta_base)
+        message(from_=msg.role, content=msg.text or "", channel=channel,
+                role=msg.role, **meta_base)
 
     for ev in _model_events(sample):
         if seen_events and getattr(ev, "uuid", None) in seen_events:
             continue
         emit_model_event(ev, agent, sample.id, sample.epoch)
 
-    for scorer, score in (sample.scores or {}).items():
-        num = _num(score.value)
-        metric(f"score:{scorer}", num if num is not None else score.value)
-
-    agent_event(agent, "sample", id=sample.id, epoch=sample.epoch,
+    agent_event(agent=agent, kind="sample", id=sample.id, epoch=sample.epoch,
                 target=sample.target,
                 scores={k: v.value for k, v in (sample.scores or {}).items()},
                 error=str(sample.error) if sample.error else None)
@@ -183,21 +183,21 @@ def headline(log: Any) -> tuple[float, str]:
 def emit_aggregate(log: Any, agent: str) -> dict:
     """The run-level tail: aggregate scorer metrics, token totals, and the scalar
     results summary. Emitted once after the eval — the per-sample events (message /
-    llm.call / score / agent.event) stream separately as each sample completes."""
+    llm.call / agent.event) stream separately as each sample completes."""
     results = getattr(log, "results", None)
     if results:
         for score in results.scores:
             for name, m in score.metrics.items():
                 num = _num(m.value)
                 if num is not None:
-                    metric(f"{score.name}/{name}", num)
+                    metric(name=f"{score.name}/{name}", value=num)
 
     ti = to = 0
     for usage in (log.stats.model_usage or {}).values():
         ti += usage.input_tokens or 0
         to += usage.output_tokens or 0
-    metric("tokens_input", ti)
-    metric("tokens_output", to)
+    metric(name="tokens_input", value=ti)
+    metric(name="tokens_output", value=to)
 
     total = results.total_samples if results else 0
     completed = results.completed_samples if results else 0
@@ -208,7 +208,7 @@ def emit_aggregate(log: Any, agent: str) -> dict:
                "errors": errors, "score": score, "score_name": score_name,
                "tokens_input": ti, "tokens_output": to}
     for k, v in summary.items():
-        metric(k, v)
+        metric(name=k, value=v)
     return summary
 
 

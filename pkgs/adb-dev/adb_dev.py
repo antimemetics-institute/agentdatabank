@@ -311,9 +311,9 @@ def run(params: Params) -> None:
             messages=[{"role": "user", "content": f"(turn {turn + 1}) {params.prompt}"}],
         )
         chars += len(response.choices[0].message.content or "")
-    metric("status", "completed")
-    metric("turns", params.turns)
-    metric("chars", chars)
+    metric(name="status", value="completed")
+    metric(name="turns", value=params.turns)
+    metric(name="chars", value=chars)
 
 
 def main() -> int:

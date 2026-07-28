@@ -28,8 +28,8 @@ def emit_provenance(*, concordia_version: str, model: str,
     # provenance, not something the game master did (agent.event requires an agent
     # string; `concordia` names the component whose identity is being recorded)
     agent_event(
-        "concordia",
-        "provenance",
+        agent="concordia",
+        kind="provenance",
         concordia=concordia_version,
         model=model,
         agents=agents,
@@ -157,7 +157,7 @@ class TurnEmitter:
                     or (components.get(comp) or {}).get("Value"))
             }
             if perception:
-                agent_event(agent, "perception", step=step, **perception)
+                agent_event(agent=agent, kind="perception", step=step, **perception)
 
 
 def emit_summary(*, status_str: str, steps: int, agents: int,
@@ -172,5 +172,5 @@ def emit_summary(*, status_str: str, steps: int, agents: int,
         "model_calls": model_calls,
     }
     for name, value in summary.items():
-        metric(name, value)
+        metric(name=name, value=value)
     return summary
