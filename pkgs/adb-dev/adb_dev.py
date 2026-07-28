@@ -389,8 +389,6 @@ experiment* page.
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    if args.flakes:
-        die("--flakes is not implemented yet; the plain scaffold works on any nix")
     name = args.name
     if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
         die("NAME must be lowercase, alphanumeric with dashes, starting with a letter")
@@ -443,7 +441,6 @@ def main() -> int:
     p_init.add_argument("--dir", help="target directory (default: ./NAME)")
     p_init.add_argument("--rev", help="adb rev to pin (default: the rev this tool was built from)")
     p_init.add_argument("--adb-url", help="adb git URL (default: the canonical repo)")
-    p_init.add_argument("--flakes", action="store_true", help="scaffold a flake instead (not implemented)")
     p_init.add_argument("--no-lock", action="store_true", help="skip running `uv lock`")
     p_init.set_defaults(fn=cmd_init)
 
