@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # the authoring smoke fetches a rev from file://$PWD
+          fetch-depth: 0 # the authoring loop pins revs from a local bare mirror
       # the NixOS-org installer action; still self-labeled experimental with no
       # stable tags (hence @main) — chosen deliberately over the third-party ones
       - uses: NixOS/nix-installer-action@main
@@ -95,15 +95,40 @@ jobs:
             "$(nix-build --no-out-link -A exec.inspect-hello)" \
             --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
 
-      - name: entrypoint identity — nix run / nix-build / nix-run mint the same condition
+      - name: entrypoint identity — nix run / nix run -f / nix-build / nix-run mint the same condition
         run: ./scripts/check-entrypoint-identity.sh
 
-      - name: authoring smoke — adb-dev init, build through --arg experiments, run
+      - name: authoring loop — init at the parent rev, bump to HEAD, run through every door
         run: |
+          # a bare mirror whose `main` IS this build's commit — the scaffold's
+          # pin block hardcodes ref = "main", and on PRs the merge commit being
+          # built is not reachable from the real main
+          adbsrc="$RUNNER_TEMP/adb-src.git"
+          git init --bare --quiet -b main "$adbsrc"  # -b: uv fetches HEAD, which must resolve
+          git push --quiet "$adbsrc" HEAD:refs/heads/main
+          head=$(git rev-parse HEAD)
+          parent=$(git rev-parse HEAD^)
+
           scaffold="$RUNNER_TEMP/ci-chat"
-          "$(nix-build --no-out-link -A exec.adb-dev)" init ci-chat \
-            --dir "$scaffold" --adb-url "file://$PWD" --rev "$GITHUB_SHA"
+          adb_dev="$(nix-build --no-out-link -A exec.adb-dev)"
+
+          # init pins the PARENT rev with --no-lock (nothing resolves against
+          # it), so bump has a real move to make; then every pinned surface —
+          # default.nix, pyproject sources, uv.lock — must land on HEAD
+          "$adb_dev" init ci-chat --dir "$scaffold" --adb-url "file://$adbsrc" \
+            --rev "$parent" --no-lock
+          (cd "$scaffold" && "$adb_dev" bump --rev "$head")
+          test "$(cd "$scaffold" && "$adb_dev" pin)" = "$head"
+          grep -q "rev = \"$head\"" "$scaffold/pyproject.toml"
+          grep -qF "$head" "$scaffold/uv.lock"
+
+          # a real keyless run through the adb checkout's --arg door
           ADB_HOME="$RUNNER_TEMP/adb-home" \
             "$(nix-build --no-out-link -A exec.ci-chat --arg experiments "$scaffold")" \
+            --set 'prompt=Say one surprising thing.' --set turns=2 \
+            --set model=mock/model --set temperature=0.7
+
+          # and the scaffold's own doors (its default.nix + fetchGit pin) agree
+          ./scripts/check-entrypoint-identity.sh --dir "$scaffold" --exp ci-chat -- \
             --set 'prompt=Say one surprising thing.' --set turns=2 \
             --set model=mock/model --set temperature=0.7
