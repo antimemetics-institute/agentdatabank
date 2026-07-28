@@ -109,7 +109,7 @@ def emit_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any) -> None:
     else:
         response = None
     latency = round(ev.working_time * 1000) if ev.working_time else None
-    err = str(ev.error) if ev.error else None
+    err = {"kind": "model_error", "message": str(ev.error)} if ev.error else None
     llm_call(agent=agent, model=ev.model, request=request, response=response,
              usage=usage, latency_ms=latency, error=err,
              sample_id=sample_id, epoch=epoch)
