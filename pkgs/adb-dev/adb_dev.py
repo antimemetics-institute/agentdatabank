@@ -325,6 +325,66 @@ result-*
 .venv/
 __pycache__/
 ''',
+    "README.md": '''\
+# @NAME@
+
+An [ADB](@WEBURL@) experiment in its own repository — scaffolded by
+`adb-dev init @NAME@` from adb `@SHORTREV@`, then developed here. Runs land in
+the shared databank home; conditions are versioned by the content of this
+repo's experiment files, so they collate with runs of the same content
+anywhere — including after this experiment joins the adb registry.
+
+## What it does
+
+A few chat turns against one model via the instrumented `ChatClient` — the
+scaffold's working example. (Replace this section when you replace `run()`.)
+
+## Layout
+
+| file | role |
+| --- | --- |
+| `default.nix` | the adb pin — `adb-dev bump` moves it; never part of identity |
+| `package.nix` | the declaration: params, results, and the program |
+| `pyproject.toml`, `uv.lock` | a normal Python project; adb libraries at the same rev as the pin |
+| `@PKG@/main.py` | the program: a pydantic `Params`, `run()`, `experiment_main` |
+
+## Run it
+
+Every param binds explicitly — run it bare and it prints the completed command
+to copy. `mock/model` is keyless and offline:
+
+```sh
+$(nix-build --no-out-link -A exec.@NAME@) --set model=mock/model …
+```
+
+And the web GUI, with this experiment in its catalog next to the built-in ones:
+
+```sh
+$(nix-build --no-out-link -A exec.adb-web)
+```
+
+## Change it
+
+Replace `run()` in `@PKG@/main.py` with your design; mirror any params/results
+change in `package.nix`. New Python dependencies are ordinary `uv add`. The
+`src` list in `package.nix` is condition identity — the content hash of exactly
+those paths versions your conditions, so the README, tests, and scaffolding
+stay out of it.
+
+## Move the pin
+
+```sh
+$(nix-build --no-out-link -A exec.adb-dev) bump --latest
+```
+
+moves `default.nix` and the `pyproject.toml` sources to the same adb rev and
+relocks. `adb-dev pin` prints the current one.
+
+---
+
+Scaffolded by `adb-dev init`; the full story is the adb book's *Writing an
+experiment* page.
+''',
 }
 
 
@@ -344,7 +404,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     if rev is None:
         print("adb-dev: built from an unpinned adb — asking the repo for its main rev")
         rev = ls_remote(url, "main")
-    subst = {"@NAME@": name, "@PKG@": pkg, "@URL@": url, "@REV@": rev, "@REF@": "main"}
+    # the README's prose link: the canonical repo even when --adb-url points the
+    # pin somewhere local — prose is for readers, the pin block is for fetchers
+    web_url = os.environ.get("ADB_REPO_URL") or url
+    subst = {"@NAME@": name, "@PKG@": pkg, "@URL@": url, "@REV@": rev,
+             "@SHORTREV@": rev[:12], "@REF@": "main", "@WEBURL@": web_url}
 
     for relpath, template in SCAFFOLD.items():
         out = dest / _render(relpath, subst)

@@ -17,6 +17,7 @@ my-exp/
 ├── package.nix      the declaration: params, results, and the program
 ├── pyproject.toml   a normal Python project; adb libraries at the same rev as the pin
 ├── uv.lock
+├── README.md        the repo's own story — starts generated, grows with your design
 └── my_exp/
     └── main.py      a working example: a few chat turns via the instrumented client
 ```
