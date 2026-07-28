@@ -90,6 +90,9 @@ export interface Manifest {
   name: string;
   summary?: string;
   schema_version?: number;
+  /* which instance packaged this experiment — "external" marks the author's own
+     repo joining the catalog; the overview pins those cards first */
+  origin?: string;
   params: Record<string, ParamDecl>;
   results?: Record<string, unknown>;
   templates?: Record<string, TemplateDecl>;

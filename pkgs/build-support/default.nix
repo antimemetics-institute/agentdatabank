@@ -184,10 +184,12 @@ in
             filter = path: _type: !isDevArtifact (baseNameOf path);
           }}") srcs));
 
+      # `origin` is catalog metadata (which instance packaged this — "external" for
+      # an author's own repo), never identity: it's not in `src` and not the fetchRef
       manifest = pkgs.writeText "adb-manifest-${name}.json" (builtins.toJSON {
         schema_version = 0;
         params = withLlmHints params;
-        inherit name summary results env;
+        inherit name summary results env origin;
       });
       app = pkgs.writeShellApplication {
         name = "adb-${name}";

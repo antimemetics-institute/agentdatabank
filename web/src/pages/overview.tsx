@@ -2,8 +2,11 @@
    their pages (#/experiments/<name>). Every experiment in the manifest catalog
    gets a card — with zero runs it still appears (summary + a hint), so a fresh
    install shows what's runnable. Sorted by run count by default (the databank's
-   center of gravity first). The per-experiment detail (composer, runs) lives on
-   the experiment page. */
+   center of gravity first) — except external experiments (origin "external":
+   the author's own repo joining the catalog), which always pin to the top:
+   whoever brought their own experiment came for that card, however many runs
+   the built-ins have. The per-experiment detail (composer, runs) lives on the
+   experiment page. */
 
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
@@ -39,12 +42,14 @@ export function OverviewPage() {
   const lastOf = (n: string) =>
     (byExp[n] ?? []).map((r) => r.started_at ?? "").sort().at(-1) ?? "";
   const q = query.trim().toLowerCase();
+  const isYours = (n: string) => byName.get(n)?.origin === "external";
   const shown = (q
     ? names.filter((n) =>
         n.toLowerCase().includes(q) ||
         (byName.get(n)?.summary ?? "").toLowerCase().includes(q))
     : names
   ).sort((a, b) =>
+    Number(isYours(b)) - Number(isYours(a)) ||
     (sort === "runs" && (byExp[b]?.length ?? 0) - (byExp[a]?.length ?? 0)) ||
     (sort === "recent" && lastOf(b).localeCompare(lastOf(a))) ||
     a.localeCompare(b));
@@ -96,7 +101,14 @@ export function OverviewPage() {
               <Card className="flex h-full min-h-40 flex-col transition-colors hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-start justify-between gap-1.5 text-sm">
-                    <span className="break-all font-mono">{exp}</span>
+                    <span className="flex min-w-0 items-start gap-1.5">
+                      <span className="break-all font-mono">{exp}</span>
+                      {isYours(exp) && (
+                        <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                          yours
+                        </span>
+                      )}
+                    </span>
                     <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                   </CardTitle>
                 </CardHeader>
