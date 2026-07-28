@@ -129,7 +129,7 @@ let
         name = "${name}-adapter";
         runtimeInputs = [ jq ];
         text = ''
-          config=$(mktemp --suffix=.json)
+          config=$(mktemp)
           trap 'rm -f "$config"' EXIT
           jq --argjson seed "''${ADB_SEED:-0}" '{
             task: ${builtins.toJSON task},
