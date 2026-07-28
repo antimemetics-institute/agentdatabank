@@ -117,6 +117,9 @@ def rewrite_uv_sources(pyproject: Path, rev: str) -> list[str]:
 
 
 def uv_lock(cwd: Path) -> bool:
+    lock = cwd / "uv.lock"
+    if lock.exists() and lock.stat().st_size == 0:
+        lock.unlink()  # the empty `init --no-lock` placeholder; uv refuses to parse it
     print("adb-dev: running `uv lock` …")
     return subprocess.run(["uv", "lock"], cwd=cwd).returncode == 0
 
