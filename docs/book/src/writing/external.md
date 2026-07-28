@@ -1,6 +1,6 @@
 # Writing an experiment
 
-An experiment is a directory: one `package.nix` declaring it — params, results, and the program that runs it. One directory can declare several experiments backed by the same code (ADB's `impossiblebench/` declares two; `inspect_evals/` one per task), but usually it's one. ADB's registry is all these declarations flattened into one flat namespace of experiment names — and your directory lives in **your own repo**, permanently: you develop and run it there, and [contributing](contributing.md) later means packaging it into the registry, not moving it.
+An experiment is a directory: one `package.nix` declaring it — params, results, and the program that runs it. One directory can declare several experiments backed by the same code (ADB's `impossiblebench/` declares two; `inspect_evals/` one per task), but usually it's one. ADB's registry is all these declarations flattened into one flat namespace of experiment names — and your directory lives in **your own repo**, permanently: you develop and run it there, and [contributing](contributing.md) later means packaging it into the registry, not moving it. [`adb-werewolf-example`](https://github.com/antimemetics-institute/adb-werewolf-example) is such a repo — this page's scaffold with `run()` swapped for a small social-deduction game.
 
 ## Scaffold one
 

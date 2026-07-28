@@ -354,7 +354,11 @@ Every param binds explicitly — run it bare and it prints the completed command
 to copy. `mock/model` is keyless and offline:
 
 ```sh
-$(nix-build --no-out-link -A exec.@NAME@) --set model=mock/model …
+$(nix-build --no-out-link -A exec.@NAME@) \
+  --set 'prompt=In one sentence: something surprising about agent experiments.' \
+  --set turns=3 \
+  --set model=mock/model \
+  --set temperature=0.7
 ```
 
 And the web GUI, with this experiment in its catalog next to the built-in ones:
