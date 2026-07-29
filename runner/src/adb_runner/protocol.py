@@ -12,7 +12,6 @@ can print breaks a run. Exit code 0 → completed, nonzero → failed, signal �
 from __future__ import annotations
 
 import datetime
-import fnmatch
 import json
 import os
 import queue
@@ -30,8 +29,10 @@ from .ulid import ulid
 # DOCKER_HOST: sandboxed experiments must find the machine's docker daemon (a
 # per-user rootless socket on dev boxes — see `task docker:up`); like provider
 # endpoints, where the daemon lives is environment, never condition identity.
+# Nothing else ambient — provider credentials/endpoints reach a run ONLY through
+# the providers store (docs/plan/credentials.md), so a stray key exported in the
+# shell can neither leak into a run nor shadow the stored value.
 ENV_ALLOWLIST = ["PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "DOCKER_HOST"]
-ENV_ALLOW_PATTERNS = ["*_API_KEY", "*_API_BASE", "*_BASE_URL", "AWS_*", "AZURE_*"]
 
 # Liveness heartbeat: while the experiment runs, the runner touches run.json's mtime
 # (content unchanged — no deposit churn, nothing in the event stream; liveness is
@@ -49,14 +50,12 @@ def _now() -> str:
 
 
 def child_env(run_id: str, run_dir: str, seed: int, provider_env: dict | None = None) -> dict:
-    # stored provider credentials/endpoints (providers.py) are the base; an explicit host
-    # env var of the same name overrides (so CI / a deliberate `export` still wins), and
-    # ADB_* are set last. This is how a real model reaches its key without the key ever
-    # appearing on the command line.
-    env = dict(provider_env or {})
-    for key, value in os.environ.items():
-        if key in ENV_ALLOWLIST or any(fnmatch.fnmatch(key, p) for p in ENV_ALLOW_PATTERNS):
-            env[key] = value
+    # constructed from scratch: system basics from the allowlist, then the stored
+    # provider credentials/endpoints (providers.py) — the store always wins over the
+    # host — then ADB_* run vars. This is how a real model reaches its key without
+    # the key ever appearing on the command line or being readable from the shell.
+    env = {key: value for key, value in os.environ.items() if key in ENV_ALLOWLIST}
+    env.update(provider_env or {})
     env.update(
         ADB_RUN_ID=run_id,
         ADB_RUN_DIR=run_dir,

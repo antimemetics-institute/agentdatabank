@@ -124,11 +124,12 @@ def test_missing_providers_gate(cfg, monkeypatch):
     assert providers.missing_providers(manifest, {"model": "mockllm/model"}) == []
     # unknown prefix (a local ollama may legitimately need nothing) → never blocked
     assert providers.missing_providers(manifest, {"model": "ollama/llama3"}) == []
-    # a host env var satisfies it without a store entry
-    monkeypatch.setenv("OPENAI_BASE_URL", "http://llama.local:11434/v1")
-    assert providers.missing_providers(manifest, {"model": "openai/q"}) == []
-    # so does a stored section
-    monkeypatch.delenv("OPENAI_BASE_URL")
+    # a host env var does NOT satisfy the gate — the store is the only credential
+    # source, and an accidentally exported key must not skip the setup prompt
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-ambient")
+    assert providers.missing_providers(manifest, {"model": "openai/q"}) == ["openai"]
+    monkeypatch.delenv("OPENAI_API_KEY")
+    # a stored section does
     providers.save({"openai": {"OPENAI_API_KEY": "k"}})
     assert providers.missing_providers(manifest, {"model": "openai/q"}) == []
 

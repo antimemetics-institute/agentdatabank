@@ -163,21 +163,20 @@ def env_for_run(manifest: dict, realized_params: dict) -> dict[str, str]:
 
 
 def missing_providers(manifest: dict, realized_params: dict) -> list[str]:
-    """Providers this run's model ids reference that are configured NOWHERE — no
-    section in the store, none of their env vars in the host env. Only providers the
+    """Providers this run's model ids reference with no section in the store. The
+    store is the ONLY source of provider credentials — a key exported in the shell
+    neither reaches a run nor suppresses this gate (it would silently skip the
+    setup prompt while the run still launched keyless). Only providers the
     REGISTRY knows need credentials are reported: an unknown prefix (ollama, vllm, a
     local server) may legitimately need nothing, and blocking on a guess would be
     inferred-but-wrong. A run naming a known provider with zero configuration can
     only fail, so the runner refuses it up front with the fix in hand."""
     store = load()
-    out = []
-    for provider in sorted(providers_used(manifest, realized_params)):
-        if provider not in REGISTRY or provider in store:
-            continue
-        if any(os.environ.get(var) for var, _secret, _default in REGISTRY[provider]):
-            continue
-        out.append(provider)
-    return out
+    return [
+        provider
+        for provider in sorted(providers_used(manifest, realized_params))
+        if provider in REGISTRY and provider not in store
+    ]
 
 
 # -- the `adb-runner providers` CLI ----------------------------------------------------
@@ -235,8 +234,7 @@ def prompt_provider(provider: str) -> int:
     adopts it). Scripted use pipes one line per prompt on stdin (non-tty)."""
     spec = REGISTRY.get(provider)
     if spec is None:
-        # not a built-in: a NAMED credential set with the conventional env vars — the
-        # same *_API_KEY / *_BASE_URL patterns the injection allowlist forwards, and
+        # not a built-in: a NAMED credential set with the conventional env var names —
         # exactly what `openai-api/<name>/<model>` ids read
         prefix = re.sub(r"[^A-Za-z0-9]+", "_", provider).upper()
         spec = [(f"{prefix}_API_KEY", True, None), (f"{prefix}_BASE_URL", False, None)]

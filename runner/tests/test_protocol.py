@@ -121,3 +121,19 @@ def test_orphaned_pipe_holders_do_not_hang_the_run(tmp_path):
     assert result.phase == "completed"
     assert any("descendants still hold" in str(e["event"].get("message", ""))
                for e in envelopes)
+
+
+def test_child_env_is_constructed_not_inherited(monkeypatch):
+    # the store is the ONLY way provider credentials reach a run: an ambient key or
+    # base-url exported in the shell neither leaks in nor shadows the stored value
+    from adb_runner.protocol import child_env
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-ambient")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://ambient/v1")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-ambient")
+    monkeypatch.setenv("DOCKER_HOST", "unix:///run/user/1000/docker.sock")
+    env = child_env("rid", "/run/dir", 7, {"OPENAI_API_KEY": "sk-stored"})
+    assert env["OPENAI_API_KEY"] == "sk-stored"  # store wins over host
+    assert "OPENAI_BASE_URL" not in env
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+    assert env["DOCKER_HOST"] == "unix:///run/user/1000/docker.sock"  # allowlisted
+    assert env["ADB_RUN_ID"] == "rid" and env["ADB_SEED"] == "7"

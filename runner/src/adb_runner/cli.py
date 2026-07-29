@@ -193,13 +193,11 @@ def main() -> int:
                         providers.prompt_provider(p)
                     missing = providers.missing_providers(manifest, realized)
                 if missing:
-                    vars_hint = "; ".join(
-                        f"{p}: {'/'.join(v for v, _secret, _d in providers.REGISTRY[p])}"
-                        for p in missing)
                     raise SchemaError(
                         f"model params need provider(s) {missing} but none are "
                         f"configured — run `nix run .#adb-runner -- providers set "
-                        f"{missing[0]}`, or export the env vars ({vars_hint})")
+                        f"{missing[0]}` (scripts pipe one line per prompt on stdin; "
+                        f"exported env vars are never read)")
             except SchemaError as exc:
                 _log(f"[{abbrev(cond['cid'])} r{replicate}] provisioning failed: {exc}")
                 counts["failed"] += 1
