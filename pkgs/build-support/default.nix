@@ -49,8 +49,27 @@ let
       }
       else p)
     params;
+
+  # Dev-loop artifacts (a `uv run` .venv, __pycache__, build dists, direnv state)
+  # are neither identity nor build input: they must not mint new conditions
+  # (mkExperiment's `source` hash) and must not be imported into the store at
+  # eval time — re-hashing a multi-hundred-MB .venv on every fresh eval was the
+  # dominant cost of a classic-door eval.
+  isDevArtifact = base:
+    builtins.elem base [ ".venv" "__pycache__" "node_modules" "dist" ".direnv" ".pytest_cache" ".mypy_cache" ".ruff_cache" ]
+    || base == "result" || lib.hasPrefix "result-" base;
+  # import a source path with dev artifacts filtered out; content-addressed, so
+  # an unchanged subtree re-imports for free
+  cleanImport = name: path: builtins.path {
+    inherit name path;
+    filter = p: _type: !isDevArtifact (baseNameOf p);
+  };
 in
 {
+  # exported for the other source-import sites (web dist, the runner workspace) —
+  # every path that enters the store goes through the same dev-artifact filter
+  inherit cleanImport;
+
   types = rec {
     llm = { kind = "llm"; };
     str = { kind = "str"; };
@@ -106,7 +125,11 @@ in
           rev = "430680a19bc85a3bda55f12e4cc1a1aadcf2e478";
         })
         { inherit pyproject-nix uv2nix lib; };
-      workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
+      # loadWorkspace would import workspaceRoot into the store as-is — .venv
+      # included; builds consume pyproject/uv.lock + package sources, never
+      # dev artifacts
+      cleanWorkspaceRoot = cleanImport "${name}-workspace" workspaceRoot;
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = cleanWorkspaceRoot; };
       # uv2nix fetches git sources with full history and allRefs (its fetchGit has no
       # shallow), which mirrors entire upstream repos into the eval git cache. The lock
       # pins an exact rev and the store hash covers only the checkout, so depth can
@@ -114,7 +137,7 @@ in
       # with url+rev read from uv.lock (one place). uv2nix's own fetch is never forced:
       # src is lazy. Assumes the host serves arbitrary pinned SHAs (GitHub does).
       gitLockPackages = builtins.filter (p: p ? source.git)
-        (builtins.fromTOML (builtins.readFile (workspaceRoot + "/uv.lock"))).package;
+        (builtins.fromTOML (builtins.readFile (cleanWorkspaceRoot + "/uv.lock"))).package;
       shallowGitOverlay = _final: prev:
         builtins.listToAttrs (map
           (p: {
@@ -137,7 +160,7 @@ in
       inRepoOverlay = final: prev:
         let
           inRepo = name: src: prev.${name}.overrideAttrs (old: {
-            inherit src;
+            src = cleanImport "${name}-src" src;
             postUnpack = "";
             nativeBuildInputs =
               (old.nativeBuildInputs or [ ]) ++ final.resolveBuildSystem { hatchling = [ ]; };
@@ -202,18 +225,10 @@ in
       # they are recorded as run covariates. The fetchable rev (`fetchRef`) is recorded
       # separately for reproducibility — also not identity.
       srcs = if builtins.isList src then src else [ src ];
-      # dev-loop artifacts are NOT identity: a `uv run` dropping a .venv into the
-      # subtree must not mint new conditions for the experiment
-      isDevArtifact = base:
-        builtins.elem base [ ".venv" "__pycache__" "node_modules" "dist" ".direnv" ".pytest_cache" ]
-        || base == "result" || lib.hasPrefix "result-" base;
+      # dev-loop artifacts are NOT identity (isDevArtifact above): a `uv run`
+      # dropping a .venv into the subtree must not mint new conditions
       source = "content:sha256:" + builtins.hashString "sha256" (lib.concatStringsSep "\n"
-        (lib.imap0 (i: p:
-          "${builtins.path {
-            path = p;
-            name = "adb-src-${name}-${toString i}";
-            filter = path: _type: !isDevArtifact (baseNameOf path);
-          }}") srcs));
+        (lib.imap0 (i: p: "${cleanImport "adb-src-${name}-${toString i}" p}") srcs));
 
       # `origin` is catalog metadata (which instance packaged this — "external" for
       # an author's own repo), never identity: it's not in `src` and not the fetchRef

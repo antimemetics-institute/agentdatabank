@@ -44,7 +44,8 @@ let
       };
 
       # ADB's own tools; the adb- prefix keeps them out of the registry's bare namespace.
-      # The runner packages itself from its own uv.lock (uv2nix) — see runner/default.nix.
+      # The runner packages itself from its own uv.lock (uv2nix) — see runner/default.nix,
+      # including why its workspace import cannot go through adb.cleanImport.
       adb-runner = final.callPackage ../../runner { };
 
       # the authoring CLI (init/bump/pin) — built knowing which adb it came from
@@ -60,14 +61,10 @@ let
       adb-web-dist = pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
         pname = "adb-web-dist";
         version = "0.1.0";
-        # filter dev-loop artifacts: in a non-git checkout the flake copies the whole
-        # tree, and a stray node_modules/dist in src breaks pnpmConfigHook
-        src = builtins.path {
-          path = ../../web;
-          name = "adb-web-src";
-          filter = path: _type:
-            !(builtins.elem (baseNameOf path) [ "node_modules" "dist" ".venv" ]);
-        };
+        # filter dev-loop artifacts (adb.cleanImport): in a non-git checkout the flake
+        # copies the whole tree, and a stray node_modules/dist in src breaks
+        # pnpmConfigHook
+        src = final.adb.cleanImport "adb-web-src" ../../web;
         pnpmDeps = pkgs.fetchPnpmDeps {
           inherit (finalAttrs) pname version src;
           fetcherVersion = 4;

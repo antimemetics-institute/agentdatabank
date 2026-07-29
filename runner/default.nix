@@ -30,6 +30,10 @@ let
     })
     { inherit pyproject-nix uv2nix lib; };
 
+  # ./. stays a LIVE path, not a filtered store import (cf. adb.cleanImport): the
+  # lock path-deps on ../lib/*, which loadWorkspace must resolve at eval — from a
+  # store-imported root, `../lib` normalizes to the malformed store path
+  # /nix/store/lib and eval dies. Costs importing the runner's own .venv (small).
   workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
 
   pythonSet =
