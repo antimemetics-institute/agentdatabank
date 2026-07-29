@@ -1,10 +1,11 @@
-"""The event payload vocabulary as msgspec Structs (docs/plan/specs/events.md).
+"""The event payload vocabulary as msgspec Structs (docs/plan/events.md).
 
 These model *payloads* — the `event` value inside the runner-owned transport envelope
 `{v, ts, run, seq, event}`. Single source of truth for the standardized shapes: the
 runner imports them for ingestion validation and `adb-emit schema`, and Python control
-planes import them (via `adb_events.emit`) so a malformed `llm.call`/`message`/… is
-impossible to construct. Experiments may still emit ANY json — `type` is optional, and
+planes emit through `adb_events.emit`, whose typed emitters validate every payload via
+msgspec.convert — a malformed `llm.call`/`message`/… raises at the emit site. (Plain
+Struct construction does NOT type-check; only the convert path validates.) Experiments may still emit ANY json — `type` is optional, and
 unknown or absent types are legal and preserved (the spec's conformance ladder); these
 are the shapes that get first-class rendering and cross-experiment comparison.
 
@@ -16,9 +17,24 @@ the raw line is what gets stored, and extension emission goes through `emit.emit
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Literal, Union
 
 import msgspec
+
+# A JSON value, for signatures that accept arbitrary payload data (emit's **meta /
+# **data / request dicts) — so typecheckers flag non-JSON arguments instead of Any
+# swallowing them. STATIC-ONLY: msgspec cannot analyze recursive aliases
+# (RecursionError at convert/decode), so this must never appear in a Struct field;
+# runtime validation is whatever the Struct field types declare.
+# Mapping/Sequence (not dict/list) so concrete types like dict[str, str] are
+# assignable — invariant containers would reject them.
+type Json = Mapping[str, "Json"] | Sequence["Json"] | str | int | float | bool | None
+
+# A contract-scalar (docs/plan/events.md): metric values and instance scores are flat
+# scalars — structured values flatten to multiple '/'-joined names. Non-recursive, so
+# safe in Struct fields (msgspec validates it).
+Scalar = Union[int, float, str, bool]
 
 
 class Status(msgspec.Struct, omit_defaults=True):
@@ -40,7 +56,7 @@ class CapturedLine(msgspec.Struct, omit_defaults=True):
 
 class Metric(msgspec.Struct, omit_defaults=True):
     name: str
-    value: Union[int, float, str, bool]
+    value: Scalar
     step: Union[int, None] = None
     unit: Union[str, None] = None
 

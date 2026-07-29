@@ -3,7 +3,7 @@
 runner → experiment: realized params JSON on stdin; ADB_RUN_ID/ADB_RUN_DIR/ADB_SEED env;
 fresh workspace as cwd; a small env allowlist (never the full host environment).
 experiment → runner: event payloads as JSON objects on stdout, one per line — each is
-wrapped verbatim in the transport envelope {v, ts, run, seq, event} (specs/events.md);
+wrapped verbatim in the transport envelope {v, ts, run, seq, event} (docs/plan/events.md);
 `type` is optional (conformance ladder: unknown or absent types are preserved). Non-JSON
 stdout lines become `stdout` events, stderr lines `stderr` events — nothing a process
 can print breaks a run. Exit code 0 → completed, nonzero → failed, signal → interrupted.
@@ -36,7 +36,7 @@ ENV_ALLOW_PATTERNS = ["*_API_KEY", "*_API_BASE", "*_BASE_URL", "AWS_*", "AZURE_*
 # Liveness heartbeat: while the experiment runs, the runner touches run.json's mtime
 # (content unchanged — no deposit churn, nothing in the event stream; liveness is
 # operational state, not experimental data). Consumers: running + stale mtime =
-# crashed ("interrupted?" per specs/events.md); experiments never know it exists.
+# crashed ("interrupted?" per docs/plan/events.md); experiments never know it exists.
 HEARTBEAT_S = 10.0
 
 
@@ -181,7 +181,7 @@ def execute_run(
                 # a payload, typed or not — `type` is optional (conformance ladder)
                 events_q.put(payload)
             else:
-                # captured verbatim, untruncated, no invented severity (specs/events.md)
+                # captured verbatim, untruncated, no invented severity (docs/plan/events.md)
                 events_q.put({"type": "stdout", "line": line})
         events_q.put(None)
 
@@ -231,7 +231,7 @@ def execute_run(
         if item is None:
             finished_readers += 1
             continue
-        # Ingestion lint (degraded-but-correct, specs/events.md conformance ladder):
+        # Ingestion lint (degraded-but-correct, docs/plan/events.md conformance ladder):
         # the payload is ALWAYS stored verbatim — a claimed lifecycle type (`run.*`
         # is runner-synthesized) or a known type with the wrong shape earns a
         # companion warning, never mutation or drop. Schema: events_schema.py.
@@ -259,7 +259,7 @@ def execute_run(
 
     # NOTE: no views are materialized or deposited — chat/llm-call projections are
     # rendered from the stream on demand (deposit irreducibles, never derivables;
-    # specs/events.md "Standard conversation views")
+    # docs/plan/events.md "Standard conversation views")
 
     summary = {
         name: metrics[name] for name in (manifest.get("results") or {}) if name in metrics

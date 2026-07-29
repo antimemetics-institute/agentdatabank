@@ -1,4 +1,4 @@
-"""adb-emit: the event vocabulary made executable (docs/plan/specs/events.md).
+"""adb-emit: the event vocabulary made executable (docs/plan/events.md).
 
     adb-emit message --from agent-2 --channel town --content "hi" --meta '{"day": 2}'
     adb-emit metric --name winner --value village

@@ -9,7 +9,7 @@ import type { Ev } from "@/shared/types";
 import { api, conds, displayPhase, flattenEv, fmtVal, runCache, uiState, useRunsPoll } from "@/lib/data";
 import type { RunMeta } from "@/shared/types";
 import { Chip, ExitBadge, LiveDot, LoadingBar, PhaseBadge, Skeleton } from "@/components/bits";
-import { ResultChips } from "@/components/results";
+import { InstanceScoreChips, ResultChip, ResultChips, dedupeMetrics } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
 import { ParamChip } from "@/components/param-value";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,10 @@ const FILTERS: { key: string; label: string; pred: (e: Ev) => boolean }[] = [
   { key: "messages", label: "messages", pred: (e) => e.type === "message" },
   { key: "llm-calls", label: "llm calls", pred: (e) => e.type === "llm.call" },
   { key: "metrics", label: "metrics", pred: (e) => e.type === "metric" },
+  /* instance close-outs only — the per-row results overview for dataset-style
+     runs (kind=sample is the legacy pre-spec name) */
+  { key: "instances", label: "instances",
+    pred: (e) => e.type === "agent.event" && (e.kind === "instance" || e.kind === "sample") },
   { key: "agent-events", label: "agent events", pred: (e) => e.type === "agent.event" },
   { key: "logs", label: "logs", pred: (e) => e.type === "log" || e.type === "stdout" || e.type === "stderr" },
 ];
@@ -121,15 +125,25 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
 function RunHead({ cid, rid, events, phase }: {
   cid: string; rid: string; events: Ev[]; phase: string;
 }) {
+  const [details, setDetails] = useState(false);
   const start = events.find((e) => e.type === "run.start") ?? {};
   const end = events.find((e) => e.type === "run.end");
   const lastStatus = [...events].reverse().find((e) => e.type === "status");
   const summary: Record<string, unknown> = end ? end.summary ?? {} : {};
-  const metrics = events
+  /* metric events collapse last-value-wins per name (docs/plan/events.md);
+     summary keys win over same-named metrics as before */
+  const metrics = dedupeMetrics(events
     .filter((e) => e.type === "metric")
-    .map((e) => ({ name: String(e.name), value: e.value as unknown, unit: e.unit as string | null }));
+    .map((e) => ({ name: String(e.name), value: e.value as unknown, unit: e.unit as string | null })));
+  const extras = metrics.filter((m) => !(m.name in summary));
+  /* per-instance scores → read-time aggregate chips (legacy kind=sample included) */
+  const instScores = events
+    .filter((e) => e.type === "agent.event" && (e.kind === "instance" || e.kind === "sample")
+      && e.data?.scores && Object.keys(e.data.scores).length > 0)
+    .map((e) => e.data.scores as Record<string, unknown>);
   const usage = end?.usage_totals;
-  const params = conds[cid]?.params ?? start.realized_params;
+  const params = (conds[cid]?.params ?? start.realized_params) as Record<string, unknown> | undefined;
+  const nParams = params ? Object.keys(params).length : 0;
   return (
     <div className="space-y-2">
       <h2 className="flex items-center gap-3 text-lg font-semibold">
@@ -145,19 +159,58 @@ function RunHead({ cid, rid, events, phase }: {
         )}
         {!end && lastStatus && <span className="text-muted-foreground">{lastStatus.detail}</span>}
       </div>
-      {(Object.keys(summary).length > 0 || metrics.length > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-card px-3 py-2">
-          <span className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground">results</span>
-          <ResultChips summary={summary} metrics={metrics} />
+      {/* results card: ONE glanceable headline row (run.end summary + derived
+          instance aggregates); everything else — every metric, every param — sits
+          behind the details toggle in a height-bounded scroller, so no data shape
+          can ever push the event stream off-screen */}
+      {(Object.keys(summary).length > 0 || instScores.length > 0 || extras.length > 0 || nParams > 0) && (
+        <div className="rounded-lg border bg-card px-3 py-2">
+          <div className="flex max-h-24 flex-wrap items-center gap-1.5 overflow-y-auto">
+            <span className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground">results</span>
+            <ResultChips summary={summary} />
+            <InstanceScoreChips scores={instScores} />
+            {(extras.length > 0 || nParams > 0) && (
+              <button
+                type="button"
+                onClick={() => setDetails(!details)}
+                className="rounded-full border px-2 font-mono text-[11px] leading-5 text-muted-foreground hover:bg-accent"
+              >
+                {details ? "hide details" : [
+                  extras.length > 0 ? `${extras.length} metrics` : null,
+                  nParams > 0 ? `${nParams} params` : null,
+                ].filter(Boolean).join(" · ")}
+              </button>
+            )}
+          </div>
+          {details && (
+            <div className="mt-1.5 max-h-48 space-y-1.5 overflow-y-auto border-t pt-1.5">
+              {extras.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground">metrics</span>
+                  {extras.map((m) => (
+                    <span key={m.name} className="inline-flex items-center gap-1">
+                      <ResultChip name={m.name} value={m.value} unit={m.unit} />
+                      {m.count > 1 && (
+                        <span className="font-mono text-[10px] text-muted-foreground" title="same-named metric re-emitted; last value shown">
+                          ×{m.count}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {nParams > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground">params</span>
+                  {Object.entries(params!).map(([k, v]) => (
+                    <ParamChip key={k} name={k} value={v} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
-      {params ? (
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(params as Record<string, unknown>).map(([k, v]) => (
-            <ParamChip key={k} name={k} value={v} />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

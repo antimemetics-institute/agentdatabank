@@ -2,7 +2,7 @@
 
 The shapes used to be defined here in pydantic; they now live once in `adb_events`
 (msgspec) so the runner's ingestion lint, `adb-emit`, and every python experiment share
-one definition (docs/plan/specs/events.md). This module stays as the runner's import
+one definition (docs/plan/events.md). This module stays as the runner's import
 site so `from .events_schema import validate_event` keeps working.
 """
 

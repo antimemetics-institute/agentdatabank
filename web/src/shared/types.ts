@@ -1,5 +1,5 @@
 /* Shared DTO types — imported by both the browser app and the node server.
-   The authoritative wire format is docs/plan/specs/events.md (the runner, in Python,
+   The authoritative wire format is docs/plan/events.md (the runner, in Python,
    is the producer); these types mirror it for TS consumers. */
 
 /* one event. On the wire: envelope + payload, {v, ts, run, seq, event: {...}} per the
@@ -30,7 +30,7 @@ export interface RunMeta {
 /* server wire-diet markers (round 7): large param values and quadratic event
    fields are replaced on the wire by these descriptors; full values come from
    /api/params/<ref> and /api/runs/<cid>/<rid>/event/<seq>. Disk records are
-   untouched — truncation is strictly a viewer concern (specs/events.md). */
+   untouched — truncation is strictly a viewer concern (docs/plan/events.md). */
 export interface ParamRef {
   __param_ref: { size: number; preview: string; ref: string };
 }

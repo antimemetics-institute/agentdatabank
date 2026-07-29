@@ -113,12 +113,14 @@ class PrintStream(io.TextIOBase):
         return len(s)
 
     @staticmethod
-    def _sample_tag() -> dict:
+    def _sample_tag() -> dict[str, dict[str, str | int]]:
         try:
             from inspect_ai.log._samples import sample_active  # internal, pinned
             active = sample_active()
             if active is not None:
-                return {"sample_id": active.sample.id, "epoch": active.epoch}
+                # spec instance-convention attribution (docs/plan/events.md)
+                return {"meta": {"instance_id": active.sample.id,
+                                 "repeat": active.epoch}}
         except Exception:
             pass
         return {}
@@ -152,7 +154,7 @@ def run(params: Params) -> None:
             s = data.summary
             live[data.sample_id] = {"id": s.id, "epoch": s.epoch,
                                     "msgs": set(), "evs": set()}
-            status(f"sample {s.id} epoch {s.epoch}: running")
+            status(f"instance {s.id} repeat {s.epoch}: running")
 
         async def on_sample_event(self, data) -> None:  # type: ignore[no-untyped-def]
             st = live.get(data.sample_id)

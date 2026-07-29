@@ -28,7 +28,7 @@ import type { Ev } from "@/shared/types";
 import { fetchFullEvent, fmtVal, uiState } from "@/lib/data";
 import { highlightJson } from "@/lib/markdown";
 import { ExitBadge, InheritedBadge, LiveDot, MdView, PhaseBadge, Segmented } from "@/components/bits";
-import { ResultChip } from "@/components/results";
+import { ResultChip, flattenScores } from "@/components/results";
 import { cn } from "@/lib/utils";
 import { containsElision, elStr, isElided } from "@/lib/content";
 
@@ -288,24 +288,14 @@ function AgentsLegend({ agents }: { agents: AgentInfo[] }) {
   );
 }
 
-/* grader verdict for agent.events: exit codes, boolean flags, status strings,
-   pytest-style tails. null = not a pass/fail-shaped event. */
+/* declared verdicts ONLY (docs/plan/events.md, tools convention): exit_code and
+   ok are the two fields an emitter declares as its own pass/fail. The old
+   string-regex and pytest-tail sniffing is gone — undeclared data renders
+   neutral, never judged from shape. null = no declared verdict. */
 function verdict(d: Ev | undefined): boolean | null {
   if (!d) return null;
   if (typeof d.exit_code === "number") return d.exit_code === 0;
-  for (const k of ["passed", "pass", "ok", "success"])
-    if (typeof d[k] === "boolean") return d[k];
-  const s = typeof d.status === "string" ? d.status : typeof d.result === "string" ? d.result : null;
-  if (s) {
-    if (/^(pass(ed)?|ok|success)$/i.test(s)) return true;
-    if (/^(fail(ed)?|error)$/i.test(s)) return false;
-  }
-  const tail = typeof d.tail === "string" ? d.tail : typeof d.output_tail === "string" ? d.output_tail : null;
-  if (tail) {
-    const f = tail.match(/(\d+)\s+failed/);
-    if (f && +f[1]! > 0) return false;
-    if (/\b\d+\s+passed\b/.test(tail)) return true;
-  }
+  if (typeof d.ok === "boolean") return d.ok;
   return null;
 }
 
@@ -1055,6 +1045,28 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
           <ToolOutcomeChip name={tName} exitCode={d.exit_code} v={v} />
         </>
       );
+    } else if (e.kind === "instance" || e.kind === "sample" /* legacy */) {
+      /* instance close-out (docs/plan/events.md): id + repeat + its scores as
+         chips, so each unit's outcome reads inline without opening the row */
+      const scores = d.scores && typeof d.scores === "object" && !Array.isArray(d.scores)
+        ? flattenScores(d.scores as Record<string, unknown>) : [];
+      summary = (
+        <>
+          {profile.showAgent && <span className="font-semibold">{e.agent}</span>}
+          <span className={cn("rounded px-1 font-mono text-[10px]", s.badge)}>
+            instance {fmtVal(d.id)}
+          </span>
+          {(d.repeat ?? d.epoch) !== undefined && (d.repeat ?? d.epoch) !== 1 ? (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              repeat {fmtVal(d.repeat ?? d.epoch)}
+            </span>
+          ) : null}
+          {d.error ? <span className={cn("rounded px-1 font-mono text-[10px]", RED)}>error</span> : null}
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden">
+            {scores.map((sc) => <ResultChip key={sc.name} name={sc.name} value={sc.value} />)}
+          </span>
+        </>
+      );
     } else {
       summary = (
         <>
@@ -1232,12 +1244,16 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
 
 /* the channel ("room") an event belongs to: messages carry it explicitly; other
    tagged events derive theirs from the sample tag — llm.call meta, source-captured
-   stdout, and per-sample agent.events all land in the same `sample:<id>` room */
+   stdout, and instance close-outs all land in the same `instance:<id>` room */
 export const evChannel = (e: Ev): string | null => {
-  if (typeof e.channel === "string") return e.channel;
-  const sid = e.meta?.sample_id ?? e.sample_id
-    ?? (e.type === "agent.event" && e.kind === "sample" ? e.data?.id : undefined);
-  return sid === undefined || sid === null ? null : `sample:${String(sid)}`;
+  if (typeof e.channel === "string")
+    /* legacy streams roomed instances as sample:<id> (pre-spec inspect
+       vocabulary) — normalize so old and new runs read as the same room kind */
+    return e.channel.startsWith("sample:") ? `instance:${e.channel.slice(7)}` : e.channel;
+  const sid = e.meta?.instance_id ?? e.meta?.sample_id ?? e.sample_id
+    ?? (e.type === "agent.event" && (e.kind === "instance" || e.kind === "sample")
+        ? e.data?.id : undefined);
+  return sid === undefined || sid === null ? null : `instance:${String(sid)}`;
 };
 
 export function EventStream({ events, phase, mode = "flat", cid, rid }: {
@@ -1291,9 +1307,9 @@ export function EventStream({ events, phase, mode = "flat", cid, rid }: {
     ? (seq: unknown) => fetchFullEvent(cid, rid, seq)
     : undefined;
 
-  /* channel filter: pick one room (e.g. #sample:lcbhard_0) and see only its
-     events — with parallel samples the flat stream is their interleaving, so the
-     room view is how one problem's trajectory stays readable. Options come from
+  /* channel filter: pick one room (e.g. #instance:lcbhard_0) and see only its
+     events — with parallel instances the flat stream is their interleaving, so
+     the room view is how one unit's trajectory stays readable. Options come from
      the FULL stream so the select never loses entries while filtered. */
   const [channelPick, setChannelPick] = useState<string | null>(null);
   const channels: string[] = [];

@@ -53,6 +53,75 @@ export function ResultChips({ summary, metrics }: {
   );
 }
 
+/* scorer values flattened to leaves. New streams arrive pre-flattened (the spec's
+   flat scalar map); legacy streams carry dict-valued scores (agentharm's
+   combined_scorer {score, refusal}) which flatten here with the same '/' join */
+export function flattenScores(scores: Record<string, unknown>): { name: string; value: unknown }[] {
+  return Object.entries(scores).flatMap(([scorer, v]) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.entries(v as Record<string, unknown>).map(([k, sv]) => ({ name: `${scorer}/${k}`, value: sv }))
+      : [{ name: scorer, value: v }]);
+}
+
+export interface MetricEv { name: string; value: unknown; unit?: string | null }
+
+/* repeated metric names collapse last-value-wins (the stream convention for
+   run-level metrics), keeping the repeat count so nothing hides silently */
+export function dedupeMetrics(ms: MetricEv[]): (MetricEv & { count: number })[] {
+  const by = new Map<string, MetricEv & { count: number }>();
+  for (const m of ms) {
+    const prev = by.get(m.name);
+    by.set(m.name, { ...m, count: (prev?.count ?? 0) + 1 });
+  }
+  return [...by.values()];
+}
+
+/* read-time aggregate over per-instance scores (instance close-outs), same
+   language as AggChips: booleans → colored pass ratio; numerics → neutral mean
+   (a 0/1 numeric is NOT judged pass/fail — refusal=1 is good on agentharm's
+   harmful split and bad on the benign one); other values → distinct counts.
+   Derived at read time, stored nowhere (docs/plan/events.md). */
+export function InstanceScoreChips({ scores }: { scores: Record<string, unknown>[] }) {
+  const byKey = new Map<string, unknown[]>();
+  for (const s of scores)
+    for (const { name, value } of flattenScores(s))
+      byKey.set(name, [...(byKey.get(name) ?? []), value]);
+  return (
+    <>
+      {[...byKey.entries()].map(([k, vals]) => {
+        const n = vals.length;
+        if (vals.every((v) => typeof v === "boolean")) {
+          const p = vals.filter(Boolean).length;
+          const cls = p === n ? GREEN : p === 0 ? RED : AMBER;
+          return <span key={k} className={cn(BASE, cls)} title={`${p} of ${n} instances`}>{k} {p}/{n} ✓</span>;
+        }
+        if (vals.every((v) => typeof v === "number")) {
+          const mean = (vals as number[]).reduce((a, b) => a + b, 0) / n;
+          return (
+            <span key={k} className={cn(BASE, NEUTRAL)} title={`mean over ${n} instances`}>
+              {k} x̄ <b className="font-semibold">{fmtNum(mean)}</b>
+              <span className="text-muted-foreground">n={n}</span>
+            </span>
+          );
+        }
+        const counts = new Map<string, number>();
+        for (const v of vals) {
+          const s = typeof v === "string" ? v : JSON.stringify(v);
+          counts.set(s, (counts.get(s) ?? 0) + 1);
+        }
+        return (
+          <span key={k} className={cn(BASE, NEUTRAL)} title={`${n} instances`}>
+            {k}{" "}
+            {counts.size <= 3
+              ? [...counts.entries()].map(([v, c]) => `${v}×${c}`).join(" ")
+              : `×${n} values`}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 /* aggregate chips over a set of runs (matrix cells): n, per-boolean pass rates
    (colored by ratio), per-numeric means — same chip language as single results */
 export function AggChips({ runs }: { runs: RunMeta[] }) {

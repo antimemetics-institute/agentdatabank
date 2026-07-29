@@ -98,7 +98,7 @@ def test_full_translation_shape(capsys):
     assert kinds.count("message") == 4  # 2 samples x 2 messages
     assert kinds.count("llm.call") == 2
     ae = [e for e in events if e["type"] == "agent.event"]
-    assert [e for e in ae if e["kind"] == "sample"].__len__() == 2
+    assert [e for e in ae if e["kind"] == "instance"].__len__() == 2
     assert [e for e in ae if e["kind"] == "provenance"].__len__() == 1
 
     # ADB-shaped request/response (events.md), raw provider payload under response.raw
@@ -111,10 +111,12 @@ def test_full_translation_shape(capsys):
     assert "raw" not in calls[1]["response"]                   # none recorded → absent
     assert calls[0]["usage"] == {"input_tokens": 2, "output_tokens": 33}
 
-    # per-sample scores ride the sample agent.event, NOT metric events (a metric
-    # has no sample scope — N same-named metrics buried the run header)
-    assert [e["data"]["scores"] for e in ae if e["kind"] == "sample"] == \
+    # per-instance scores ride the instance close-out, NOT metric events (a metric
+    # has no instance scope — N same-named metrics buried the run header)
+    inst = [e for e in ae if e["kind"] == "instance"]
+    assert [e["data"]["scores"] for e in inst] == \
         [{"includes": "C"}, {"includes": "I"}]
+    assert [e["data"]["repeat"] for e in inst] == [1, 1]
     assert not [e for e in events
                 if e["type"] == "metric" and e["name"].startswith("score:")]
 
@@ -130,16 +132,16 @@ def test_full_translation_shape(capsys):
 def test_messages_carry_sample_channel_and_meta(capsys):
     translate.emit_all(_log(), "m")
     msgs = [e for e in _capture(capsys) if e["type"] == "message"]
-    assert {m["channel"] for m in msgs} == {"sample:1", "sample:2"}
-    assert all(m["meta"]["sample_id"] in (1, 2) for m in msgs)
+    assert {m["channel"] for m in msgs} == {"instance:1", "instance:2"}
+    assert all(m["meta"]["instance_id"] in (1, 2) for m in msgs)
     assert all(m["from"] in ("user", "assistant") for m in msgs)
 
 
 def test_llm_calls_tagged_with_sample(capsys):
     translate.emit_all(_log(), "m")
     calls = [e for e in _capture(capsys) if e["type"] == "llm.call"]
-    assert [c["meta"]["sample_id"] for c in calls] == [1, 2]
-    assert all(c["meta"]["epoch"] == 1 for c in calls)
+    assert [c["meta"]["instance_id"] for c in calls] == [1, 2]
+    assert all(c["meta"]["repeat"] == 1 for c in calls)
 
 
 def _chat(role, text, mid):
@@ -157,7 +159,7 @@ def test_live_model_event_streams_new_turns_once(capsys):
     events = _capture(capsys)
     assert [e["from"] for e in events if e["type"] == "message"] == ["user", "assistant"]
     call = [e for e in events if e["type"] == "llm.call"][0]
-    assert call["meta"] == {"sample_id": "s1", "epoch": 1}
+    assert call["meta"] == {"instance_id": "s1", "repeat": 1}
 
     # replaying the same event emits no duplicate turns (deduped via seen ids)
     translate.emit_live_model_event(ev, "agent", "s1", 1, seen)
@@ -188,6 +190,18 @@ def test_provenance_records_sliceable_covariates(capsys):
     assert d["task"] == "gsm8k" and d["task_version"] == 1
     assert d["dataset"]["name"] == "gsm8k"
     assert d["revision"]["commit"] == "911f0ed"
+
+
+def test_dict_scores_flatten_to_scalar_leaves(capsys):
+    """The agentharm shape: a dict-valued scorer becomes '/'-joined scalar leaves
+    on the instance close-out (docs/plan/events.md — scores are a flat scalar map)."""
+    s = _sample_wire()
+    s.scores = {"combined_scorer": _score({"score": 0, "refusal": 1})}
+    translate.emit_sample(s, "m")
+    inst = [e for e in _capture(capsys)
+            if e["type"] == "agent.event" and e["kind"] == "instance"]
+    assert inst[0]["data"]["scores"] == \
+        {"combined_scorer/score": 0, "combined_scorer/refusal": 1}
 
 
 def test_headline_prefers_accuracy():

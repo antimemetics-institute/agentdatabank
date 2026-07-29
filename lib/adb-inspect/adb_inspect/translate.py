@@ -1,12 +1,13 @@
-"""EvalLog -> ADB event stream (docs/plan/specs/events.md).
+"""EvalLog -> ADB event stream (docs/plan/events.md).
 
-Full per-sample translation: every chat turn becomes a `message` (channel per
-sample, so the transcript viewer reads one conversation per row), every model
-call becomes an `llm.call` (verbatim provider request/response when Inspect
-recorded it), and each sample closes with an `agent.event` carrying its scores.
-`metric` events are run-level only — aggregate scorer metrics and token totals,
-emitted last. (Per-sample scores are NOT metrics: a metric has no sample scope,
-so N same-named events are unreadable — that's what buried the agentharm UI.)
+Inspect's sample/epoch vocabulary maps onto the spec's instance convention at the
+wire boundary: each dataset sample is an *instance* (channel `instance:<id>`,
+`meta.instance_id` on its messages/llm.calls), each epoch a *repeat*, and each
+sample closes with an `instance` event carrying its scores as a FLAT scalar map
+(dict-valued scorers flatten with '/'-joined names). `metric` events are
+run-level only — aggregate scorer metrics and token totals, emitted last.
+(Per-instance scores are NOT metrics: a metric has no instance scope, so N
+same-named events are unreadable — that's what buried the agentharm UI.)
 
 Inspect telemetry is secondary data (transcript-derived), so callers may weigh
 it accordingly — same posture as the harness normalizers in specs/harness.md.
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from adb_events.emit import agent_event, llm_call, message, metric, status
+from adb_events.emit import agent_event, instance, llm_call, message, metric, status
 
 # Inspect Score.value uses these letter grades; map to 0/1 for numeric metrics.
 _GRADE = {"C": 1.0, "I": 0.0, "P": 0.5, "N": 0.0}
@@ -112,7 +113,7 @@ def emit_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any) -> None:
     err = {"kind": "model_error", "message": str(ev.error)} if ev.error else None
     llm_call(agent=agent, model=ev.model, request=request, response=response,
              usage=usage, latency_ms=latency, error=err,
-             sample_id=sample_id, epoch=epoch)
+             instance_id=sample_id, repeat=epoch)
 
 
 def emit_live_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any,
@@ -120,7 +121,7 @@ def emit_live_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any,
     """Live-stream one completed ModelEvent: first any chat turns not yet emitted
     (its input plus the reply, deduped by message id into `seen_messages`), then the
     `llm.call` — so the transcript grows as the sample runs, not at its end."""
-    channel = f"sample:{sample_id}"
+    channel = f"instance:{sample_id}"
     turns = list(ev.input or [])
     if ev.output is not None and ev.output.message is not None:
         turns.append(ev.output.message)
@@ -130,18 +131,37 @@ def emit_live_model_event(ev: Any, agent: str, sample_id: Any, epoch: Any,
             continue
         seen_messages.add(mid)
         message(from_=m.role, content=m.text or "", channel=channel, role=m.role,
-                sample_id=sample_id, epoch=epoch)
+                instance_id=sample_id, repeat=epoch)
     emit_model_event(ev, agent, sample_id, epoch)
+
+
+_SCALAR = (int, float, str, bool)
+
+
+def _flat_scores(scores: dict) -> dict:
+    """Inspect Score.value per scorer → the spec's flat scalar map: dict-valued
+    scorers (agentharm's combined_scorer) flatten with '/'-joined names; a
+    non-scalar leaf stringifies (degraded-but-correct — the raw .eval artifact
+    keeps the original)."""
+    out: dict = {}
+    for scorer, v in scores.items():
+        if isinstance(v, dict):
+            for k, leaf in v.items():
+                out[f"{scorer}/{k}"] = leaf if isinstance(leaf, _SCALAR) else str(leaf)
+        else:
+            out[scorer] = v if isinstance(v, _SCALAR) else str(v)
+    return out
 
 
 def emit_sample(sample: Any, agent: str, *,
                 seen_messages: set | None = None,
                 seen_events: set | None = None) -> None:
-    """Emit a completed sample. `seen_*` are ids already streamed live by the
-    caller's hooks (emit_live_model_event) — skipped here, so this doubles as the
-    reconciliation pass: anything the live path missed comes out now."""
-    channel = f"sample:{sample.id}"
-    meta_base = {"sample_id": sample.id, "epoch": sample.epoch}
+    """Emit a completed sample as one spec instance. `seen_*` are ids already
+    streamed live by the caller's hooks (emit_live_model_event) — skipped here, so
+    this doubles as the reconciliation pass: anything the live path missed comes
+    out now."""
+    channel = f"instance:{sample.id}"
+    meta_base = {"instance_id": sample.id, "repeat": sample.epoch}
 
     for msg in sample.messages or []:
         if seen_messages and getattr(msg, "id", None) in seen_messages:
@@ -154,10 +174,10 @@ def emit_sample(sample: Any, agent: str, *,
             continue
         emit_model_event(ev, agent, sample.id, sample.epoch)
 
-    agent_event(agent=agent, kind="sample", id=sample.id, epoch=sample.epoch,
-                target=sample.target,
-                scores={k: v.value for k, v in (sample.scores or {}).items()},
-                error=str(sample.error) if sample.error else None)
+    instance(agent=agent, id=sample.id, repeat=sample.epoch,
+             target=sample.target,
+             scores=_flat_scores({k: v.value for k, v in (sample.scores or {}).items()}),
+             error=str(sample.error) if sample.error else None)
 
 
 def headline(log: Any) -> tuple[float, str]:

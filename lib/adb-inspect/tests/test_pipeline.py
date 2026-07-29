@@ -147,7 +147,7 @@ def test_print_capture_tags_the_printing_sample(inspect_ok, tmp_path, capsys):
     events = [json.loads(l) for l in capsys.readouterr().out.splitlines() if l.strip()]
     tagged = [e for e in events if e.get("type") == "stdout" and e.get("line") == "solving p1"]
     assert tagged, f"no tagged stdout event in {events!r}"
-    assert tagged[0]["sample_id"] == "p1" and tagged[0]["epoch"] == 1
+    assert tagged[0]["meta"] == {"instance_id": "p1", "repeat": 1}
 
 
 def test_score_reproducible(inspect_ok, tmp_path):

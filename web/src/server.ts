@@ -11,7 +11,7 @@
      response.raw, any string > ~4 KB) into {__elided: {bytes, preview}} markers;
      /api/runs/<cid>/<rid>/event/<seq> serves one full event on demand. The disk
      record stays untouched — "truncation is strictly a viewer concern"
-     (specs/events.md);
+     (docs/plan/events.md);
    - immutable data (conditions, params, terminal runs' events) is served with
      strong ETags + long-lived Cache-Control;
    - responses over ~1 KB are gzipped (node:zlib — still stdlib) when the client
