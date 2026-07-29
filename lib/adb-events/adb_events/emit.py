@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sys
 import threading
+from collections.abc import Mapping
 from typing import TextIO
 
 import msgspec
@@ -96,11 +97,14 @@ def message(*, from_: str, content: str, channel: str, to: str | None = None,
                                     "to": to, "visible_to": visible_to, "meta": meta or None})
 
 
-def llm_call(*, agent: str | None, model: str, request: dict[str, Json],
-             response: dict[str, Json] | None = None,
-             usage: dict[str, Json] | None = None,
+# Container params are Mapping, not dict, for the same reason models.Json uses
+# Mapping/Sequence: dict is invariant, so a concrete dict[str, str] argument (a
+# built error/usage payload) would be rejected by typecheckers.
+def llm_call(*, agent: str | None, model: str, request: Mapping[str, Json],
+             response: Mapping[str, Json] | None = None,
+             usage: Mapping[str, Json] | None = None,
              latency_ms: int | float | None = None,
-             error: dict[str, Json] | None = None,
+             error: Mapping[str, Json] | None = None,
              **meta: Json) -> None:
     _validated("llm.call", LlmCall, {
         "agent": agent, "model": model, "request": request,
@@ -116,7 +120,7 @@ def agent_event(*, agent: str, kind: str, **data: Json) -> None:
 _SCALAR = (int, float, str, bool)
 
 
-def instance(*, agent: str, id: str | int, scores: dict[str, Scalar] | None = None,
+def instance(*, agent: str, id: str | int, scores: Mapping[str, Scalar] | None = None,
              repeat: int | None = None, error: str | None = None, **data: Json) -> None:
     """Close out one instance — the multi-instance run convention
     (docs/plan/events.md): one run working through many independent units (dataset

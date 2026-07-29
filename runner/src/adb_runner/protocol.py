@@ -167,12 +167,15 @@ def execute_run(
         env=child_env(run_id, str(store.dir), seed, credential_env),
         text=True,
     )
+    stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
+    if stdin is None or stdout is None or stderr is None:
+        raise RuntimeError("child pipes missing")  # typeshed can't see Popen(PIPE)
     run_meta["phase"] = "running"
     store.write_run_json(run_meta)
     emit({"type": "run.status", "phase": "running"})
 
     def read_stdout():
-        for line in proc.stdout:
+        for line in stdout:
             line = line.rstrip("\n")
             if not line.strip():
                 continue
@@ -189,7 +192,7 @@ def execute_run(
         events_q.put(None)
 
     def read_stderr():
-        for line in proc.stderr:
+        for line in stderr:
             line = line.rstrip("\n")
             if line:
                 events_q.put({"type": "stderr", "line": line})
@@ -200,8 +203,8 @@ def execute_run(
         t.start()
 
     try:
-        proc.stdin.write(json.dumps(realized_params))
-        proc.stdin.close()
+        stdin.write(json.dumps(realized_params))
+        stdin.close()
     except BrokenPipeError:
         pass
 

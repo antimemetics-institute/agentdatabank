@@ -28,6 +28,7 @@ import re
 import stat
 import sys
 import tomllib
+from collections.abc import Collection
 from pathlib import Path
 
 # Built-in names come from the canonical provider registry (the adb-providers
@@ -436,7 +437,7 @@ def _prompt_values(name: str, current: dict[str, str] | None) -> dict[str, str] 
 
 
 def _prompt_profile_name(*, suggestion: str | None,
-                         taken: set[str] = frozenset()) -> str | None:
+                         taken: Collection[str] = frozenset()) -> str | None:
     state = f" [{suggestion}]" if suggestion else ""
     while True:
         entered = _read(f"name this profile{state}: ", False) or (suggestion or "")

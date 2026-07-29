@@ -31,18 +31,6 @@ from typing import Any
 from adb_events.emit import artifact, metric, set_output
 
 
-def _load_config(path: Path) -> Any:
-    """JSON first (what the runner adapters write); YAML if the experiment's env
-    ships it (kept out of this package's requirements)."""
-    text = path.read_text()
-    try:
-        return json.loads(text)
-    except ValueError:
-        import yaml  # optional — only reached for actual-YAML configs
-
-        return yaml.safe_load(text)
-
-
 def experiment_main(params_model, run, *, prog: str,
                     description: str | None = None,
                     fallback_summary: dict[str, Any] | None = None,
@@ -59,7 +47,8 @@ def experiment_main(params_model, run, *, prog: str,
     )
     args = parser.parse_args(argv)
     try:
-        raw = json.load(sys.stdin) if args.config is None else _load_config(Path(args.config))
+        raw = (json.load(sys.stdin) if args.config is None
+               else json.loads(Path(args.config).read_text()))
         params = params_model.model_validate(raw)
     except Exception:
         traceback.print_exc()

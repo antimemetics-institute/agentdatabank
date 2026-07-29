@@ -14,13 +14,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import shutil
 import sys
 import threading
 import traceback
 from pathlib import Path
-
-import yaml
 
 from adb_events.emit import artifact, emit_raw, log, metric, set_output, status
 from .models import Params, inspect_model
@@ -114,7 +113,7 @@ class PrintStream(io.TextIOBase):
         return len(s)
 
     @staticmethod
-    def _sample_tag() -> dict[str, dict[str, str | int]]:
+    def _sample_tag() -> dict[str, dict[str, str | int | None]]:
         try:
             from inspect_ai.log._samples import sample_active  # internal, pinned
             active = sample_active()
@@ -229,14 +228,15 @@ def main() -> int:
     # the task's own prints (solver progress etc.) must not sit in a block buffer
     # until the next event flush pushes them out — the runner reads this pipe live
     try:
-        sys.stdout.reconfigure(line_buffering=True)
+        if isinstance(sys.stdout, io.TextIOWrapper):
+            sys.stdout.reconfigure(line_buffering=True)
     except Exception:
         pass
     parser = argparse.ArgumentParser(prog="adb-inspect-eval", description=__doc__)
-    parser.add_argument("config", help="path to a JSON (or YAML) config file")
+    parser.add_argument("config", help="path to a JSON config file")
     args = parser.parse_args()
     try:
-        params = Params.model_validate(yaml.safe_load(Path(args.config).read_text()))
+        params = Params.model_validate(json.loads(Path(args.config).read_text()))
     except Exception:
         traceback.print_exc()
         return 1

@@ -20,7 +20,7 @@ def assert_conformant(events: Iterable[dict]) -> int:
     number of events actually validated (0 means the assertion was vacuous)."""
     checked = 0
     for event in events:
-        model = EVENT_MODELS.get(event.get("type"))
+        model = EVENT_MODELS.get(event.get("type") or "")
         if model is None:
             continue
         body = {key: value for key, value in event.items() if key != "type"}

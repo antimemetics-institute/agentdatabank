@@ -64,18 +64,20 @@ class RunStore:
     def _open_chunk(self):
         path = self.dir / f"events-{self._chunk_index:05d}.jsonl"
         self._fh = path.open("a")
+        return self._fh
 
     def write_event(self, event: dict) -> str:
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
-        if self._fh is None:
-            self._open_chunk()
+        fh = self._fh
+        if fh is None:
+            fh = self._open_chunk()
         elif self._chunk_bytes + len(line) > CHUNK_BYTES:
-            self._fh.close()
+            fh.close()
             self._chunk_index += 1
             self._chunk_bytes = 0
-            self._open_chunk()
-        self._fh.write(line + "\n")
-        self._fh.flush()
+            fh = self._open_chunk()
+        fh.write(line + "\n")
+        fh.flush()
         self._chunk_bytes += len(line) + 1
         return line
 

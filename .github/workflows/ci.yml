@@ -1,6 +1,6 @@
-# CI mirrors the Taskfile's check surface (task lock:check / test) plus the nix
-# acceptance paths: registry eval, a keyless run, entrypoint-identity, and the
-# authoring loop (adb-dev init → build → run). Keyless throughout — mockllm/mock
+# CI mirrors the Taskfile's check surface (task lock:check / test / typecheck) plus
+# the nix acceptance paths: registry eval, a keyless run, entrypoint-identity, and
+# the authoring loop (adb-dev init → build → run). Keyless throughout — mockllm/mock
 # only, no provider credentials, no docker experiments.
 name: ci
 
@@ -91,6 +91,13 @@ jobs:
 
       - name: registry eval — build every experiment's manifest
         run: nix-build --no-out-link -A manifests
+
+      # through the dev shell so CI runs the exact ty the flake pins — classic
+      # nix-shell included: shell.nix defaults pkgs to default.nix, which reads
+      # flake.lock (one lock, two doors), so this ignores NIX_PATH and needs no
+      # version literal kept in sync
+      - name: typecheck — shared libs + runner
+        run: nix-shell --run 'task typecheck'
 
       - name: keyless run — inspect-hello on the mock model
         run: |

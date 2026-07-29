@@ -20,13 +20,23 @@ dependencies = [
 llm = ["openai>=1.60"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    # mirrors the [llm] extra so `task typecheck` sees the SDK's real types;
+    # consumers still opt in via adb-experiment[llm]
+    "openai>=1.60",
+]
 
 # adb-events is in-repo (not on PyPI); the nix build (adb.mkPythonEnv) also
 # overrides it to the same source.
 [tool.uv.sources]
 adb-events = { path = "../adb-events" }
 adb-providers = { path = "../adb-providers" }
+
+# Non-editable path-dep consumers rebuild only when the cache key changes, and uv's
+# default key is pyproject.toml alone — key on the sources so edits propagate.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_experiment/**/*.py" }]
 
 [build-system]
 requires = ["hatchling"]

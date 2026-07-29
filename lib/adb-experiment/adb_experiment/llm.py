@@ -93,7 +93,7 @@ class ChatClient:
         if self.is_mock:
             self.served_model = model_id.split("/", 1)[1]
             self.base_url = ""
-            self._sdk = None
+            self._request = self._mock_create  # unreached (_create short-circuits)
             self._disable_thinking = False
         else:
             import openai  # the [llm] extra; only this module needs it
@@ -106,8 +106,10 @@ class ChatClient:
             # is the chat endpoint's chat_template_kwargs (llama.cpp/vLLM); strip_think
             # still covers any that slip through.
             self._disable_thinking = "qwen" in self.served_model.lower()
-            self._sdk = openai.OpenAI(api_key=endpoint.api_key,
-                                      base_url=endpoint.base_url)
+            sdk = openai.OpenAI(api_key=endpoint.api_key,
+                                base_url=endpoint.base_url)
+            # closed over, so _create never handles an Optional client
+            self._request = lambda kw: sdk.chat.completions.create(**kw)
         # the one surface frameworks use; duck-typed so no SDK subclassing is needed
         self.chat = types.SimpleNamespace(
             completions=types.SimpleNamespace(create=self._create)
@@ -135,7 +137,7 @@ class ChatClient:
             return self._mock_create(kw)
         started = time.monotonic()
         try:
-            response = self._sdk.chat.completions.create(**kw)
+            response = self._request(kw)
         except Exception as exc:
             self._emit(
                 kw["messages"], "", {"backend": "openai-chat"},

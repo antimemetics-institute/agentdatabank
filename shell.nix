@@ -21,6 +21,12 @@ pkgs.mkShell {
     pkgs.go-task
     pkgs.jq
 
+    # python typechecker (task typecheck); from nixpkgs, NOT a per-project dev dep —
+    # the PyPI wheel's prebuilt binary doesn't run on NixOS, and one pinned copy
+    # beats five. CI runs task typecheck through this same shell (ci.yml, nix job),
+    # so the flake pin is the single source of the version.
+    pkgs.ty
+
     pkgs.mdbook
 
     # sandboxed experiments (inspect's docker sandbox) need a Docker daemon; the

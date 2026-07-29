@@ -32,6 +32,7 @@ llm = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "openai" },
     { name = "pytest" },
 ]
 
@@ -44,7 +45,10 @@ requires-dist = [
 provides-extras = ["llm"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8" }]
+dev = [
+    { name = "openai", specifier = ">=1.60" },
+    { name = "pytest", specifier = ">=8" },
+]
 
 [[package]]
 name = "adb-providers"
