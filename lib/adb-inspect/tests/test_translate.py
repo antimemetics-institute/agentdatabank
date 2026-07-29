@@ -144,6 +144,46 @@ def test_llm_calls_tagged_with_sample(capsys):
     assert all(c["meta"]["repeat"] == 1 for c in calls)
 
 
+# --- error paths: only ever executed on real provider failure, so the tests are the
+# only coverage these branches get before live-fire ---------------------------------
+
+def test_errored_model_event_emits_structured_error(capsys):
+    """The live-fire regression: a failed call's ModelEvent carries `error` as a
+    plain string, a placeholder empty output message, no usage, no working_time,
+    and the provider's error body under call.response (inspect_ai's error branch).
+    It must land as the structured {kind, message} wire error — the old code passed
+    the bare string, and the first-ever execution of this branch crashed a run."""
+    ev = ModelEvent("m", _call({"vendor": "wire"}, {"error": "model call failed"}),
+                    None,
+                    _dumpable({"role": "assistant", "content": ""}),
+                    "unknown",
+                    inp=[_dumpable({"role": "user", "content": "hi"})],
+                    working_time=None,
+                    error="model call failed")
+    translate.emit_model_event(ev, "agent", "s1", 1)
+    [call] = _capture(capsys)
+    assert call["type"] == "llm.call"
+    assert call["error"] == {"kind": "model_error", "message": "model call failed"}
+    assert call["response"]["raw"] == {"error": "model call failed"}
+    assert "usage" not in call
+    assert "latency_ms" not in call
+
+
+def test_sample_error_lands_on_instance_closeout(capsys):
+    """sample.error is an EvalError object, not a str — it must be stringified onto
+    the instance close-out (instance error is `str | None` on the wire)."""
+    class EvalError:
+        def __str__(self) -> str:
+            return "RuntimeError('boom')"
+
+    s = _sample_derived()
+    s.error = EvalError()
+    translate.emit_sample(s, "m")
+    inst = [e for e in _capture(capsys)
+            if e["type"] == "agent.event" and e["kind"] == "instance"]
+    assert inst[0]["data"]["error"] == "RuntimeError('boom')"
+
+
 def _chat(role, text, mid):
     """A fake ChatMessage: id/role/text for the live path, model_dump for _dump."""
     return NS(id=mid, role=role, text=text,
