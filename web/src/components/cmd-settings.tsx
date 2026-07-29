@@ -110,6 +110,16 @@ export function CmdSettings() {
             />
           </div>
 
+          {p.source === "github" && (
+            /* a cached main.tar.gz can lag behind new commits; this adds
+               --tarball-ttl 0 / --refresh so every run re-checks. Inert for a
+               local checkout, so the row hides with it. */
+            <div className="pl-11">
+              <Check label="always fetch latest" checked={p.latest}
+                onChange={(v) => set({ latest: v })} />
+            </div>
+          )}
+
           {/* the mode tabs — the rows below are contextual to the tab */}
           <div className="flex items-center gap-2">
             <span className="w-9 shrink-0 text-[11px] text-muted-foreground">With</span>

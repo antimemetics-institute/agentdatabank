@@ -12,28 +12,44 @@ const GITHUB = "github:antimemetics-institute/agentdatabank";
 const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";
 
-test("defaults: stock nix-build exec form, tarball continued before -A", () => {
+test("defaults: stock nix-build exec form, fresh tarball continued before -A", () => {
   assert.equal(
     rewriteCmd("nix run .#inspect-hello -- --set model=m", p({})),
-    `$(nix-build --no-out-link ${TARBALL} \\\n  -A exec.inspect-hello) --set model=m`,
+    `$(nix-build --no-out-link --tarball-ttl 0 ${TARBALL} \\\n  -A exec.inspect-hello) --set model=m`,
   );
 });
 
-test("flakes mode: github ref, armored for stock nix", () => {
+test("flakes mode: github ref, armored for stock nix, refreshed", () => {
   assert.equal(
     rewriteCmd("nix run .#inspect-hello -- --set model=m", p({ mode: "flakes" })),
-    `nix run ${GITHUB}#inspect-hello${ARMOR} -- --set model=m`,
+    `nix run ${GITHUB}#inspect-hello${ARMOR} --refresh -- --set model=m`,
   );
 });
 
 test("flakes enabled globally drops the armor; registry shortens the ref", () => {
   assert.equal(
     rewriteCmd("nix run .#foo", p({ mode: "flakes", flakes: true })),
-    `nix run ${GITHUB}#foo`,
+    `nix run ${GITHUB}#foo --refresh`,
   );
   assert.equal(
     rewriteCmd("nix run .#foo", p({ mode: "flakes", flakes: true, registry: true })),
-    "nix run adb#foo",
+    "nix run adb#foo --refresh",
+  );
+});
+
+test("latest off drops the freshness flags; local checkout never carries them", () => {
+  assert.equal(
+    rewriteCmd("nix run .#foo", p({ latest: false })),
+    `$(nix-build --no-out-link ${TARBALL} \\\n  -A exec.foo)`,
+  );
+  assert.equal(
+    rewriteCmd("nix run .#foo", p({ mode: "flakes", flakes: true, latest: false })),
+    `nix run ${GITHUB}#foo`,
+  );
+  // latest:true + local is inert — nothing cached to bypass
+  assert.equal(
+    rewriteCmd("nix run .#foo", p({ source: "local" })),
+    "$(nix-build --no-out-link -A exec.foo)",
   );
 });
 
@@ -45,7 +61,7 @@ test("local checkout with global flakes is the canonical identity", () => {
 test("nix-build mode: $(nix-build …) head, `--` separator dropped", () => {
   assert.equal(
     rewriteCmd("nix run .#foo -- --set a=1", p({ mode: "nix-build" })),
-    `$(nix-build --no-out-link ${TARBALL} \\\n  -A exec.foo) --set a=1`,
+    `$(nix-build --no-out-link --tarball-ttl 0 ${TARBALL} \\\n  -A exec.foo) --set a=1`,
   );
   assert.equal(
     rewriteCmd("nix run .#foo", p({ mode: "nix-build", source: "local" })),
@@ -60,7 +76,7 @@ test("nix-run installed: head swap, experiment- prefix except adb-* packages", (
   );
   assert.equal(
     rewriteCmd("nix run .#adb-web", p({ mode: "nix-run", nixRun: true })),
-    `nix-run ${TARBALL} \\\n  -A adb-web`,
+    `nix-run --option tarball-ttl 0 ${TARBALL} \\\n  -A adb-web`,
   );
 });
 
@@ -80,7 +96,7 @@ test("non-command text and indentation are preserved", () => {
   assert.equal(rewriteCmd("echo hello", p({})), "echo hello");
   assert.equal(
     rewriteCmd("  nix run .#foo", p({ mode: "flakes", flakes: true })),
-    `  nix run ${GITHUB}#foo`,
+    `  nix run ${GITHUB}#foo --refresh`,
   );
 });
 

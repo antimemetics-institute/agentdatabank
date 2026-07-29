@@ -19,12 +19,17 @@
   // zero configuration, and the exec one-liner is the only form that does.
   // flakes:false likewise (armor flag until the reader enables them globally);
   // nixRun:false (the wrapped nix-shell form works without anything installed).
+  // latest:true — a stale cached main.tar.gz silently running old code is worse
+  // than a redundant HEAD check.
   var DEFAULTS = {
     // mode tabs: "nix-build" (stock-nix $(nix-build …)/exec one-liner), "flakes"
     // (nix run, armored until flakes are global), "nix-run" (classic runner;
     // nixRun = installed globally, else nix-shell-wrapped)
     mode: "nix-build",
     source: "github", flakes: false, registry: false, nixRun: false,
+    // github source only: bypass Nix's download cache so a rerun picks up new
+    // commits on main (tarball-ttl 0 / --refresh). Inert for a local checkout.
+    latest: true,
   };
 
   function load() {
@@ -51,17 +56,22 @@
   // github-source forms continue onto a fresh line before it (backslash-newline
   // holds inside $(…) and inside the nix-shell --run double quotes alike).
   function flakelessHead(cmd, p) {
+    // "always fetch latest" spellings: nix-build takes the setting as a flag;
+    // nix-run only documents --option. Only the github tarball is ever cached.
+    var fresh = p.source === "github" && p.latest;
     if (p.mode === "nix-build") {
       cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
+        var ttl = fresh ? " --tarball-ttl 0" : "";
         var src = p.source === "local" ? " " : " " + TARBALL + " \\\n  ";
-        return "$(nix-build --no-out-link" + src + "-A exec." + name + ")";
+        return "$(nix-build --no-out-link" + ttl + src + "-A exec." + name + ")";
       });
       return cmd.replace(/(-A exec\.\S+\)) --(?=\s|$)/, "$1");
     }
     return cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
       var pkg = name.indexOf("adb-") === 0 ? name : "experiment-" + name;
+      var ttl = fresh ? "--option tarball-ttl 0 " : "";
       var src = p.source === "local" ? ". " : TARBALL + " \\\n  ";
-      return "nix-run " + src + "-A " + pkg;
+      return "nix-run " + ttl + src + "-A " + pkg;
     });
   }
   function rewriteLine(line, p) {
@@ -71,9 +81,10 @@
     if (p.mode === "nix-build" || p.mode === "nix-run") return before + flakelessHead(cmd, p);
     cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
       var head = "nix run " + ref(p) + "#" + name;
-      // the flag trails the installable (before any `--`), so the command reads
+      // the flags trail the installable (before any `--`), so the command reads
       // action-first: `nix run adb#inspect-hello --extra-experimental-features … -- …`
       if (!p.flakes) head += ARMOR;
+      if (p.source === "github" && p.latest) head += " --refresh";
       return head;
     });
     return before + cmd;
@@ -207,6 +218,15 @@
         { value: "local", label: "local checkout (.)" }
       ], function (v) { update({ source: v }); }));
       pop.appendChild(r1);
+
+      if (p.source === "github") {
+        // a cached main.tar.gz can lag behind new commits; this adds
+        // --tarball-ttl 0 / --refresh so every run re-checks. Inert for a
+        // local checkout, so the row hides with it.
+        var r4 = el("div", { class: "adb-row" });
+        r4.appendChild(check("always fetch latest", p.latest, function (v) { update({ latest: v }); }));
+        pop.appendChild(r4);
+      }
 
       // the mode tabs — the rows below are contextual to the tab
       var r0 = el("div", { class: "adb-row" });

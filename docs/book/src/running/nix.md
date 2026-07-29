@@ -29,6 +29,10 @@ nix registry add adb github:{{repo}}
 
 The registry ref floats to the latest commit, which is fine: the runner records the *resolved* revision, so your run is still exactly identified.
 
+## Always fetching the latest
+
+Nix caches downloads: once it has fetched `main` (as a tarball or a flake ref), it reuses that copy for a while rather than asking GitHub again — so a rerun can silently execute code that's a few commits behind. The "always fetch latest" checkbox in the [⚙ command settings](#adb-cmd-settings) (on by default, GitHub source only) makes every command re-check: `--tarball-ttl 0` on `nix-build`, `--refresh` on `nix run`, `--option tarball-ttl 0` on `nix-run`. If nothing changed upstream, the check is a cheap no-op — nothing is re-downloaded or rebuilt. Untick it to save the round-trip, or when you're running from a local checkout (where there's no download to go stale and the checkbox doesn't apply). Pinned `…/<rev>` commands don't need it either — a pin resolves the same way every time.
+
 ## The experimental-features flag
 
 `nix run` needs two experimental features, `nix-command` and `flakes`. The commands in this guide **opt in explicitly, per command** — nothing global to configure, works on a stock install:

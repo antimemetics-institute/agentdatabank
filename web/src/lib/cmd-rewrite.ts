@@ -14,18 +14,23 @@ export type CmdPrefs = {
   flakes: boolean;
   registry: boolean;
   nixRun: boolean;
+  // github source only: bypass Nix's download cache so a rerun picks up new
+  // commits on main (tarball-ttl 0 / --refresh). Inert for a local checkout.
+  latest: boolean;
 };
 
 /* flakes:false by default — commands must work on a stock Nix install, so they
    carry an explicit --extra-experimental-features until the user says it's
    enabled globally. nixRun:false likewise: the wrapped nix-shell form works
-   without anything installed. */
+   without anything installed. latest:true — a stale cached main.tar.gz silently
+   running old code is worse than a redundant HEAD check. */
 export const CMD_PREFS_DEFAULTS: CmdPrefs = {
   mode: "nix-build",
   source: "github",
   flakes: false,
   registry: false,
   nixRun: false,
+  latest: true,
 };
 
 const GITHUB = "github:antimemetics-institute/agentdatabank";
@@ -47,17 +52,22 @@ function ref(p: CmdPrefs): string {
    github-source forms continue onto a fresh line before it (backslash-newline
    holds inside $(…) and inside the nix-shell --run double quotes alike). */
 function flakelessHead(cmd: string, p: CmdPrefs): string {
+  // "always fetch latest" spellings: nix-build takes the setting as a flag;
+  // nix-run only documents --option. Only the github tarball is ever cached.
+  const fresh = p.source === "github" && p.latest;
   if (p.mode === "nix-build") {
     cmd = cmd.replace(/^nix run \.#(\S+)/, (_, name: string) => {
+      const ttl = fresh ? " --tarball-ttl 0" : "";
       const src = p.source === "local" ? " " : " " + TARBALL + " \\\n  ";
-      return `$(nix-build --no-out-link${src}-A exec.${name})`;
+      return `$(nix-build --no-out-link${ttl}${src}-A exec.${name})`;
     });
     return cmd.replace(/(-A exec\.\S+\)) --(?=\s|$)/, "$1");
   }
   return cmd.replace(/^nix run \.#(\S+)/, (_, name: string) => {
     const pkg = name.startsWith("adb-") ? name : `experiment-${name}`;
+    const ttl = fresh ? "--option tarball-ttl 0 " : "";
     const src = p.source === "local" ? ". " : TARBALL + " \\\n  ";
-    return `nix-run ${src}-A ${pkg}`;
+    return `nix-run ${ttl}${src}-A ${pkg}`;
   });
 }
 
@@ -69,9 +79,10 @@ function rewriteLine(line: string, p: CmdPrefs): string {
   if (p.mode === "nix-build" || p.mode === "nix-run") return before + flakelessHead(cmd, p);
   cmd = cmd.replace(/^nix run \.#(\S+)/, (_, name: string) => {
     let head = `nix run ${ref(p)}#${name}`;
-    // the flag trails the installable (before any `--`), so the command reads
+    // the flags trail the installable (before any `--`), so the command reads
     // action-first: `nix run adb#inspect-hello --extra-experimental-features … -- …`
     if (!p.flakes) head += ARMOR;
+    if (p.source === "github" && p.latest) head += " --refresh";
     return head;
   });
   return before + cmd;
