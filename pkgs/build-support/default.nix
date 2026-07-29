@@ -107,6 +107,28 @@ in
         })
         { inherit pyproject-nix uv2nix lib; };
       workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
+      # uv2nix fetches git sources with full history and allRefs (its fetchGit has no
+      # shallow), which mirrors entire upstream repos into the eval git cache. The lock
+      # pins an exact rev and the store hash covers only the checkout, so depth can
+      # never affect identity — re-fetch every git-sourced package shallowly instead,
+      # with url+rev read from uv.lock (one place). uv2nix's own fetch is never forced:
+      # src is lazy. Assumes the host serves arbitrary pinned SHAs (GitHub does).
+      gitLockPackages = builtins.filter (p: p ? source.git)
+        (builtins.fromTOML (builtins.readFile (workspaceRoot + "/uv.lock"))).package;
+      shallowGitOverlay = _final: prev:
+        builtins.listToAttrs (map
+          (p: {
+            inherit (p) name;
+            value = prev.${p.name}.overrideAttrs (_old: {
+              src = builtins.fetchGit {
+                url = builtins.head (lib.splitString "?" (builtins.head (lib.splitString "#" p.source.git)));
+                rev = lib.last (lib.splitString "#" p.source.git);
+                shallow = true;
+                submodules = true;
+              };
+            });
+          })
+          gitLockPackages);
       # External repos lock the libs as git+subdirectory sources; the override
       # must then also (a) clear uv2nix's postUnpack subdir descent — the
       # replacement src IS the package root — and (b) inject hatchling: build
@@ -135,6 +157,7 @@ in
           (lib.composeManyExtensions [
             pyproject-build-systems.overlays.default
             (workspace.mkPyprojectOverlay { inherit sourcePreference; })
+            shallowGitOverlay
             inRepoOverlay
             overrides
           ]);
