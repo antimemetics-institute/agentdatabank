@@ -11,12 +11,14 @@ adb: this run needs credential set 'anthropic' — setting it up now
 ANTHROPIC_API_KEY [unset]: ****
 ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
 save 'anthropic' for future runs? [Y/n]:
+name this profile [default]:
 adb: [258b80e5323e r1] … running
 ```
 
 - Secret prompts are hidden — never echoed, and never on the command line. (There is deliberately no `KEY=VALUE` argv form: argv shows up in `ps` and shell history.)
 - `Enter` accepts a shown `[default: …]`.
 - `save? [Y/n]` — `Y` stores the set for every future run; `n` uses it for this run only and forgets it.
+- The profile name is for keeping several credentials for the same provider — `Enter` is the right answer until you need that (see [Profiles](#profiles)).
 - Headless runs never hang on a prompt: with piped stdin or `--json`, a missing set refuses the run and prints the `credentials set` command to run instead.
 
 ## A name is a condition, a key is environment
@@ -71,6 +73,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > ANTHROPIC_API_KEY [unset]: ****
 > ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
 > save 'anthropic' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `anthropic/…`, e.g. `anthropic/claude-sonnet-4-5-20250929`.
@@ -82,6 +85,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > OPENAI_API_KEY [unset]: ****
 > OPENAI_BASE_URL [default: https://api.openai.com/v1]:
 > save 'openai' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `openai/…`, e.g. `openai/gpt-4o-2024-11-20`.
@@ -93,6 +97,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > GOOGLE_API_KEY [unset]: ****
 > GOOGLE_BASE_URL [default: https://generativelanguage.googleapis.com/v1beta/openai]:
 > save 'google' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `google/…`, e.g. `google/gemini-2.5-pro`.
@@ -104,6 +109,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > GROQ_API_KEY [unset]: ****
 > GROQ_BASE_URL [default: https://api.groq.com/openai/v1]:
 > save 'groq' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `groq/…`, e.g. `groq/llama-3.3-70b-versatile`.
@@ -115,6 +121,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > MOONSHOTAI_API_KEY [unset]: ****
 > MOONSHOTAI_BASE_URL [default: https://api.moonshot.ai/v1]:
 > save 'moonshotai' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `moonshotai/…`, e.g. `moonshotai/kimi-k3` — Moonshot's own API. The same models served through OpenRouter are `openrouter/moonshotai/…` ids: a different provider, so a different condition.
@@ -126,6 +133,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > OPENROUTER_API_KEY [unset]: ****
 > OPENROUTER_BASE_URL [default: https://openrouter.ai/api/v1]:
 > save 'openrouter' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `openrouter/…`, e.g. `openrouter/deepseek/deepseek-r1`.
@@ -137,6 +145,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > AZUREAI_API_KEY [unset]: ****
 > AZUREAI_BASE_URL [unset]: https://my-endpoint.eastus.models.ai.azure.com
 > save 'azureai' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > The base URL is your Azure endpoint (no universal default). Model ids: `azureai/…` — the model part is your deployment name.
@@ -150,6 +159,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > OPENAI_API_KEY [unset]: ****
 > OPENAI_BASE_URL [default: https://api.openai.com/v1]: http://localhost:11434/v1
 > save 'openai' for future runs? [Y/n]:
+> name this profile [default]:
 > ```
 >
 > Model ids: `openai/<served-model-name>` — where the model is served is your environment, never part of the condition, so your runs bucket with everyone else's runs of that model.
@@ -167,13 +177,32 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 
 </details>
 
+## Profiles
+
+A credential set can hold several **profiles** — a work key and a personal key for the same provider, a proxy endpoint next to the direct one. The `default` profile is what every run uses silently; the moment a set has named profiles, interactive runs ask:
+
+```text
+which 'openai' credentials? [default] work personal new:
+always use 'work' for 'concordia'? [y/N]:
+```
+
+- `Enter` takes the bracketed default; typing a name takes that profile; `new` creates one on the spot (same prompts as setup, then a name).
+- `always use …? [y/N]` — `y` remembers the choice **per experiment**, so this experiment never asks again. Remembered choices live in `~/.config/adb/preferences.toml` — profile *names* only, never values, so it isn't secret; edit or delete lines freely to forget.
+- Create and edit profiles directly with `credentials set openai.work`; delete one with `credentials remove openai.work`.
+- Headless runs never see the picker: a remembered choice wins, else the `default` profile, else the run is refused with the fix.
+- Profiles are atomic — a profile missing a field never borrows it from another profile.
+- The profile choice is environment, never identity: runs of the same model under different profiles land in the same condition bucket.
+
 ## The store
 
 ```
-~/.config/adb/credentials.toml      # mode 0600, one section per credential set
+~/.config/adb/credentials.toml      # mode 0600, one [<set>.<profile>] section each
+~/.config/adb/preferences.toml      # remembered per-experiment choices (names only)
 ```
 
-The path honors `$XDG_CONFIG_HOME`; `$ADB_CREDENTIALS_FILE` overrides it entirely. That variable is also the CI story: your pipeline materializes this file from its own secret manager and points the variable at it. Base URLs are validated as you type them (an `http(s)://` scheme is required), so a typo is one retype instead of a cryptic client error mid-run.
+The path honors `$XDG_CONFIG_HOME`; `$ADB_CREDENTIALS_FILE` overrides it entirely. That variable is also the CI story: your pipeline materializes this file from its own secret manager and points the variable at it — `chmod 600` it as you do, because a store readable by group or others is refused outright (with the `chmod` to run), the same way ssh treats a leaky private key. Base URLs are validated as you type them (an `http(s)://` scheme is required), so a typo is one retype instead of a cryptic client error mid-run.
+
+The file is yours to edit by hand — `credentials set` is a convenience, not a gatekeeper. A set is a free-form field map: any env var you add to a section is injected into every run that routes to it, including vars the dialogue never asks about (an org id, an API version, extra vendor knobs). The dialogue only knows the common shape; the store carries whatever you put in it.
 
 ## How credentials reach the experiment
 

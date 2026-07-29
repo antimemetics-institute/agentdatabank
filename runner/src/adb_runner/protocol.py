@@ -87,6 +87,7 @@ def execute_run(
     store: RunStore,
     run_id: str | None = None,
     on_event=None,
+    credential_env: dict | None = None,
 ) -> RunResult:
     run_id = run_id or ulid()
     # `source` is the per-experiment content identity (feeds condition_id); `fetch_ref` is
@@ -151,9 +152,12 @@ def execute_run(
         },
     })
 
-    # resolve stored credentials/endpoints for the credential sets this run's model ids
-    # route to (docs/plan/comparability.md: endpoint + key are environment, not condition)
-    credential_env = credentials.env_for_run(manifest, realized_params)
+    # stored credentials/endpoints for the credential sets this run's model ids route
+    # to (docs/plan/comparability.md: endpoint + key are environment, not condition).
+    # The CLI resolves these up front (profile ladder, may prompt) and passes them in;
+    # direct callers without one get the default-profile resolution.
+    if credential_env is None:
+        credential_env = credentials.env_for_run(manifest, realized_params)
     proc = subprocess.Popen(
         [program],
         stdin=subprocess.PIPE,

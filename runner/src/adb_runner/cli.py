@@ -167,6 +167,21 @@ def main() -> int:
 
     json_out = (lambda e: print(json.dumps(e, separators=(",", ":")), flush=True)) if args.json else None
 
+    # Credentials resolve ONCE per invocation (they are constant across replicates —
+    # a picker that re-asked every replicate would be noise). Interactively this may
+    # prompt: first-use setup for an unconfigured built-in (the run continues with
+    # the freshly entered credential; secrets never touch argv), and the profile
+    # picker when named profiles exist. Headless (piped stdin or --json) it never
+    # prompts — remembered choice, else default profile, else exit 2 with the fix.
+    realized = cond["params"]  # no distributions in the MVP: realized ARE the spec params
+    interactive = sys.stdin.isatty() and not args.json
+    try:
+        credential_env = credentials.resolve_run_credentials(
+            manifest, realized, experiment=manifest["name"], interactive=interactive)
+    except ValueError as exc:
+        _log(f"provisioning failed: {exc}")
+        return 2
+
     counts = {"completed": 0, "failed": 0, "interrupted": 0}
     try:
         ensure_condition(home, cond["cid"], {
@@ -175,29 +190,7 @@ def main() -> int:
         for replicate in range(1, replicates + 1):
             run_seed = _derive_seed(base_seed, cond["cid"], replicate)
             try:
-                # no distributions in the MVP: realized params ARE the spec params
-                realized = cond["params"]
                 validate_realized(realized, manifest)
-                # a model naming a built-in credential set with zero configuration can
-                # only fail. Interactively, set it up right here — the run continues
-                # with the freshly stored credential (secrets never touch argv;
-                # managing them later is `adb-runner credentials`). Headless (piped
-                # stdin or --json), refuse with the fix instead of hanging on a prompt.
-                missing = credentials.missing_sets(manifest, realized)
-                if missing and sys.stdin.isatty() and not args.json:
-                    for p in missing:
-                        _log(f"this run needs credential set {p!r} — setting it up "
-                             f"now (stored 0600 in {credentials.config_path()}; "
-                             f"change later with "
-                             f"`nix run .#adb-runner -- credentials set {p}`)")
-                        credentials.prompt_set(p)
-                    missing = credentials.missing_sets(manifest, realized)
-                if missing:
-                    raise SchemaError(
-                        f"this run needs credential set(s) {missing} but none are "
-                        f"configured — run `nix run .#adb-runner -- credentials set "
-                        f"{missing[0]}` (scripts pipe one line per prompt on stdin; "
-                        f"exported env vars are never read)")
             except SchemaError as exc:
                 _log(f"[{abbrev(cond['cid'])} r{replicate}] provisioning failed: {exc}")
                 counts["failed"] += 1
@@ -229,6 +222,7 @@ def main() -> int:
                 store=store,
                 run_id=run_id,
                 on_event=on_event,
+                credential_env=credential_env,
             )
             counts[result.phase] = counts.get(result.phase, 0) + 1
             summary = " ".join(f"{k}={v}" for k, v in result.summary.items())
