@@ -32,9 +32,14 @@ model list and a declared mapping in at least one wrapper (an explicit map,
 deliberately not discovered) — first-class in the `types.llm` vocabulary whether
 they have a dedicated SDK (anthropic, groq, …) or are reached over an
 OpenAI-compatible mount (moonshotai); which wire a wrapper uses is that wrapper's
-concern, not the user's. Pattern-style providers (azureai deployments,
-openai-api/openrouter passthrough) are static hints in suggestions.nix instead,
-since they have no enumerable (or no bounded) model list.
+concern, not the user's. openrouter is catalog-backed too — its public /models
+list is keyless and first-party in the strict sense (the ids its API accepts,
+already org-scoped: openrouter/moonshotai/kimi-k3) — but has no dated-snapshot
+scheme or models.dev lineup, so it bypasses that machinery (openrouter_models).
+Pattern-style providers (azureai deployments, openai-api passthrough) are static
+hints in suggestions.nix instead, since they have no enumerable model list; the
+openrouter/ pattern hint stays alongside the catalog entries as the escape hatch
+for models OpenRouter added since the last regen.
 
 Output is deterministic for unchanged upstream data (no timestamps): a clean
 `git diff` after running IS the update.
@@ -51,6 +56,7 @@ from pathlib import Path
 
 MODELS_DEV_URL = "https://models.dev/api.json"
 LITELLM_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/models"
 
 # inspect provider prefix -> (models.dev provider key, litellm_provider key,
 # litellm id prefix to strip, credential hint shown in the GUI)
@@ -184,6 +190,36 @@ def live_provider_ids(prefix: str, stored: dict[str, str]) -> list[str]:
     return [m["id"] for m in data.get("data", [])]
 
 
+def openrouter_models() -> list[dict]:
+    """OpenRouter's public /models list (keyless) — the ids its API accepts.
+
+    Ids arrive already org-scoped (moonshotai/kimi-k3), and there is no
+    dated-snapshot scheme, so none of the lineup/snapshot machinery applies.
+    `~`-prefixed ids are OpenRouter's retired/rerouted aliases — excluded like
+    -latest aliases elsewhere. `:free` variants stay: a distinct serving tier is
+    a legitimately selectable (and distinct) condition. `created` is the stable
+    added-to-OpenRouter timestamp — the closest thing to a release date, and
+    deterministic across regens."""
+    import time
+
+    models = []
+    for m in fetch(OPENROUTER_URL).get("data", []):
+        arch = m.get("architecture") or {}
+        inputs = arch.get("input_modalities") or []
+        outputs = arch.get("output_modalities") or []
+        if "text" not in inputs or set(outputs) != {"text"}:
+            continue
+        if m["id"].startswith("~"):
+            continue
+        created = m.get("created") or 0
+        models.append({
+            "id": m["id"],
+            "name": m.get("name", m["id"]),
+            "release_date": time.strftime("%Y-%m-%d", time.gmtime(created)) if created else "",
+        })
+    return sorted(models, key=lambda m: (m["release_date"], m["id"]), reverse=True)
+
+
 def text_chat_model(m: dict) -> bool:
     mod = m.get("modalities") or {}
     inputs, outputs = mod.get("input") or [], mod.get("output") or []
@@ -296,9 +332,16 @@ def main() -> int:
                 print(f"note: {prefix}/{m['id']} absent from the first-party id list")
         providers[prefix] = {"credential_hint": cred, "models": models}
 
+    or_models = openrouter_models()
+    print(f"openrouter: first-party /models list used ({len(or_models)} ids)")
+    providers["openrouter"] = {
+        "credential_hint": "Needs OPENROUTER_API_KEY (asked for on first run).",
+        "models": or_models,
+    }
+
     out = {
         "_generated_by": "lib/model-catalog/update.py — do not edit by hand",
-        "sources": [MODELS_DEV_URL, LITELLM_URL],
+        "sources": [MODELS_DEV_URL, LITELLM_URL, OPENROUTER_URL],
         "providers": providers,
     }
     path = Path(__file__).resolve().parent / "model_catalog.json"

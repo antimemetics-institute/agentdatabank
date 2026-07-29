@@ -10,7 +10,7 @@
 
 let
   catalog = builtins.fromJSON (builtins.readFile ./model_catalog.json);
-  order = [ "anthropic" "openai" "google" "groq" "mistral" "grok" "moonshotai" "bedrock" ];
+  order = [ "anthropic" "openai" "google" "groq" "mistral" "grok" "moonshotai" "bedrock" "openrouter" ];
   fromCatalog = lib.concatMap
     (prefix:
       let p = catalog.providers.${prefix}; in
@@ -25,7 +25,7 @@ let
     order;
   patterns = [
     { value = "openai/qwen3.5-9b"; description = "A model served from your own OpenAI-compatible server (set its base URL on the openai credential set)."; }
-    { value = "openrouter/"; description = "openrouter/<org>/<model>: any OpenRouter-hosted model. Needs OPENROUTER_API_KEY (asked for on first run)."; }
+    { value = "openrouter/"; description = "openrouter/<org>/<model>: any OpenRouter-hosted model, including ones added since this catalog was generated. Needs OPENROUTER_API_KEY (asked for on first run)."; }
     { value = "azureai/"; description = "Type your Azure deployment name after the slash; endpoint + key asked for on first run."; }
     { value = "openai-api/"; description = "openai-api/<name>/<model>: an OpenAI-compatible server under a named credential set."; }
   ];

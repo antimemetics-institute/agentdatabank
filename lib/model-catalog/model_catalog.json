@@ -2,7 +2,8 @@
  "_generated_by": "lib/model-catalog/update.py \u2014 do not edit by hand",
  "sources": [
   "https://models.dev/api.json",
-  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+  "https://openrouter.ai/api/v1/models"
  ],
  "providers": {
   "anthropic": {
@@ -1222,6 +1223,1721 @@
      "id": "meta.llama3-1-70b-instruct-v1:0",
      "name": "Llama 3.1 70B Instruct",
      "release_date": "2024-07-23"
+    }
+   ]
+  },
+  "openrouter": {
+   "credential_hint": "Needs OPENROUTER_API_KEY (asked for on first run).",
+   "models": [
+    {
+     "id": "qwen/qwen3.7-flash",
+     "name": "Qwen: Qwen3.7 Flash",
+     "release_date": "2026-07-27"
+    },
+    {
+     "id": "anthropic/claude-opus-5-fast",
+     "name": "Claude Opus 5 (Fast)",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "anthropic/claude-opus-5",
+     "name": "Claude Opus 5",
+     "release_date": "2026-07-24"
+    },
+    {
+     "id": "inclusionai/ling-3.0-flash:free",
+     "name": "Ling-3.0-flash (free)",
+     "release_date": "2026-07-23"
+    },
+    {
+     "id": "poolside/laguna-s-2.1:free",
+     "name": "Poolside: Laguna S 2.1 (free)",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "poolside/laguna-s-2.1",
+     "name": "Poolside: Laguna S 2.1",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "google/gemini-3.6-flash:batch",
+     "name": "Google: Gemini 3.6 Flash (batch)",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "google/gemini-3.6-flash",
+     "name": "Google: Gemini 3.6 Flash",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "google/gemini-3.5-flash-lite:batch",
+     "name": "Google: Gemini 3.5 Flash Lite (batch)",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "google/gemini-3.5-flash-lite",
+     "name": "Google: Gemini 3.5 Flash Lite",
+     "release_date": "2026-07-21"
+    },
+    {
+     "id": "meituan/longcat-2.0",
+     "name": "Meituan: LongCat 2.0",
+     "release_date": "2026-07-20"
+    },
+    {
+     "id": "thinkingmachines/inkling",
+     "name": "Thinking Machines: Inkling",
+     "release_date": "2026-07-17"
+    },
+    {
+     "id": "moonshotai/kimi-k3",
+     "name": "MoonshotAI: Kimi K3",
+     "release_date": "2026-07-16"
+    },
+    {
+     "id": "meta/muse-spark-1.1",
+     "name": "Meta: Muse Spark 1.1",
+     "release_date": "2026-07-16"
+    },
+    {
+     "id": "kwaipilot/kat-coder-pro-v2.5",
+     "name": "Kwaipilot: KAT-Coder-Pro V2.5",
+     "release_date": "2026-07-10"
+    },
+    {
+     "id": "kwaipilot/kat-coder-air-v2.5",
+     "name": "Kwaipilot: KAT-Coder-Air V2.5",
+     "release_date": "2026-07-10"
+    },
+    {
+     "id": "openai/gpt-5.6-terra-pro",
+     "name": "OpenAI: GPT-5.6 Terra Pro",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai/gpt-5.6-terra",
+     "name": "OpenAI: GPT-5.6 Terra",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai/gpt-5.6-sol-pro",
+     "name": "OpenAI: GPT-5.6 Sol Pro",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai/gpt-5.6-sol",
+     "name": "OpenAI: GPT-5.6 Sol",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai/gpt-5.6-luna-pro",
+     "name": "OpenAI: GPT-5.6 Luna Pro",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "openai/gpt-5.6-luna",
+     "name": "OpenAI: GPT-5.6 Luna",
+     "release_date": "2026-07-09"
+    },
+    {
+     "id": "x-ai/grok-4.5",
+     "name": "xAI: Grok 4.5",
+     "release_date": "2026-07-08"
+    },
+    {
+     "id": "aion-labs/aion-3.0-mini",
+     "name": "AionLabs: Aion-3.0-Mini",
+     "release_date": "2026-07-07"
+    },
+    {
+     "id": "aion-labs/aion-3.0",
+     "name": "AionLabs: Aion-3.0",
+     "release_date": "2026-07-07"
+    },
+    {
+     "id": "tencent/hy3",
+     "name": "Tencent: Hy3",
+     "release_date": "2026-07-06"
+    },
+    {
+     "id": "poolside/laguna-xs-2.1:free",
+     "name": "Poolside: Laguna XS 2.1 (free)",
+     "release_date": "2026-07-02"
+    },
+    {
+     "id": "poolside/laguna-xs-2.1",
+     "name": "Poolside: Laguna XS 2.1",
+     "release_date": "2026-07-02"
+    },
+    {
+     "id": "anthropic/claude-sonnet-5:batch",
+     "name": "Anthropic: Claude Sonnet 5 (batch)",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "anthropic/claude-sonnet-5",
+     "name": "Anthropic: Claude Sonnet 5",
+     "release_date": "2026-06-30"
+    },
+    {
+     "id": "sakana/fugu-ultra",
+     "name": "Sakana: Fugu Ultra",
+     "release_date": "2026-06-24"
+    },
+    {
+     "id": "nex-agi/nex-n2-mini",
+     "name": "Nex AGI: Nex-N2-Mini",
+     "release_date": "2026-06-24"
+    },
+    {
+     "id": "cohere/north-mini-code:free",
+     "name": "Cohere: North Mini Code (free)",
+     "release_date": "2026-06-17"
+    },
+    {
+     "id": "z-ai/glm-5.2",
+     "name": "Z.ai: GLM 5.2",
+     "release_date": "2026-06-16"
+    },
+    {
+     "id": "openrouter/fusion",
+     "name": "OpenRouter: Fusion",
+     "release_date": "2026-06-13"
+    },
+    {
+     "id": "moonshotai/kimi-k2.7-code",
+     "name": "MoonshotAI: Kimi K2.7 Code",
+     "release_date": "2026-06-12"
+    },
+    {
+     "id": "anthropic/claude-fable-5:batch",
+     "name": "Anthropic: Claude Fable 5 (batch)",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "anthropic/claude-fable-5",
+     "name": "Anthropic: Claude Fable 5",
+     "release_date": "2026-06-09"
+    },
+    {
+     "id": "nex-agi/nex-n2-pro",
+     "name": "Nex AGI: Nex-N2-Pro",
+     "release_date": "2026-06-08"
+    },
+    {
+     "id": "nvidia/nemotron-3.5-content-safety:free",
+     "name": "NVIDIA: Nemotron 3.5 Content Safety (free)",
+     "release_date": "2026-06-04"
+    },
+    {
+     "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+     "name": "NVIDIA: Nemotron 3 Ultra (free)",
+     "release_date": "2026-06-04"
+    },
+    {
+     "id": "nvidia/nemotron-3-ultra-550b-a55b",
+     "name": "NVIDIA: Nemotron 3 Ultra",
+     "release_date": "2026-06-04"
+    },
+    {
+     "id": "qwen/qwen3.7-plus",
+     "name": "Qwen: Qwen3.7 Plus",
+     "release_date": "2026-06-03"
+    },
+    {
+     "id": "minimax/minimax-m3:batch",
+     "name": "MiniMax: MiniMax M3 (batch)",
+     "release_date": "2026-05-31"
+    },
+    {
+     "id": "minimax/minimax-m3",
+     "name": "MiniMax: MiniMax M3",
+     "release_date": "2026-05-31"
+    },
+    {
+     "id": "stepfun/step-3.7-flash",
+     "name": "StepFun: Step 3.7 Flash",
+     "release_date": "2026-05-28"
+    },
+    {
+     "id": "anthropic/claude-opus-4.8:batch",
+     "name": "Anthropic: Claude Opus 4.8 (batch)",
+     "release_date": "2026-05-27"
+    },
+    {
+     "id": "anthropic/claude-opus-4.8-fast",
+     "name": "Anthropic: Claude Opus 4.8 (Fast)",
+     "release_date": "2026-05-27"
+    },
+    {
+     "id": "anthropic/claude-opus-4.8",
+     "name": "Anthropic: Claude Opus 4.8",
+     "release_date": "2026-05-27"
+    },
+    {
+     "id": "qwen/qwen3.7-max",
+     "name": "Qwen: Qwen3.7 Max",
+     "release_date": "2026-05-21"
+    },
+    {
+     "id": "x-ai/grok-build-0.1",
+     "name": "xAI: Grok Build 0.1",
+     "release_date": "2026-05-20"
+    },
+    {
+     "id": "google/gemini-3.5-flash:batch",
+     "name": "Google: Gemini 3.5 Flash (batch)",
+     "release_date": "2026-05-19"
+    },
+    {
+     "id": "google/gemini-3.5-flash",
+     "name": "Google: Gemini 3.5 Flash",
+     "release_date": "2026-05-19"
+    },
+    {
+     "id": "perceptron/perceptron-mk1",
+     "name": "Perceptron: Perceptron Mk1",
+     "release_date": "2026-05-12"
+    },
+    {
+     "id": "anthropic/claude-opus-4.7-fast",
+     "name": "Anthropic: Claude Opus 4.7 (Fast)",
+     "release_date": "2026-05-12"
+    },
+    {
+     "id": "inclusionai/ring-2.6-1t",
+     "name": "inclusionAI: Ring-2.6-1T",
+     "release_date": "2026-05-08"
+    },
+    {
+     "id": "google/gemini-3.1-flash-lite:batch",
+     "name": "Google: Gemini 3.1 Flash Lite (batch)",
+     "release_date": "2026-05-07"
+    },
+    {
+     "id": "google/gemini-3.1-flash-lite",
+     "name": "Google: Gemini 3.1 Flash Lite",
+     "release_date": "2026-05-07"
+    },
+    {
+     "id": "openai/gpt-chat-latest",
+     "name": "OpenAI: GPT Chat Latest",
+     "release_date": "2026-05-05"
+    },
+    {
+     "id": "x-ai/grok-4.3",
+     "name": "xAI: Grok 4.3",
+     "release_date": "2026-04-30"
+    },
+    {
+     "id": "mistralai/mistral-medium-3-5",
+     "name": "Mistral: Mistral Medium 3.5",
+     "release_date": "2026-04-30"
+    },
+    {
+     "id": "ibm-granite/granite-4.1-8b",
+     "name": "IBM: Granite 4.1 8B",
+     "release_date": "2026-04-30"
+    },
+    {
+     "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+     "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+     "release_date": "2026-04-28"
+    },
+    {
+     "id": "qwen/qwen3.6-max-preview",
+     "name": "Qwen: Qwen3.6 Max Preview",
+     "release_date": "2026-04-27"
+    },
+    {
+     "id": "qwen/qwen3.6-flash",
+     "name": "Qwen: Qwen3.6 Flash",
+     "release_date": "2026-04-27"
+    },
+    {
+     "id": "qwen/qwen3.6-35b-a3b",
+     "name": "Qwen: Qwen3.6 35B A3B",
+     "release_date": "2026-04-27"
+    },
+    {
+     "id": "qwen/qwen3.6-27b",
+     "name": "Qwen: Qwen3.6 27B",
+     "release_date": "2026-04-27"
+    },
+    {
+     "id": "qwen/qwen3.5-plus-20260420",
+     "name": "Qwen: Qwen3.5 Plus 2026-04-20",
+     "release_date": "2026-04-27"
+    },
+    {
+     "id": "openai/gpt-5.5:batch",
+     "name": "OpenAI: GPT-5.5 (batch)",
+     "release_date": "2026-04-24"
+    },
+    {
+     "id": "openai/gpt-5.5-pro",
+     "name": "OpenAI: GPT-5.5 Pro",
+     "release_date": "2026-04-24"
+    },
+    {
+     "id": "openai/gpt-5.5",
+     "name": "OpenAI: GPT-5.5",
+     "release_date": "2026-04-24"
+    },
+    {
+     "id": "deepseek/deepseek-v4-pro",
+     "name": "DeepSeek: DeepSeek V4 Pro",
+     "release_date": "2026-04-24"
+    },
+    {
+     "id": "deepseek/deepseek-v4-flash",
+     "name": "DeepSeek: DeepSeek V4 Flash",
+     "release_date": "2026-04-24"
+    },
+    {
+     "id": "inclusionai/ling-2.6-1t",
+     "name": "inclusionAI: Ling-2.6-1T",
+     "release_date": "2026-04-23"
+    },
+    {
+     "id": "xiaomi/mimo-v2.5-pro",
+     "name": "Xiaomi: MiMo-V2.5-Pro",
+     "release_date": "2026-04-22"
+    },
+    {
+     "id": "xiaomi/mimo-v2.5",
+     "name": "Xiaomi: MiMo-V2.5",
+     "release_date": "2026-04-22"
+    },
+    {
+     "id": "tencent/hy3-preview",
+     "name": "Tencent: Hy3 preview",
+     "release_date": "2026-04-22"
+    },
+    {
+     "id": "openrouter/pareto-code",
+     "name": "Pareto Code Router",
+     "release_date": "2026-04-21"
+    },
+    {
+     "id": "inclusionai/ling-2.6-flash",
+     "name": "inclusionAI: Ling-2.6-flash",
+     "release_date": "2026-04-21"
+    },
+    {
+     "id": "moonshotai/kimi-k2.6",
+     "name": "MoonshotAI: Kimi K2.6",
+     "release_date": "2026-04-20"
+    },
+    {
+     "id": "anthropic/claude-opus-4.7:batch",
+     "name": "Anthropic: Claude Opus 4.7 (batch)",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "anthropic/claude-opus-4.7",
+     "name": "Anthropic: Claude Opus 4.7",
+     "release_date": "2026-04-16"
+    },
+    {
+     "id": "z-ai/glm-5.1",
+     "name": "Z.ai: GLM 5.1",
+     "release_date": "2026-04-07"
+    },
+    {
+     "id": "google/gemma-4-26b-a4b-it:free",
+     "name": "Google: Gemma 4 26B A4B  (free)",
+     "release_date": "2026-04-03"
+    },
+    {
+     "id": "google/gemma-4-26b-a4b-it",
+     "name": "Google: Gemma 4 26B A4B ",
+     "release_date": "2026-04-03"
+    },
+    {
+     "id": "qwen/qwen3.6-plus",
+     "name": "Qwen: Qwen3.6 Plus",
+     "release_date": "2026-04-02"
+    },
+    {
+     "id": "google/gemma-4-31b-it:free",
+     "name": "Google: Gemma 4 31B (free)",
+     "release_date": "2026-04-02"
+    },
+    {
+     "id": "google/gemma-4-31b-it",
+     "name": "Google: Gemma 4 31B",
+     "release_date": "2026-04-02"
+    },
+    {
+     "id": "z-ai/glm-5v-turbo",
+     "name": "Z.ai: GLM 5V Turbo",
+     "release_date": "2026-04-01"
+    },
+    {
+     "id": "arcee-ai/trinity-large-thinking",
+     "name": "Arcee AI: Trinity Large Thinking",
+     "release_date": "2026-04-01"
+    },
+    {
+     "id": "x-ai/grok-4.20-multi-agent",
+     "name": "xAI: Grok 4.20 Multi-Agent",
+     "release_date": "2026-03-31"
+    },
+    {
+     "id": "x-ai/grok-4.20",
+     "name": "xAI: Grok 4.20",
+     "release_date": "2026-03-31"
+    },
+    {
+     "id": "kwaipilot/kat-coder-pro-v2",
+     "name": "Kwaipilot: KAT-Coder-Pro V2",
+     "release_date": "2026-03-27"
+    },
+    {
+     "id": "rekaai/reka-edge",
+     "name": "Reka Edge",
+     "release_date": "2026-03-20"
+    },
+    {
+     "id": "minimax/minimax-m2.7",
+     "name": "MiniMax: MiniMax M2.7",
+     "release_date": "2026-03-18"
+    },
+    {
+     "id": "openai/gpt-5.4-nano:batch",
+     "name": "OpenAI: GPT-5.4 Nano (batch)",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "openai/gpt-5.4-nano",
+     "name": "OpenAI: GPT-5.4 Nano",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "openai/gpt-5.4-mini:batch",
+     "name": "OpenAI: GPT-5.4 Mini (batch)",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "openai/gpt-5.4-mini",
+     "name": "OpenAI: GPT-5.4 Mini",
+     "release_date": "2026-03-17"
+    },
+    {
+     "id": "mistralai/mistral-small-2603",
+     "name": "Mistral: Mistral Small 4",
+     "release_date": "2026-03-16"
+    },
+    {
+     "id": "z-ai/glm-5-turbo",
+     "name": "Z.ai: GLM 5 Turbo",
+     "release_date": "2026-03-15"
+    },
+    {
+     "id": "nvidia/nemotron-3-super-120b-a12b:free",
+     "name": "NVIDIA: Nemotron 3 Super (free)",
+     "release_date": "2026-03-11"
+    },
+    {
+     "id": "nvidia/nemotron-3-super-120b-a12b",
+     "name": "NVIDIA: Nemotron 3 Super",
+     "release_date": "2026-03-11"
+    },
+    {
+     "id": "qwen/qwen3.5-9b",
+     "name": "Qwen: Qwen3.5-9B",
+     "release_date": "2026-03-10"
+    },
+    {
+     "id": "bytedance-seed/seed-2.0-lite",
+     "name": "ByteDance Seed: Seed-2.0-Lite",
+     "release_date": "2026-03-10"
+    },
+    {
+     "id": "openai/gpt-5.4:batch",
+     "name": "OpenAI: GPT-5.4 (batch)",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "openai/gpt-5.4-pro",
+     "name": "OpenAI: GPT-5.4 Pro",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "openai/gpt-5.4",
+     "name": "OpenAI: GPT-5.4",
+     "release_date": "2026-03-05"
+    },
+    {
+     "id": "inception/mercury-2",
+     "name": "Inception: Mercury 2",
+     "release_date": "2026-03-04"
+    },
+    {
+     "id": "openai/gpt-5.3-chat",
+     "name": "OpenAI: GPT-5.3 Chat",
+     "release_date": "2026-03-03"
+    },
+    {
+     "id": "google/gemini-3.1-flash-lite-preview",
+     "name": "Google: Gemini 3.1 Flash Lite Preview",
+     "release_date": "2026-03-03"
+    },
+    {
+     "id": "bytedance-seed/seed-2.0-mini",
+     "name": "ByteDance Seed: Seed-2.0-Mini",
+     "release_date": "2026-02-26"
+    },
+    {
+     "id": "qwen/qwen3.5-flash-02-23",
+     "name": "Qwen: Qwen3.5-Flash",
+     "release_date": "2026-02-25"
+    },
+    {
+     "id": "qwen/qwen3.5-35b-a3b",
+     "name": "Qwen: Qwen3.5-35B-A3B",
+     "release_date": "2026-02-25"
+    },
+    {
+     "id": "qwen/qwen3.5-27b",
+     "name": "Qwen: Qwen3.5-27B",
+     "release_date": "2026-02-25"
+    },
+    {
+     "id": "qwen/qwen3.5-122b-a10b",
+     "name": "Qwen: Qwen3.5-122B-A10B",
+     "release_date": "2026-02-25"
+    },
+    {
+     "id": "google/gemini-3.1-pro-preview-customtools",
+     "name": "Google: Gemini 3.1 Pro Preview Custom Tools",
+     "release_date": "2026-02-25"
+    },
+    {
+     "id": "openai/gpt-5.3-codex",
+     "name": "OpenAI: GPT-5.3-Codex",
+     "release_date": "2026-02-24"
+    },
+    {
+     "id": "aion-labs/aion-2.0",
+     "name": "AionLabs: Aion-2.0",
+     "release_date": "2026-02-23"
+    },
+    {
+     "id": "google/gemini-3.1-pro-preview:batch",
+     "name": "Google: Gemini 3.1 Pro Preview (batch)",
+     "release_date": "2026-02-19"
+    },
+    {
+     "id": "google/gemini-3.1-pro-preview",
+     "name": "Google: Gemini 3.1 Pro Preview",
+     "release_date": "2026-02-19"
+    },
+    {
+     "id": "anthropic/claude-sonnet-4.6",
+     "name": "Anthropic: Claude Sonnet 4.6",
+     "release_date": "2026-02-17"
+    },
+    {
+     "id": "qwen/qwen3.5-plus-02-15",
+     "name": "Qwen: Qwen3.5 Plus 2026-02-15",
+     "release_date": "2026-02-16"
+    },
+    {
+     "id": "qwen/qwen3.5-397b-a17b",
+     "name": "Qwen: Qwen3.5 397B A17B",
+     "release_date": "2026-02-16"
+    },
+    {
+     "id": "minimax/minimax-m2.5",
+     "name": "MiniMax: MiniMax M2.5",
+     "release_date": "2026-02-12"
+    },
+    {
+     "id": "z-ai/glm-5",
+     "name": "Z.ai: GLM 5",
+     "release_date": "2026-02-11"
+    },
+    {
+     "id": "qwen/qwen3-max-thinking",
+     "name": "Qwen: Qwen3 Max Thinking",
+     "release_date": "2026-02-09"
+    },
+    {
+     "id": "qwen/qwen3-coder-next",
+     "name": "Qwen: Qwen3 Coder Next",
+     "release_date": "2026-02-04"
+    },
+    {
+     "id": "anthropic/claude-opus-4.6:batch",
+     "name": "Anthropic: Claude Opus 4.6 (batch)",
+     "release_date": "2026-02-04"
+    },
+    {
+     "id": "anthropic/claude-opus-4.6",
+     "name": "Anthropic: Claude Opus 4.6",
+     "release_date": "2026-02-04"
+    },
+    {
+     "id": "openrouter/free",
+     "name": "Free Models Router",
+     "release_date": "2026-02-01"
+    },
+    {
+     "id": "stepfun/step-3.5-flash",
+     "name": "StepFun: Step 3.5 Flash",
+     "release_date": "2026-01-29"
+    },
+    {
+     "id": "upstage/solar-pro-3",
+     "name": "Upstage: Solar Pro 3",
+     "release_date": "2026-01-27"
+    },
+    {
+     "id": "moonshotai/kimi-k2.5",
+     "name": "MoonshotAI: Kimi K2.5",
+     "release_date": "2026-01-27"
+    },
+    {
+     "id": "minimax/minimax-m2-her",
+     "name": "MiniMax: MiniMax M2-her",
+     "release_date": "2026-01-23"
+    },
+    {
+     "id": "writer/palmyra-x5",
+     "name": "Writer: Palmyra X5",
+     "release_date": "2026-01-21"
+    },
+    {
+     "id": "z-ai/glm-4.7-flash",
+     "name": "Z.ai: GLM 4.7 Flash",
+     "release_date": "2026-01-19"
+    },
+    {
+     "id": "openai/gpt-5.2-codex",
+     "name": "OpenAI: GPT-5.2-Codex",
+     "release_date": "2026-01-14"
+    },
+    {
+     "id": "minimax/minimax-m2.1",
+     "name": "MiniMax: MiniMax M2.1",
+     "release_date": "2025-12-23"
+    },
+    {
+     "id": "bytedance-seed/seed-1.6-flash",
+     "name": "ByteDance Seed: Seed 1.6 Flash",
+     "release_date": "2025-12-23"
+    },
+    {
+     "id": "bytedance-seed/seed-1.6",
+     "name": "ByteDance Seed: Seed 1.6",
+     "release_date": "2025-12-23"
+    },
+    {
+     "id": "z-ai/glm-4.7",
+     "name": "Z.ai: GLM 4.7",
+     "release_date": "2025-12-22"
+    },
+    {
+     "id": "google/gemini-3-flash-preview:batch",
+     "name": "Google: Gemini 3 Flash Preview (batch)",
+     "release_date": "2025-12-17"
+    },
+    {
+     "id": "google/gemini-3-flash-preview",
+     "name": "Google: Gemini 3 Flash Preview",
+     "release_date": "2025-12-17"
+    },
+    {
+     "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+     "name": "NVIDIA: Nemotron 3 Nano 30B A3B (free)",
+     "release_date": "2025-12-14"
+    },
+    {
+     "id": "nvidia/nemotron-3-nano-30b-a3b",
+     "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+     "release_date": "2025-12-14"
+    },
+    {
+     "id": "openai/gpt-5.2:batch",
+     "name": "OpenAI: GPT-5.2 (batch)",
+     "release_date": "2025-12-10"
+    },
+    {
+     "id": "openai/gpt-5.2-pro",
+     "name": "OpenAI: GPT-5.2 Pro",
+     "release_date": "2025-12-10"
+    },
+    {
+     "id": "openai/gpt-5.2-chat",
+     "name": "OpenAI: GPT-5.2 Chat",
+     "release_date": "2025-12-10"
+    },
+    {
+     "id": "openai/gpt-5.2",
+     "name": "OpenAI: GPT-5.2",
+     "release_date": "2025-12-10"
+    },
+    {
+     "id": "mistralai/devstral-2512",
+     "name": "Mistral: Devstral 2 2512",
+     "release_date": "2025-12-09"
+    },
+    {
+     "id": "z-ai/glm-4.6v",
+     "name": "Z.ai: GLM 4.6V",
+     "release_date": "2025-12-08"
+    },
+    {
+     "id": "relace/relace-search",
+     "name": "Relace: Relace Search",
+     "release_date": "2025-12-08"
+    },
+    {
+     "id": "openrouter/bodybuilder",
+     "name": "Body Builder (beta)",
+     "release_date": "2025-12-05"
+    },
+    {
+     "id": "openai/gpt-5.1-codex-max",
+     "name": "OpenAI: GPT-5.1-Codex-Max",
+     "release_date": "2025-12-04"
+    },
+    {
+     "id": "mistralai/ministral-8b-2512",
+     "name": "Mistral: Ministral 3 8B 2512",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistralai/ministral-3b-2512",
+     "name": "Mistral: Ministral 3 3B 2512",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistralai/ministral-14b-2512",
+     "name": "Mistral: Ministral 3 14B 2512",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "amazon/nova-2-lite-v1",
+     "name": "Amazon: Nova 2 Lite",
+     "release_date": "2025-12-02"
+    },
+    {
+     "id": "mistralai/mistral-large-2512",
+     "name": "Mistral: Mistral Large 3 2512",
+     "release_date": "2025-12-01"
+    },
+    {
+     "id": "deepseek/deepseek-v3.2",
+     "name": "DeepSeek: DeepSeek V3.2",
+     "release_date": "2025-12-01"
+    },
+    {
+     "id": "anthropic/claude-opus-4.5:batch",
+     "name": "Anthropic: Claude Opus 4.5 (batch)",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "anthropic/claude-opus-4.5",
+     "name": "Anthropic: Claude Opus 4.5",
+     "release_date": "2025-11-24"
+    },
+    {
+     "id": "allenai/olmo-3-32b-think",
+     "name": "AllenAI: Olmo 3 32B Think",
+     "release_date": "2025-11-21"
+    },
+    {
+     "id": "openai/gpt-5.1:batch",
+     "name": "OpenAI: GPT-5.1 (batch)",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "openai/gpt-5.1-codex-mini",
+     "name": "OpenAI: GPT-5.1-Codex-Mini",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "openai/gpt-5.1-codex",
+     "name": "OpenAI: GPT-5.1-Codex",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "openai/gpt-5.1-chat",
+     "name": "OpenAI: GPT-5.1 Chat",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "openai/gpt-5.1",
+     "name": "OpenAI: GPT-5.1",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "deepcogito/cogito-v2.1-671b",
+     "name": "Deep Cogito: Cogito v2.1 671B",
+     "release_date": "2025-11-13"
+    },
+    {
+     "id": "moonshotai/kimi-k2-thinking",
+     "name": "MoonshotAI: Kimi K2 Thinking",
+     "release_date": "2025-11-06"
+    },
+    {
+     "id": "amazon/nova-premier-v1",
+     "name": "Amazon: Nova Premier 1.0",
+     "release_date": "2025-10-31"
+    },
+    {
+     "id": "perplexity/sonar-pro-search",
+     "name": "Perplexity: Sonar Pro Search",
+     "release_date": "2025-10-30"
+    },
+    {
+     "id": "mistralai/voxtral-small-24b-2507",
+     "name": "Mistral: Voxtral Small 24B 2507",
+     "release_date": "2025-10-30"
+    },
+    {
+     "id": "openai/gpt-oss-safeguard-20b",
+     "name": "OpenAI: gpt-oss-safeguard-20b",
+     "release_date": "2025-10-29"
+    },
+    {
+     "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+     "name": "NVIDIA: Nemotron Nano 12B 2 VL (free)",
+     "release_date": "2025-10-28"
+    },
+    {
+     "id": "qwen/qwen3-vl-32b-instruct",
+     "name": "Qwen: Qwen3 VL 32B Instruct",
+     "release_date": "2025-10-23"
+    },
+    {
+     "id": "minimax/minimax-m2",
+     "name": "MiniMax: MiniMax M2",
+     "release_date": "2025-10-23"
+    },
+    {
+     "id": "ibm-granite/granite-4.0-h-micro",
+     "name": "IBM: Granite 4.0 Micro",
+     "release_date": "2025-10-20"
+    },
+    {
+     "id": "anthropic/claude-haiku-4.5:batch",
+     "name": "Anthropic: Claude Haiku 4.5 (batch)",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "anthropic/claude-haiku-4.5",
+     "name": "Anthropic: Claude Haiku 4.5",
+     "release_date": "2025-10-15"
+    },
+    {
+     "id": "qwen/qwen3-vl-8b-thinking",
+     "name": "Qwen: Qwen3 VL 8B Thinking",
+     "release_date": "2025-10-14"
+    },
+    {
+     "id": "qwen/qwen3-vl-8b-instruct",
+     "name": "Qwen: Qwen3 VL 8B Instruct",
+     "release_date": "2025-10-14"
+    },
+    {
+     "id": "openai/o4-mini-deep-research",
+     "name": "OpenAI: o4 Mini Deep Research",
+     "release_date": "2025-10-10"
+    },
+    {
+     "id": "openai/o3-deep-research",
+     "name": "OpenAI: o3 Deep Research",
+     "release_date": "2025-10-10"
+    },
+    {
+     "id": "qwen/qwen3-vl-30b-a3b-thinking",
+     "name": "Qwen: Qwen3 VL 30B A3B Thinking",
+     "release_date": "2025-10-06"
+    },
+    {
+     "id": "qwen/qwen3-vl-30b-a3b-instruct",
+     "name": "Qwen: Qwen3 VL 30B A3B Instruct",
+     "release_date": "2025-10-06"
+    },
+    {
+     "id": "openai/gpt-5-pro",
+     "name": "OpenAI: GPT-5 Pro",
+     "release_date": "2025-10-06"
+    },
+    {
+     "id": "z-ai/glm-4.6",
+     "name": "Z.ai: GLM 4.6",
+     "release_date": "2025-09-30"
+    },
+    {
+     "id": "deepseek/deepseek-v3.2-exp",
+     "name": "DeepSeek: DeepSeek V3.2 Exp",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "anthropic/claude-sonnet-4.5:batch",
+     "name": "Anthropic: Claude Sonnet 4.5 (batch)",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "anthropic/claude-sonnet-4.5",
+     "name": "Anthropic: Claude Sonnet 4.5",
+     "release_date": "2025-09-29"
+    },
+    {
+     "id": "thedrummer/cydonia-24b-v4.1",
+     "name": "TheDrummer: Cydonia 24B V4.1",
+     "release_date": "2025-09-27"
+    },
+    {
+     "id": "relace/relace-apply-3",
+     "name": "Relace: Relace Apply 3",
+     "release_date": "2025-09-26"
+    },
+    {
+     "id": "qwen/qwen3-vl-235b-a22b-thinking",
+     "name": "Qwen: Qwen3 VL 235B A22B Thinking",
+     "release_date": "2025-09-23"
+    },
+    {
+     "id": "qwen/qwen3-vl-235b-a22b-instruct",
+     "name": "Qwen: Qwen3 VL 235B A22B Instruct",
+     "release_date": "2025-09-23"
+    },
+    {
+     "id": "qwen/qwen3-max",
+     "name": "Qwen: Qwen3 Max",
+     "release_date": "2025-09-23"
+    },
+    {
+     "id": "qwen/qwen3-coder-plus",
+     "name": "Qwen: Qwen3 Coder Plus",
+     "release_date": "2025-09-23"
+    },
+    {
+     "id": "openai/gpt-5-codex",
+     "name": "OpenAI: GPT-5 Codex",
+     "release_date": "2025-09-23"
+    },
+    {
+     "id": "deepseek/deepseek-v3.1-terminus",
+     "name": "DeepSeek: DeepSeek V3.1 Terminus",
+     "release_date": "2025-09-22"
+    },
+    {
+     "id": "qwen/qwen3-coder-flash",
+     "name": "Qwen: Qwen3 Coder Flash",
+     "release_date": "2025-09-17"
+    },
+    {
+     "id": "qwen/qwen3-next-80b-a3b-thinking",
+     "name": "Qwen: Qwen3 Next 80B A3B Thinking",
+     "release_date": "2025-09-11"
+    },
+    {
+     "id": "qwen/qwen3-next-80b-a3b-instruct",
+     "name": "Qwen: Qwen3 Next 80B A3B Instruct",
+     "release_date": "2025-09-11"
+    },
+    {
+     "id": "qwen/qwen-plus-2025-07-28:thinking",
+     "name": "Qwen: Qwen Plus 0728 (thinking)",
+     "release_date": "2025-09-08"
+    },
+    {
+     "id": "qwen/qwen-plus-2025-07-28",
+     "name": "Qwen: Qwen Plus 0728",
+     "release_date": "2025-09-08"
+    },
+    {
+     "id": "nvidia/nemotron-nano-9b-v2:free",
+     "name": "NVIDIA: Nemotron Nano 9B V2 (free)",
+     "release_date": "2025-09-05"
+    },
+    {
+     "id": "moonshotai/kimi-k2-0905",
+     "name": "MoonshotAI: Kimi K2 0905",
+     "release_date": "2025-09-04"
+    },
+    {
+     "id": "qwen/qwen3-30b-a3b-thinking-2507",
+     "name": "Qwen: Qwen3 30B A3B Thinking 2507",
+     "release_date": "2025-08-28"
+    },
+    {
+     "id": "nousresearch/hermes-4-70b",
+     "name": "Nous: Hermes 4 70B",
+     "release_date": "2025-08-26"
+    },
+    {
+     "id": "nousresearch/hermes-4-405b",
+     "name": "Nous: Hermes 4 405B",
+     "release_date": "2025-08-26"
+    },
+    {
+     "id": "deepseek/deepseek-chat-v3.1",
+     "name": "DeepSeek: DeepSeek V3.1",
+     "release_date": "2025-08-21"
+    },
+    {
+     "id": "mistralai/mistral-medium-3.1",
+     "name": "Mistral: Mistral Medium 3.1",
+     "release_date": "2025-08-13"
+    },
+    {
+     "id": "z-ai/glm-4.5v",
+     "name": "Z.ai: GLM 4.5V",
+     "release_date": "2025-08-11"
+    },
+    {
+     "id": "ai21/jamba-large-1.7",
+     "name": "AI21: Jamba Large 1.7",
+     "release_date": "2025-08-08"
+    },
+    {
+     "id": "openai/gpt-5:batch",
+     "name": "OpenAI: GPT-5 (batch)",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-5-nano:batch",
+     "name": "OpenAI: GPT-5 Nano (batch)",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-5-nano",
+     "name": "OpenAI: GPT-5 Nano",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-5-mini:batch",
+     "name": "OpenAI: GPT-5 Mini (batch)",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-5-mini",
+     "name": "OpenAI: GPT-5 Mini",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-5",
+     "name": "OpenAI: GPT-5",
+     "release_date": "2025-08-07"
+    },
+    {
+     "id": "openai/gpt-oss-20b:free",
+     "name": "OpenAI: gpt-oss-20b (free)",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai/gpt-oss-20b",
+     "name": "OpenAI: gpt-oss-20b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "openai/gpt-oss-120b",
+     "name": "OpenAI: gpt-oss-120b",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "anthropic/claude-opus-4.1:batch",
+     "name": "Anthropic: Claude Opus 4.1 (batch)",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "anthropic/claude-opus-4.1",
+     "name": "Anthropic: Claude Opus 4.1",
+     "release_date": "2025-08-05"
+    },
+    {
+     "id": "mistralai/codestral-2508",
+     "name": "Mistral: Codestral 2508",
+     "release_date": "2025-08-01"
+    },
+    {
+     "id": "qwen/qwen3-coder-30b-a3b-instruct",
+     "name": "Qwen: Qwen3 Coder 30B A3B Instruct",
+     "release_date": "2025-07-31"
+    },
+    {
+     "id": "qwen/qwen3-30b-a3b-instruct-2507",
+     "name": "Qwen: Qwen3 30B A3B Instruct 2507",
+     "release_date": "2025-07-29"
+    },
+    {
+     "id": "z-ai/glm-4.5-air",
+     "name": "Z.ai: GLM 4.5 Air",
+     "release_date": "2025-07-25"
+    },
+    {
+     "id": "z-ai/glm-4.5",
+     "name": "Z.ai: GLM 4.5",
+     "release_date": "2025-07-25"
+    },
+    {
+     "id": "qwen/qwen3-235b-a22b-thinking-2507",
+     "name": "Qwen: Qwen3 235B A22B Thinking 2507",
+     "release_date": "2025-07-25"
+    },
+    {
+     "id": "qwen/qwen3-coder",
+     "name": "Qwen: Qwen3 Coder 480B A35B",
+     "release_date": "2025-07-23"
+    },
+    {
+     "id": "google/gemini-2.5-flash-lite:batch",
+     "name": "Google: Gemini 2.5 Flash Lite (batch)",
+     "release_date": "2025-07-22"
+    },
+    {
+     "id": "google/gemini-2.5-flash-lite",
+     "name": "Google: Gemini 2.5 Flash Lite",
+     "release_date": "2025-07-22"
+    },
+    {
+     "id": "bytedance/ui-tars-1.5-7b",
+     "name": "ByteDance: UI-TARS 7B ",
+     "release_date": "2025-07-22"
+    },
+    {
+     "id": "qwen/qwen3-235b-a22b-2507",
+     "name": "Qwen: Qwen3 235B A22B Instruct 2507",
+     "release_date": "2025-07-21"
+    },
+    {
+     "id": "moonshotai/kimi-k2",
+     "name": "MoonshotAI: Kimi K2 0711",
+     "release_date": "2025-07-11"
+    },
+    {
+     "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+     "name": "Venice: Uncensored",
+     "release_date": "2025-07-09"
+    },
+    {
+     "id": "tencent/hunyuan-a13b-instruct",
+     "name": "Tencent: Hunyuan A13B Instruct",
+     "release_date": "2025-07-08"
+    },
+    {
+     "id": "morph/morph-v3-large",
+     "name": "Morph: Morph V3 Large",
+     "release_date": "2025-07-07"
+    },
+    {
+     "id": "morph/morph-v3-fast",
+     "name": "Morph: Morph V3 Fast",
+     "release_date": "2025-07-07"
+    },
+    {
+     "id": "baidu/ernie-4.5-vl-424b-a47b",
+     "name": "Baidu: ERNIE 4.5 VL 424B A47B ",
+     "release_date": "2025-06-30"
+    },
+    {
+     "id": "mistralai/mistral-small-3.2-24b-instruct",
+     "name": "Mistral: Mistral Small 3.2 24B",
+     "release_date": "2025-06-20"
+    },
+    {
+     "id": "minimax/minimax-m1",
+     "name": "MiniMax: MiniMax M1",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "google/gemini-2.5-pro:batch",
+     "name": "Google: Gemini 2.5 Pro (batch)",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "google/gemini-2.5-pro",
+     "name": "Google: Gemini 2.5 Pro",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "google/gemini-2.5-flash:batch",
+     "name": "Google: Gemini 2.5 Flash (batch)",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "google/gemini-2.5-flash",
+     "name": "Google: Gemini 2.5 Flash",
+     "release_date": "2025-06-17"
+    },
+    {
+     "id": "openai/o3-pro",
+     "name": "OpenAI: o3 Pro",
+     "release_date": "2025-06-10"
+    },
+    {
+     "id": "google/gemini-2.5-pro-preview",
+     "name": "Google: Gemini 2.5 Pro Preview 06-05",
+     "release_date": "2025-06-05"
+    },
+    {
+     "id": "deepseek/deepseek-r1-0528",
+     "name": "DeepSeek: R1 0528",
+     "release_date": "2025-05-28"
+    },
+    {
+     "id": "anthropic/claude-sonnet-4",
+     "name": "Anthropic: Claude Sonnet 4",
+     "release_date": "2025-05-22"
+    },
+    {
+     "id": "anthropic/claude-opus-4",
+     "name": "Anthropic: Claude Opus 4",
+     "release_date": "2025-05-22"
+    },
+    {
+     "id": "google/gemma-3n-e4b-it",
+     "name": "Google: Gemma 3n 4B",
+     "release_date": "2025-05-20"
+    },
+    {
+     "id": "mistralai/mistral-medium-3",
+     "name": "Mistral: Mistral Medium 3",
+     "release_date": "2025-05-07"
+    },
+    {
+     "id": "google/gemini-2.5-pro-preview-05-06",
+     "name": "Google: Gemini 2.5 Pro Preview 05-06",
+     "release_date": "2025-05-07"
+    },
+    {
+     "id": "arcee-ai/virtuoso-large",
+     "name": "Arcee AI: Virtuoso Large",
+     "release_date": "2025-05-05"
+    },
+    {
+     "id": "meta-llama/llama-guard-4-12b",
+     "name": "Meta: Llama Guard 4 12B",
+     "release_date": "2025-04-30"
+    },
+    {
+     "id": "qwen/qwen3-8b",
+     "name": "Qwen: Qwen3 8B",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "qwen/qwen3-32b",
+     "name": "Qwen: Qwen3 32B",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "qwen/qwen3-30b-a3b",
+     "name": "Qwen: Qwen3 30B A3B",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "qwen/qwen3-235b-a22b",
+     "name": "Qwen: Qwen3 235B A22B",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "qwen/qwen3-14b",
+     "name": "Qwen: Qwen3 14B",
+     "release_date": "2025-04-28"
+    },
+    {
+     "id": "openai/o4-mini-high",
+     "name": "OpenAI: o4 Mini High",
+     "release_date": "2025-04-16"
+    },
+    {
+     "id": "openai/o4-mini",
+     "name": "OpenAI: o4 Mini",
+     "release_date": "2025-04-16"
+    },
+    {
+     "id": "openai/o3",
+     "name": "OpenAI: o3",
+     "release_date": "2025-04-16"
+    },
+    {
+     "id": "openai/gpt-4.1-nano",
+     "name": "OpenAI: GPT-4.1 Nano",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "openai/gpt-4.1-mini",
+     "name": "OpenAI: GPT-4.1 Mini",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "openai/gpt-4.1",
+     "name": "OpenAI: GPT-4.1",
+     "release_date": "2025-04-14"
+    },
+    {
+     "id": "meta-llama/llama-4-scout",
+     "name": "Meta: Llama 4 Scout",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "meta-llama/llama-4-maverick",
+     "name": "Meta: Llama 4 Maverick",
+     "release_date": "2025-04-05"
+    },
+    {
+     "id": "deepseek/deepseek-chat-v3-0324",
+     "name": "DeepSeek: DeepSeek V3 0324",
+     "release_date": "2025-03-24"
+    },
+    {
+     "id": "openai/o1-pro",
+     "name": "OpenAI: o1-pro",
+     "release_date": "2025-03-19"
+    },
+    {
+     "id": "mistralai/mistral-small-3.1-24b-instruct",
+     "name": "Mistral: Mistral Small 3.1 24B",
+     "release_date": "2025-03-17"
+    },
+    {
+     "id": "google/gemma-3-4b-it",
+     "name": "Google: Gemma 3 4B",
+     "release_date": "2025-03-13"
+    },
+    {
+     "id": "google/gemma-3-12b-it",
+     "name": "Google: Gemma 3 12B",
+     "release_date": "2025-03-13"
+    },
+    {
+     "id": "cohere/command-a",
+     "name": "Cohere: Command A",
+     "release_date": "2025-03-13"
+    },
+    {
+     "id": "rekaai/reka-flash-3",
+     "name": "Reka Flash 3",
+     "release_date": "2025-03-12"
+    },
+    {
+     "id": "google/gemma-3-27b-it",
+     "name": "Google: Gemma 3 27B",
+     "release_date": "2025-03-12"
+    },
+    {
+     "id": "thedrummer/skyfall-36b-v2",
+     "name": "TheDrummer: Skyfall 36B V2",
+     "release_date": "2025-03-10"
+    },
+    {
+     "id": "perplexity/sonar-reasoning-pro",
+     "name": "Perplexity: Sonar Reasoning Pro",
+     "release_date": "2025-03-07"
+    },
+    {
+     "id": "perplexity/sonar-pro",
+     "name": "Perplexity: Sonar Pro",
+     "release_date": "2025-03-07"
+    },
+    {
+     "id": "perplexity/sonar-deep-research",
+     "name": "Perplexity: Sonar Deep Research",
+     "release_date": "2025-03-07"
+    },
+    {
+     "id": "mistralai/mistral-saba",
+     "name": "Mistral: Saba",
+     "release_date": "2025-02-17"
+    },
+    {
+     "id": "openai/o3-mini-high",
+     "name": "OpenAI: o3 Mini High",
+     "release_date": "2025-02-12"
+    },
+    {
+     "id": "aion-labs/aion-rp-llama-3.1-8b",
+     "name": "AionLabs: Aion-RP 1.0 (8B)",
+     "release_date": "2025-02-04"
+    },
+    {
+     "id": "qwen/qwen2.5-vl-72b-instruct",
+     "name": "Qwen: Qwen2.5 VL 72B Instruct",
+     "release_date": "2025-02-01"
+    },
+    {
+     "id": "qwen/qwen-plus",
+     "name": "Qwen: Qwen-Plus",
+     "release_date": "2025-02-01"
+    },
+    {
+     "id": "openai/o3-mini",
+     "name": "OpenAI: o3 Mini",
+     "release_date": "2025-01-31"
+    },
+    {
+     "id": "mistralai/mistral-small-24b-instruct-2501",
+     "name": "Mistral: Mistral Small 3",
+     "release_date": "2025-01-30"
+    },
+    {
+     "id": "perplexity/sonar",
+     "name": "Perplexity: Sonar",
+     "release_date": "2025-01-27"
+    },
+    {
+     "id": "deepseek/deepseek-r1-distill-llama-70b",
+     "name": "DeepSeek: R1 Distill Llama 70B",
+     "release_date": "2025-01-23"
+    },
+    {
+     "id": "deepseek/deepseek-r1",
+     "name": "DeepSeek: R1",
+     "release_date": "2025-01-20"
+    },
+    {
+     "id": "minimax/minimax-01",
+     "name": "MiniMax: MiniMax-01",
+     "release_date": "2025-01-15"
+    },
+    {
+     "id": "microsoft/phi-4",
+     "name": "Microsoft: Phi 4",
+     "release_date": "2025-01-10"
+    },
+    {
+     "id": "deepseek/deepseek-chat",
+     "name": "DeepSeek: DeepSeek V3",
+     "release_date": "2024-12-26"
+    },
+    {
+     "id": "sao10k/l3.3-euryale-70b",
+     "name": "Sao10K: Llama 3.3 Euryale 70B",
+     "release_date": "2024-12-18"
+    },
+    {
+     "id": "openai/o1",
+     "name": "OpenAI: o1",
+     "release_date": "2024-12-17"
+    },
+    {
+     "id": "cohere/command-r7b-12-2024",
+     "name": "Cohere: Command R7B (12-2024)",
+     "release_date": "2024-12-14"
+    },
+    {
+     "id": "meta-llama/llama-3.3-70b-instruct",
+     "name": "Meta: Llama 3.3 70B Instruct",
+     "release_date": "2024-12-06"
+    },
+    {
+     "id": "amazon/nova-pro-v1",
+     "name": "Amazon: Nova Pro 1.0",
+     "release_date": "2024-12-05"
+    },
+    {
+     "id": "amazon/nova-micro-v1",
+     "name": "Amazon: Nova Micro 1.0",
+     "release_date": "2024-12-05"
+    },
+    {
+     "id": "amazon/nova-lite-v1",
+     "name": "Amazon: Nova Lite 1.0",
+     "release_date": "2024-12-05"
+    },
+    {
+     "id": "openai/gpt-4o-2024-11-20",
+     "name": "OpenAI: GPT-4o (2024-11-20)",
+     "release_date": "2024-11-20"
+    },
+    {
+     "id": "mistralai/mistral-large-2407",
+     "name": "Mistral Large 2407",
+     "release_date": "2024-11-19"
+    },
+    {
+     "id": "qwen/qwen-2.5-coder-32b-instruct",
+     "name": "Qwen2.5 Coder 32B Instruct",
+     "release_date": "2024-11-11"
+    },
+    {
+     "id": "thedrummer/unslopnemo-12b",
+     "name": "TheDrummer: UnslopNemo 12B",
+     "release_date": "2024-11-08"
+    },
+    {
+     "id": "anthracite-org/magnum-v4-72b",
+     "name": "Magnum v4 72B",
+     "release_date": "2024-10-22"
+    },
+    {
+     "id": "qwen/qwen-2.5-7b-instruct",
+     "name": "Qwen: Qwen2.5 7B Instruct",
+     "release_date": "2024-10-16"
+    },
+    {
+     "id": "thedrummer/rocinante-12b",
+     "name": "TheDrummer: Rocinante 12B",
+     "release_date": "2024-09-30"
+    },
+    {
+     "id": "meta-llama/llama-3.2-3b-instruct",
+     "name": "Meta: Llama 3.2 3B Instruct",
+     "release_date": "2024-09-25"
+    },
+    {
+     "id": "meta-llama/llama-3.2-1b-instruct",
+     "name": "Meta: Llama 3.2 1B Instruct",
+     "release_date": "2024-09-25"
+    },
+    {
+     "id": "qwen/qwen-2.5-72b-instruct",
+     "name": "Qwen2.5 72B Instruct",
+     "release_date": "2024-09-19"
+    },
+    {
+     "id": "cohere/command-r-plus-08-2024",
+     "name": "Cohere: Command R+ (08-2024)",
+     "release_date": "2024-08-30"
+    },
+    {
+     "id": "cohere/command-r-08-2024",
+     "name": "Cohere: Command R (08-2024)",
+     "release_date": "2024-08-30"
+    },
+    {
+     "id": "sao10k/l3.1-euryale-70b",
+     "name": "Sao10K: Llama 3.1 Euryale 70B v2.2",
+     "release_date": "2024-08-28"
+    },
+    {
+     "id": "nousresearch/hermes-3-llama-3.1-70b",
+     "name": "Nous: Hermes 3 70B Instruct",
+     "release_date": "2024-08-18"
+    },
+    {
+     "id": "nousresearch/hermes-3-llama-3.1-405b",
+     "name": "Nous: Hermes 3 405B Instruct",
+     "release_date": "2024-08-16"
+    },
+    {
+     "id": "sao10k/l3-lunaris-8b",
+     "name": "Sao10K: Llama 3 8B Lunaris",
+     "release_date": "2024-08-13"
+    },
+    {
+     "id": "openai/gpt-4o-2024-08-06",
+     "name": "OpenAI: GPT-4o (2024-08-06)",
+     "release_date": "2024-08-06"
+    },
+    {
+     "id": "meta-llama/llama-3.1-8b-instruct",
+     "name": "Meta: Llama 3.1 8B Instruct",
+     "release_date": "2024-07-23"
+    },
+    {
+     "id": "meta-llama/llama-3.1-70b-instruct",
+     "name": "Meta: Llama 3.1 70B Instruct",
+     "release_date": "2024-07-23"
+    },
+    {
+     "id": "mistralai/mistral-nemo",
+     "name": "Mistral: Mistral Nemo",
+     "release_date": "2024-07-19"
+    },
+    {
+     "id": "openai/gpt-4o-mini-2024-07-18",
+     "name": "OpenAI: GPT-4o-mini (2024-07-18)",
+     "release_date": "2024-07-18"
+    },
+    {
+     "id": "openai/gpt-4o-mini",
+     "name": "OpenAI: GPT-4o-mini",
+     "release_date": "2024-07-18"
+    },
+    {
+     "id": "google/gemma-2-27b-it",
+     "name": "Google: Gemma 2 27B",
+     "release_date": "2024-07-13"
+    },
+    {
+     "id": "openai/gpt-4o-2024-05-13",
+     "name": "OpenAI: GPT-4o (2024-05-13)",
+     "release_date": "2024-05-13"
+    },
+    {
+     "id": "openai/gpt-4o",
+     "name": "OpenAI: GPT-4o",
+     "release_date": "2024-05-13"
+    },
+    {
+     "id": "mistralai/mixtral-8x22b-instruct",
+     "name": "Mistral: Mixtral 8x22B Instruct",
+     "release_date": "2024-04-17"
+    },
+    {
+     "id": "microsoft/wizardlm-2-8x22b",
+     "name": "WizardLM-2 8x22B",
+     "release_date": "2024-04-16"
+    },
+    {
+     "id": "openai/gpt-4-turbo",
+     "name": "OpenAI: GPT-4 Turbo",
+     "release_date": "2024-04-09"
+    },
+    {
+     "id": "anthropic/claude-3-haiku",
+     "name": "Anthropic: Claude 3 Haiku",
+     "release_date": "2024-03-13"
+    },
+    {
+     "id": "mistralai/mistral-large",
+     "name": "Mistral Large",
+     "release_date": "2024-02-26"
+    },
+    {
+     "id": "openai/gpt-4-turbo-preview",
+     "name": "OpenAI: GPT-4 Turbo Preview",
+     "release_date": "2024-01-25"
+    },
+    {
+     "id": "openai/gpt-3.5-turbo-0613",
+     "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
+     "release_date": "2024-01-25"
+    },
+    {
+     "id": "openai/gpt-3.5-turbo-instruct",
+     "name": "OpenAI: GPT-3.5 Turbo Instruct",
+     "release_date": "2023-09-28"
+    },
+    {
+     "id": "openai/gpt-3.5-turbo-16k",
+     "name": "OpenAI: GPT-3.5 Turbo 16k",
+     "release_date": "2023-08-28"
+    },
+    {
+     "id": "mancer/weaver",
+     "name": "Mancer: Weaver (alpha)",
+     "release_date": "2023-08-02"
+    },
+    {
+     "id": "undi95/remm-slerp-l2-13b",
+     "name": "ReMM SLERP 13B",
+     "release_date": "2023-07-22"
+    },
+    {
+     "id": "gryphe/mythomax-l2-13b",
+     "name": "MythoMax 13B",
+     "release_date": "2023-07-02"
+    },
+    {
+     "id": "openai/gpt-4",
+     "name": "OpenAI: GPT-4",
+     "release_date": "2023-05-28"
+    },
+    {
+     "id": "openai/gpt-3.5-turbo",
+     "name": "OpenAI: GPT-3.5 Turbo",
+     "release_date": "2023-05-28"
     }
    ]
   }
