@@ -44,7 +44,10 @@ const STYLES: Record<string, Style> = {
   status: { Icon: Info, badge: "border border-border/60 text-muted-foreground/80", icon: "text-muted-foreground" },
   log: { Icon: FileText, badge: "bg-slate-500/15 text-slate-700 dark:text-slate-400", icon: "text-slate-600 dark:text-slate-400" },
   stdout: { Icon: FileText, badge: "border border-border/60 text-muted-foreground/80", icon: "text-muted-foreground" },
-  stderr: { Icon: FileText, badge: "border border-red-500/40 text-red-700 dark:text-red-400", icon: "text-red-600 dark:text-red-400" },
+  /* stderr is a channel, not a severity — docker/git/pip narrate progress there.
+     Neutral like stdout (the badge label tells them apart); red stays reserved for
+     log level=error and failed runs. */
+  stderr: { Icon: FileText, badge: "border border-border/60 text-muted-foreground/80", icon: "text-muted-foreground" },
   message: { Icon: MessageSquare, badge: "bg-sky-500/15 text-sky-700 dark:text-sky-400", icon: "text-sky-600 dark:text-sky-400" },
   "llm.call": { Icon: Sparkles, badge: "bg-violet-500/15 text-violet-700 dark:text-violet-400", icon: "text-violet-600 dark:text-violet-400" },
   "agent.event": { Icon: Terminal, badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400", icon: "text-amber-600 dark:text-amber-400" },

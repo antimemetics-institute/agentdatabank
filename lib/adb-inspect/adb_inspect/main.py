@@ -24,6 +24,7 @@ import yaml
 
 from adb_events.emit import artifact, emit_raw, log, metric, set_output, status
 from .models import Params, inspect_model
+from .sandbox_status import sandbox_provisioning_status
 from .translate import (emit_aggregate, emit_live_model_event, emit_provenance,
                         emit_sample)
 
@@ -185,10 +186,12 @@ def run(params: Params) -> None:
     task = resolve_task(params.task)
     status(f"running inspect eval: task={params.task} model={params.model}")
     # events keep flowing to the real stdout (the JSONL channel); everything the
-    # eval prints is captured and re-emitted as tagged `stdout` events (PrintStream)
+    # eval prints is captured and re-emitted as tagged `stdout` events (PrintStream),
+    # and inspect's otherwise-silent docker provisioning is narrated as status
+    # events (sandbox_status.py)
     set_output(sys.stdout)
     try:
-        with contextlib.redirect_stdout(PrintStream()):
+        with contextlib.redirect_stdout(PrintStream()), sandbox_provisioning_status():
             logs = run_eval(task, **eval_kwargs(params, log_dir))
     except Exception as exc:  # an eval that won't even start is data, not a crash
         log(f"inspect eval failed to run: {exc}", level="error")
