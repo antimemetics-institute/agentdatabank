@@ -86,9 +86,17 @@ export interface TemplateDecl {
   params?: Record<string, unknown>;
   replicates?: number;
 }
+/* one external reference (paper, upstream source, dataset) — presentation only,
+   declared by the experiment (mkExperiment `links`) or generated from a wrapped
+   package's own metadata (inspect_evals' listing) */
+export interface ExtLink {
+  label: string;
+  url: string;
+}
 export interface Manifest {
   name: string;
   summary?: string;
+  links?: ExtLink[];
   schema_version?: number;
   /* which instance packaged this experiment — "external" marks the author's own
      repo joining the catalog; the overview pins those cards first */

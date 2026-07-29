@@ -152,6 +152,11 @@ in
     , params
     , results ? { }
     , env ? { }
+      # external references for the experiment page — [{ label, url }]: the upstream
+      # repo/docs, paper, datasets. Presentation only, never identity (not in `src`):
+      # generated from a wrapped package's own declared metadata where it exists
+      # (inspect_evals' listing), hand-written in the wrapper otherwise.
+    , links ? [ ]
     , program
     , src           # the experiment's OWN identity sources: a path (usually `./.`) or a
                     # list of paths. See identity note below. Identity is strictly
@@ -189,7 +194,7 @@ in
       manifest = pkgs.writeText "adb-manifest-${name}.json" (builtins.toJSON {
         schema_version = 0;
         params = withLlmHints params;
-        inherit name summary results env origin;
+        inherit name summary results env origin links;
       });
       app = pkgs.writeShellApplication {
         name = "adb-${name}";

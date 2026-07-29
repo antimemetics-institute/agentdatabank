@@ -76,7 +76,45 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 39558
+   "dataset_samples": 39558,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2506.09038"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/abstention_bench"
+    },
+    {
+     "label": "tasksource/bigbench",
+     "url": "https://huggingface.co/datasets/tasksource/bigbench"
+    },
+    {
+     "label": "allenai/coconot",
+     "url": "https://huggingface.co/datasets/allenai/coconot"
+    },
+    {
+     "label": "Idavidrein/gpqa",
+     "url": "https://huggingface.co/datasets/Idavidrein/gpqa"
+    },
+    {
+     "label": "openai/gsm8k",
+     "url": "https://huggingface.co/datasets/openai/gsm8k"
+    },
+    {
+     "label": "amayuelas/KUQ",
+     "url": "https://huggingface.co/datasets/amayuelas/KUQ"
+    },
+    {
+     "label": "cais/mmlu",
+     "url": "https://huggingface.co/datasets/cais/mmlu"
+    },
+    {
+     "label": "ninoscherrer/moralchoice",
+     "url": "https://huggingface.co/datasets/ninoscherrer/moralchoice"
+    }
+   ]
   },
   "agent_bench_os": {
    "task": "inspect_evals/agent_bench_os",
@@ -130,7 +168,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 26
+   "dataset_samples": 26,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2308.03688"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agent_bench"
+    }
+   ]
   },
   "agent_threat_bench_autonomy_hijack": {
    "task": "inspect_evals/agent_threat_bench_autonomy_hijack",
@@ -158,7 +206,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 6
+   "dataset_samples": 6,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agent_threat_bench"
+    }
+   ]
   },
   "agent_threat_bench_data_exfil": {
    "task": "inspect_evals/agent_threat_bench_data_exfil",
@@ -186,7 +244,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 8
+   "dataset_samples": 8,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agent_threat_bench"
+    }
+   ]
   },
   "agent_threat_bench_memory_poison": {
    "task": "inspect_evals/agent_threat_bench_memory_poison",
@@ -214,7 +282,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 10
+   "dataset_samples": 10,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agent_threat_bench"
+    }
+   ]
   },
   "agentdojo": {
    "task": "inspect_evals/agentdojo",
@@ -312,7 +390,17 @@
    "dependency": "agentdojo",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1014
+   "dataset_samples": 1014,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.13352"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agentdojo"
+    }
+   ]
   },
   "agentharm": {
    "task": "inspect_evals/agentharm",
@@ -432,7 +520,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 176
+   "dataset_samples": 176,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.09024"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agentharm"
+    },
+    {
+     "label": "ai-safety-institute/AgentHarm",
+     "url": "https://huggingface.co/datasets/ai-safety-institute/AgentHarm"
+    }
+   ]
   },
   "agentharm_benign": {
    "task": "inspect_evals/agentharm_benign",
@@ -544,7 +646,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 176
+   "dataset_samples": 176,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.09024"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agentharm"
+    },
+    {
+     "label": "ai-safety-institute/AgentHarm",
+     "url": "https://huggingface.co/datasets/ai-safety-institute/AgentHarm"
+    }
+   ]
   },
   "agentic_misalignment": {
    "task": "inspect_evals/agentic_misalignment",
@@ -659,7 +775,17 @@
    "dependency": "agentic_misalignment",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://www.anthropic.com/research/agentic-misalignment"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agentic_misalignment"
+    }
+   ]
   },
   "agie_aqua_rat": {
    "task": "inspect_evals/agie_aqua_rat",
@@ -703,7 +829,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 254
+   "dataset_samples": 254,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_logiqa_en": {
    "task": "inspect_evals/agie_logiqa_en",
@@ -747,7 +883,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 651
+   "dataset_samples": 651,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_lsat_ar": {
    "task": "inspect_evals/agie_lsat_ar",
@@ -791,7 +937,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 230
+   "dataset_samples": 230,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_lsat_lr": {
    "task": "inspect_evals/agie_lsat_lr",
@@ -835,7 +991,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 510
+   "dataset_samples": 510,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_lsat_rc": {
    "task": "inspect_evals/agie_lsat_rc",
@@ -879,7 +1045,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 269
+   "dataset_samples": 269,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_math": {
    "task": "inspect_evals/agie_math",
@@ -923,7 +1099,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_sat_en": {
    "task": "inspect_evals/agie_sat_en",
@@ -967,7 +1153,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 206
+   "dataset_samples": 206,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_sat_en_without_passage": {
    "task": "inspect_evals/agie_sat_en_without_passage",
@@ -1011,7 +1207,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 206
+   "dataset_samples": 206,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "agie_sat_math": {
    "task": "inspect_evals/agie_sat_math",
@@ -1055,7 +1261,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 220
+   "dataset_samples": 220,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2304.06364"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/agieval"
+    }
+   ]
   },
   "aime2024": {
    "task": "inspect_evals/aime2024",
@@ -1069,7 +1285,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 30
+   "dataset_samples": 30,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://huggingface.co/datasets/Maxwell-Jia/AIME_2024"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/aime2024"
+    },
+    {
+     "label": "Maxwell-Jia/AIME_2024",
+     "url": "https://huggingface.co/datasets/Maxwell-Jia/AIME_2024"
+    }
+   ]
   },
   "aime2025": {
    "task": "inspect_evals/aime2025",
@@ -1083,7 +1313,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 30
+   "dataset_samples": 30,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://huggingface.co/datasets/math-ai/aime25"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/aime2025"
+    },
+    {
+     "label": "math-ai/aime25",
+     "url": "https://huggingface.co/datasets/math-ai/aime25"
+    }
+   ]
   },
   "aime2026": {
    "task": "inspect_evals/aime2026",
@@ -1097,7 +1341,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 30
+   "dataset_samples": 30,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://huggingface.co/datasets/math-ai/aime26"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/aime2026"
+    },
+    {
+     "label": "math-ai/aime26",
+     "url": "https://huggingface.co/datasets/math-ai/aime26"
+    }
+   ]
   },
   "air_bench": {
    "task": "inspect_evals/air_bench",
@@ -1111,7 +1369,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 5694
+   "dataset_samples": 5694,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2407.17436"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/air_bench"
+    },
+    {
+     "label": "stanford-crfm/air-bench-2024",
+     "url": "https://huggingface.co/datasets/stanford-crfm/air-bench-2024"
+    }
+   ]
   },
   "anima": {
    "task": "inspect_evals/anima",
@@ -1218,7 +1490,21 @@
    "dependency": "anima",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 26
+   "dataset_samples": 26,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2604.13076"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/anima"
+    },
+    {
+     "label": "sentientfutures/anima",
+     "url": "https://huggingface.co/datasets/sentientfutures/anima"
+    }
+   ]
   },
   "ape_eval": {
    "task": "inspect_evals/ape_eval",
@@ -1297,7 +1583,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 600
+   "dataset_samples": 600,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.02873"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/ape"
+    }
+   ]
   },
   "apps": {
    "task": "inspect_evals/apps",
@@ -1361,7 +1657,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 5000
+   "dataset_samples": 5000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2105.09938v3"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/apps"
+    },
+    {
+     "label": "codeparrot/apps",
+     "url": "https://huggingface.co/datasets/codeparrot/apps"
+    }
+   ]
   },
   "arc_challenge": {
    "task": "inspect_evals/arc_challenge",
@@ -1375,7 +1685,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1172
+   "dataset_samples": 1172,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1803.05457"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/arc"
+    },
+    {
+     "label": "allenai/ai2_arc",
+     "url": "https://huggingface.co/datasets/allenai/ai2_arc"
+    }
+   ]
   },
   "arc_easy": {
    "task": "inspect_evals/arc_easy",
@@ -1389,7 +1713,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 2376
+   "dataset_samples": 2376,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1803.05457"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/arc"
+    },
+    {
+     "label": "allenai/ai2_arc",
+     "url": "https://huggingface.co/datasets/allenai/ai2_arc"
+    }
+   ]
   },
   "assistant_bench_closed_book_one_shot": {
    "task": "inspect_evals/assistant_bench_closed_book_one_shot",
@@ -1405,7 +1743,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.15711"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/assistant_bench"
+    },
+    {
+     "label": "AssistantBench/AssistantBench",
+     "url": "https://huggingface.co/datasets/AssistantBench/AssistantBench"
+    }
+   ]
   },
   "assistant_bench_closed_book_zero_shot": {
    "task": "inspect_evals/assistant_bench_closed_book_zero_shot",
@@ -1421,7 +1773,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.15711"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/assistant_bench"
+    },
+    {
+     "label": "AssistantBench/AssistantBench",
+     "url": "https://huggingface.co/datasets/AssistantBench/AssistantBench"
+    }
+   ]
   },
   "assistant_bench_web_browser": {
    "task": "inspect_evals/assistant_bench_web_browser",
@@ -1476,7 +1842,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.15711"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/assistant_bench"
+    },
+    {
+     "label": "AssistantBench/AssistantBench",
+     "url": "https://huggingface.co/datasets/AssistantBench/AssistantBench"
+    }
+   ]
   },
   "assistant_bench_web_search_one_shot": {
    "task": "inspect_evals/assistant_bench_web_search_one_shot",
@@ -1540,7 +1920,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.15711"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/assistant_bench"
+    },
+    {
+     "label": "AssistantBench/AssistantBench",
+     "url": "https://huggingface.co/datasets/AssistantBench/AssistantBench"
+    }
+   ]
   },
   "assistant_bench_web_search_zero_shot": {
    "task": "inspect_evals/assistant_bench_web_search_zero_shot",
@@ -1604,7 +1998,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.15711"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/assistant_bench"
+    },
+    {
+     "label": "AssistantBench/AssistantBench",
+     "url": "https://huggingface.co/datasets/AssistantBench/AssistantBench"
+    }
+   ]
   },
   "b3": {
    "task": "inspect_evals/b3",
@@ -1704,7 +2112,21 @@
    "dependency": "b3",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 630
+   "dataset_samples": 630,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2510.22620"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/b3"
+    },
+    {
+     "label": "Lakera/b3-agent-security-benchmark-weak",
+     "url": "https://huggingface.co/datasets/Lakera/b3-agent-security-benchmark-weak"
+    }
+   ]
   },
   "bbeh": {
    "task": "inspect_evals/bbeh",
@@ -1757,7 +2179,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 4520
+   "dataset_samples": 4520,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2502.19187"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bbeh"
+    },
+    {
+     "label": "BBEH/bbeh",
+     "url": "https://huggingface.co/datasets/BBEH/bbeh"
+    }
+   ]
   },
   "bbeh_mini": {
    "task": "inspect_evals/bbeh_mini",
@@ -1784,7 +2220,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 460
+   "dataset_samples": 460,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2502.19187"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bbeh"
+    },
+    {
+     "label": "BBEH/bbeh",
+     "url": "https://huggingface.co/datasets/BBEH/bbeh"
+    }
+   ]
   },
   "bbh": {
    "task": "inspect_evals/bbh",
@@ -1819,7 +2269,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 250
+   "dataset_samples": 250,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2210.09261"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bbh"
+    },
+    {
+     "label": "Joschka/big_bench_hard",
+     "url": "https://huggingface.co/datasets/Joschka/big_bench_hard"
+    }
+   ]
   },
   "bbq": {
    "task": "inspect_evals/bbq",
@@ -1846,7 +2310,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 58492
+   "dataset_samples": 58492,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2110.08193"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bbq"
+    },
+    {
+     "label": "heegyu/bbq",
+     "url": "https://huggingface.co/datasets/heegyu/bbq"
+    }
+   ]
   },
   "bfcl": {
    "task": "inspect_evals/bfcl",
@@ -1895,7 +2373,13 @@
    "dependency": "bfcl",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 4981
+   "dataset_samples": 4981,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bfcl"
+    }
+   ]
   },
   "bigcodebench": {
    "task": "inspect_evals/bigcodebench",
@@ -1955,7 +2439,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1140
+   "dataset_samples": 1140,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.15877"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bigcodebench"
+    },
+    {
+     "label": "bigcode/bigcodebench",
+     "url": "https://huggingface.co/datasets/bigcode/bigcodebench"
+    }
+   ]
   },
   "bold": {
    "task": "inspect_evals/bold",
@@ -1989,7 +2487,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 7200
+   "dataset_samples": 7200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2101.11718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/bold"
+    },
+    {
+     "label": "AmazonScience/bold",
+     "url": "https://huggingface.co/datasets/AmazonScience/bold"
+    }
+   ]
   },
   "boolq": {
    "task": "inspect_evals/boolq",
@@ -2014,7 +2526,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 3270
+   "dataset_samples": 3270,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1905.10044"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/boolq"
+    },
+    {
+     "label": "google/boolq",
+     "url": "https://huggingface.co/datasets/google/boolq"
+    }
+   ]
   },
   "browse_comp": {
    "task": "inspect_evals/browse_comp",
@@ -2055,7 +2581,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1266
+   "dataset_samples": 1266,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2504.12516"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/browse_comp"
+    }
+   ]
   },
   "chembench": {
    "task": "inspect_evals/chembench",
@@ -2099,7 +2635,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 2786
+   "dataset_samples": 2786,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2404.01475v2"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/chembench"
+    },
+    {
+     "label": "jablonkagroup/ChemBench",
+     "url": "https://huggingface.co/datasets/jablonkagroup/ChemBench"
+    }
+   ]
   },
   "class_eval": {
    "task": "inspect_evals/class_eval",
@@ -2135,7 +2685,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2308.01861"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/class_eval"
+    },
+    {
+     "label": "FudanSELab/ClassEval",
+     "url": "https://huggingface.co/datasets/FudanSELab/ClassEval"
+    }
+   ]
   },
   "coconot": {
    "task": "inspect_evals/coconot",
@@ -2195,7 +2759,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1001
+   "dataset_samples": 1001,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.12043"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/coconot"
+    },
+    {
+     "label": "allenai/coconot",
+     "url": "https://huggingface.co/datasets/allenai/coconot"
+    }
+   ]
   },
   "commonsense_qa": {
    "task": "inspect_evals/commonsense_qa",
@@ -2220,7 +2798,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1221
+   "dataset_samples": 1221,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1811.00937"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/commonsense_qa"
+    },
+    {
+     "label": "tau/commonsense_qa",
+     "url": "https://huggingface.co/datasets/tau/commonsense_qa"
+    }
+   ]
   },
   "compute_eval": {
    "task": "inspect_evals/compute_eval",
@@ -2321,7 +2913,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 406
+   "dataset_samples": 406,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/compute_eval"
+    },
+    {
+     "label": "nvidia/compute-eval",
+     "url": "https://huggingface.co/datasets/nvidia/compute-eval"
+    }
+   ]
   },
   "core_bench": {
    "task": "inspect_evals/core_bench",
@@ -2493,7 +3095,21 @@
    "dependency": "core_bench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 45
+   "dataset_samples": 45,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2409.11363"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/core_bench"
+    },
+    {
+     "label": "siegelz/core-bench",
+     "url": "https://huggingface.co/datasets/siegelz/core-bench"
+    }
+   ]
   },
   "cti_realm_25": {
    "task": "inspect_evals/cti_realm_25",
@@ -2529,7 +3145,21 @@
    "dependency": "cti_realm",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 25
+   "dataset_samples": 25,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2603.13517"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cti_realm"
+    },
+    {
+     "label": "arjun180-new/cti_realm",
+     "url": "https://huggingface.co/datasets/arjun180-new/cti_realm"
+    }
+   ]
   },
   "cti_realm_25_minimal": {
    "task": "inspect_evals/cti_realm_25_minimal",
@@ -2565,7 +3195,21 @@
    "dependency": "cti_realm",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 25
+   "dataset_samples": 25,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2603.13517"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cti_realm"
+    },
+    {
+     "label": "arjun180-new/cti_realm",
+     "url": "https://huggingface.co/datasets/arjun180-new/cti_realm"
+    }
+   ]
   },
   "cti_realm_25_seeded": {
    "task": "inspect_evals/cti_realm_25_seeded",
@@ -2601,7 +3245,21 @@
    "dependency": "cti_realm",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 25
+   "dataset_samples": 25,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2603.13517"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cti_realm"
+    },
+    {
+     "label": "arjun180-new/cti_realm",
+     "url": "https://huggingface.co/datasets/arjun180-new/cti_realm"
+    }
+   ]
   },
   "cti_realm_50": {
    "task": "inspect_evals/cti_realm_50",
@@ -2637,7 +3295,21 @@
    "dependency": "cti_realm",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2603.13517"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cti_realm"
+    },
+    {
+     "label": "arjun180-new/cti_realm",
+     "url": "https://huggingface.co/datasets/arjun180-new/cti_realm"
+    }
+   ]
   },
   "cve_bench": {
    "task": "inspect_evals/cve_bench",
@@ -2685,7 +3357,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": false,
-   "dataset_samples": 40
+   "dataset_samples": 40,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2503.17332"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cve_bench"
+    }
+   ]
   },
   "cybench": {
    "task": "inspect_evals/cybench",
@@ -2733,7 +3415,17 @@
    "dependency": "cybench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 39
+   "dataset_samples": 39,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2408.08926"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybench"
+    }
+   ]
   },
   "cybergym": {
    "task": "inspect_evals/cybergym",
@@ -2835,7 +3527,21 @@
    "dependency": "cybergym",
    "sandbox": true,
    "requires_internet": false,
-   "dataset_samples": 6028
+   "dataset_samples": 6028,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.02548"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybergym"
+    },
+    {
+     "label": "sunblaze-ucb/cybergym",
+     "url": "https://huggingface.co/datasets/sunblaze-ucb/cybergym"
+    }
+   ]
   },
   "cybermetric_10000": {
    "task": "inspect_evals/cybermetric_10000",
@@ -2849,7 +3555,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 10000
+   "dataset_samples": 10000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.07688"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybermetric"
+    }
+   ]
   },
   "cybermetric_2000": {
    "task": "inspect_evals/cybermetric_2000",
@@ -2863,7 +3579,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 2000
+   "dataset_samples": 2000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.07688"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybermetric"
+    }
+   ]
   },
   "cybermetric_500": {
    "task": "inspect_evals/cybermetric_500",
@@ -2877,7 +3603,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.07688"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybermetric"
+    }
+   ]
   },
   "cybermetric_80": {
    "task": "inspect_evals/cybermetric_80",
@@ -2891,7 +3627,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 80
+   "dataset_samples": 80,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.07688"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cybermetric"
+    }
+   ]
   },
   "cyse2_interpreter_abuse": {
    "task": "inspect_evals/cyse2_interpreter_abuse",
@@ -2935,7 +3681,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_2"
+    }
+   ]
   },
   "cyse2_prompt_injection": {
    "task": "inspect_evals/cyse2_prompt_injection",
@@ -2988,7 +3744,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 251
+   "dataset_samples": 251,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_2"
+    }
+   ]
   },
   "cyse2_vulnerability_exploit": {
    "task": "inspect_evals/cyse2_vulnerability_exploit",
@@ -3041,7 +3807,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 585
+   "dataset_samples": 585,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_2"
+    }
+   ]
   },
   "cyse3_visual_prompt_injection": {
    "task": "inspect_evals/cyse3_visual_prompt_injection",
@@ -3094,7 +3870,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.04724"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_3"
+    },
+    {
+     "label": "facebook/cyberseceval3-visual-prompt-injection",
+     "url": "https://huggingface.co/datasets/facebook/cyberseceval3-visual-prompt-injection"
+    }
+   ]
   },
   "cyse4_autocomplete": {
    "task": "inspect_evals/cyse4_autocomplete",
@@ -3129,7 +3919,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1916
+   "dataset_samples": 1916,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_instruct": {
    "task": "inspect_evals/cyse4_instruct",
@@ -3164,7 +3964,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1916
+   "dataset_samples": 1916,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_malware_analysis": {
    "task": "inspect_evals/cyse4_malware_analysis",
@@ -3189,7 +3999,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 609
+   "dataset_samples": 609,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_mitre": {
    "task": "inspect_evals/cyse4_mitre",
@@ -3244,7 +4064,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_mitre_frr": {
    "task": "inspect_evals/cyse4_mitre_frr",
@@ -3279,7 +4109,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 750
+   "dataset_samples": 750,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_multilingual_prompt_injection": {
    "task": "inspect_evals/cyse4_multilingual_prompt_injection",
@@ -3324,7 +4164,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1004
+   "dataset_samples": 1004,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_multiturn_phishing": {
    "task": "inspect_evals/cyse4_multiturn_phishing",
@@ -3378,7 +4228,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "cyse4_threat_intelligence": {
    "task": "inspect_evals/cyse4_threat_intelligence",
@@ -3408,7 +4268,17 @@
    "dependency": "cyberseceval_4",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 588
+   "dataset_samples": 588,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.13161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/cyberseceval_4"
+    }
+   ]
   },
   "docvqa": {
    "task": "inspect_evals/docvqa",
@@ -3435,7 +4305,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 5349
+   "dataset_samples": 5349,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2007.00398"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/docvqa"
+    },
+    {
+     "label": "lmms-lab/DocVQA",
+     "url": "https://huggingface.co/datasets/lmms-lab/DocVQA"
+    }
+   ]
   },
   "drop": {
    "task": "inspect_evals/drop",
@@ -3478,7 +4362,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 9535
+   "dataset_samples": 9535,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1903.00161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/drop"
+    },
+    {
+     "label": "EleutherAI/drop",
+     "url": "https://huggingface.co/datasets/EleutherAI/drop"
+    }
+   ]
   },
   "ds1000": {
    "task": "inspect_evals/ds1000",
@@ -3525,7 +4423,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2211.11501"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/ds1000"
+    },
+    {
+     "label": "xlangai/DS-1000",
+     "url": "https://huggingface.co/datasets/xlangai/DS-1000"
+    }
+   ]
   },
   "fortress_adversarial": {
    "task": "inspect_evals/fortress_adversarial",
@@ -3555,7 +4467,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.14922"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/fortress"
+    },
+    {
+     "label": "ScaleAI/fortress_public",
+     "url": "https://huggingface.co/datasets/ScaleAI/fortress_public"
+    }
+   ]
   },
   "fortress_benign": {
    "task": "inspect_evals/fortress_benign",
@@ -3593,7 +4519,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.14922"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/fortress"
+    },
+    {
+     "label": "ScaleAI/fortress_public",
+     "url": "https://huggingface.co/datasets/ScaleAI/fortress_public"
+    }
+   ]
   },
   "frontier_cs": {
    "task": "inspect_evals/frontier_cs",
@@ -3669,7 +4609,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 238
+   "dataset_samples": 238,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2512.15699"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/frontier_cs"
+    },
+    {
+     "label": "FrontierCS/Frontier-CS",
+     "url": "https://huggingface.co/datasets/FrontierCS/Frontier-CS"
+    }
+   ]
   },
   "frontier_cs_algorithmic": {
    "task": "inspect_evals/frontier_cs_algorithmic",
@@ -3727,7 +4681,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 172
+   "dataset_samples": 172,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2512.15699"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/frontier_cs"
+    },
+    {
+     "label": "FrontierCS/Frontier-CS",
+     "url": "https://huggingface.co/datasets/FrontierCS/Frontier-CS"
+    }
+   ]
   },
   "frontier_cs_research": {
    "task": "inspect_evals/frontier_cs_research",
@@ -3794,7 +4762,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 66
+   "dataset_samples": 66,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2512.15699"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/frontier_cs"
+    },
+    {
+     "label": "FrontierCS/Frontier-CS",
+     "url": "https://huggingface.co/datasets/FrontierCS/Frontier-CS"
+    }
+   ]
   },
   "frontierscience": {
    "task": "inspect_evals/frontierscience",
@@ -3836,7 +4818,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 160
+   "dataset_samples": 160,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://openai.com/index/frontierscience/"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/frontierscience"
+    },
+    {
+     "label": "openai/frontierscience",
+     "url": "https://huggingface.co/datasets/openai/frontierscience"
+    }
+   ]
   },
   "gaia": {
    "task": "inspect_evals/gaia",
@@ -3914,7 +4910,21 @@
    "dependency": "gaia",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 165
+   "dataset_samples": 165,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.12983"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gaia"
+    },
+    {
+     "label": "gaia-benchmark/GAIA",
+     "url": "https://huggingface.co/datasets/gaia-benchmark/GAIA"
+    }
+   ]
   },
   "gaia_level1": {
    "task": "inspect_evals/gaia_level1",
@@ -3930,7 +4940,21 @@
    "dependency": "gaia",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 53
+   "dataset_samples": 53,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.12983"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gaia"
+    },
+    {
+     "label": "gaia-benchmark/GAIA",
+     "url": "https://huggingface.co/datasets/gaia-benchmark/GAIA"
+    }
+   ]
   },
   "gaia_level2": {
    "task": "inspect_evals/gaia_level2",
@@ -3946,7 +4970,21 @@
    "dependency": "gaia",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 86
+   "dataset_samples": 86,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.12983"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gaia"
+    },
+    {
+     "label": "gaia-benchmark/GAIA",
+     "url": "https://huggingface.co/datasets/gaia-benchmark/GAIA"
+    }
+   ]
   },
   "gaia_level3": {
    "task": "inspect_evals/gaia_level3",
@@ -3962,7 +5000,21 @@
    "dependency": "gaia",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 26
+   "dataset_samples": 26,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.12983"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gaia"
+    },
+    {
+     "label": "gaia-benchmark/GAIA",
+     "url": "https://huggingface.co/datasets/gaia-benchmark/GAIA"
+    }
+   ]
   },
   "gdm_classifier_evasion": {
    "task": "inspect_evals/gdm_classifier_evasion",
@@ -4007,7 +5059,17 @@
    "dependency": "gdm_stealth",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 9
+   "dataset_samples": 9,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_stealth"
+    }
+   ]
   },
   "gdm_cover_your_tracks": {
    "task": "inspect_evals/gdm_cover_your_tracks",
@@ -4061,7 +5123,17 @@
    "dependency": "gdm_stealth",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_stealth"
+    }
+   ]
   },
   "gdm_in_house_ctf": {
    "task": "inspect_evals/gdm_in_house_ctf",
@@ -4118,7 +5190,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 13
+   "dataset_samples": 13,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_in_house_ctf"
+    }
+   ]
   },
   "gdm_intercode_ctf": {
    "task": "inspect_evals/gdm_intercode_ctf",
@@ -4239,7 +5321,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 78
+   "dataset_samples": 78,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2306.14898"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_intercode_ctf"
+    }
+   ]
   },
   "gdm_oversight_pattern": {
    "task": "inspect_evals/gdm_oversight_pattern",
@@ -4284,7 +5376,17 @@
    "dependency": "gdm_stealth",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_stealth"
+    }
+   ]
   },
   "gdm_self_reasoning_approved_directories": {
    "task": "inspect_evals/gdm_self_reasoning_approved_directories",
@@ -4333,7 +5435,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_calculator_improvement": {
    "task": "inspect_evals/gdm_self_reasoning_calculator_improvement",
@@ -4382,7 +5494,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_context_length_mod_instrumental_only": {
    "task": "inspect_evals/gdm_self_reasoning_context_length_mod_instrumental_only",
@@ -4431,7 +5553,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_context_length_mod_irreversibility_only": {
    "task": "inspect_evals/gdm_self_reasoning_context_length_mod_irreversibility_only",
@@ -4480,7 +5612,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_database_tool": {
    "task": "inspect_evals/gdm_self_reasoning_database_tool",
@@ -4529,7 +5671,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_latency_calculator": {
    "task": "inspect_evals/gdm_self_reasoning_latency_calculator",
@@ -4578,7 +5730,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_max_messages_calculator": {
    "task": "inspect_evals/gdm_self_reasoning_max_messages_calculator",
@@ -4627,7 +5789,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_max_tokens": {
    "task": "inspect_evals/gdm_self_reasoning_max_tokens",
@@ -4676,7 +5848,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_oversight_frequency": {
    "task": "inspect_evals/gdm_self_reasoning_oversight_frequency",
@@ -4725,7 +5907,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_read_logs": {
    "task": "inspect_evals/gdm_self_reasoning_read_logs",
@@ -4774,7 +5966,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_self_reasoning_turn_off_filters": {
    "task": "inspect_evals/gdm_self_reasoning_turn_off_filters",
@@ -4832,7 +6034,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 2
+   "dataset_samples": 2,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_reasoning"
+    }
+   ]
   },
   "gdm_sp01_e2e": {
    "task": "inspect_evals/gdm_sp01_e2e",
@@ -4859,7 +6071,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp01_milestones": {
    "task": "inspect_evals/gdm_sp01_milestones",
@@ -4907,7 +6129,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp02_e2e": {
    "task": "inspect_evals/gdm_sp02_e2e",
@@ -4934,7 +6157,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp02_milestones": {
    "task": "inspect_evals/gdm_sp02_milestones",
@@ -4991,7 +6224,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp03_e2e": {
    "task": "inspect_evals/gdm_sp03_e2e",
@@ -5018,7 +6252,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp03_milestones": {
    "task": "inspect_evals/gdm_sp03_milestones",
@@ -5075,7 +6319,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp04_e2e": {
    "task": "inspect_evals/gdm_sp04_e2e",
@@ -5102,7 +6347,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp04_milestones": {
    "task": "inspect_evals/gdm_sp04_milestones",
@@ -5159,7 +6414,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp05_e2e": {
    "task": "inspect_evals/gdm_sp05_e2e",
@@ -5186,7 +6442,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp05_milestones": {
    "task": "inspect_evals/gdm_sp05_milestones",
@@ -5243,7 +6509,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp07_e2e": {
    "task": "inspect_evals/gdm_sp07_e2e",
@@ -5270,7 +6537,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp07_milestones": {
    "task": "inspect_evals/gdm_sp07_milestones",
@@ -5327,7 +6604,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp08_e2e": {
    "task": "inspect_evals/gdm_sp08_e2e",
@@ -5354,7 +6632,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp08_milestones": {
    "task": "inspect_evals/gdm_sp08_milestones",
@@ -5411,7 +6699,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp09_e2e": {
    "task": "inspect_evals/gdm_sp09_e2e",
@@ -5438,7 +6727,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp09_milestones": {
    "task": "inspect_evals/gdm_sp09_milestones",
@@ -5495,7 +6794,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp10_e2e": {
    "task": "inspect_evals/gdm_sp10_e2e",
@@ -5522,7 +6822,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp10_milestones": {
    "task": "inspect_evals/gdm_sp10_milestones",
@@ -5579,7 +6889,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_sp12_e2e": {
    "task": "inspect_evals/gdm_sp12_e2e",
@@ -5606,7 +6917,17 @@
    "dependency": "gdm_self_proliferation",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2403.13793"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_self_proliferation"
+    }
+   ]
   },
   "gdm_sp12_milestones": {
    "task": "inspect_evals/gdm_sp12_milestones",
@@ -5663,7 +6984,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "gdm_strategic_rule_breaking": {
    "task": "inspect_evals/gdm_strategic_rule_breaking",
@@ -5708,7 +7030,17 @@
    "dependency": "gdm_stealth",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.01420"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdm_stealth"
+    }
+   ]
   },
   "gdpval": {
    "task": "inspect_evals/gdpval",
@@ -5747,7 +7079,21 @@
    "dependency": "gdpval",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 220
+   "dataset_samples": 220,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2510.04374"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gdpval"
+    },
+    {
+     "label": "openai/gdpval",
+     "url": "https://huggingface.co/datasets/openai/gdpval"
+    }
+   ]
   },
   "gpqa_diamond": {
    "task": "inspect_evals/gpqa_diamond",
@@ -5801,7 +7147,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 198
+   "dataset_samples": 198,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.12022"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gpqa"
+    }
+   ]
   },
   "gsm8k": {
    "task": "inspect_evals/gsm8k",
@@ -5844,7 +7200,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1319
+   "dataset_samples": 1319,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2110.14168"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/gsm8k"
+    },
+    {
+     "label": "openai/gsm8k",
+     "url": "https://huggingface.co/datasets/openai/gsm8k"
+    }
+   ]
   },
   "healthbench": {
    "task": "inspect_evals/healthbench",
@@ -5963,7 +7333,17 @@
    "dependency": "healthbench",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 5000
+   "dataset_samples": 5000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.08775"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/healthbench"
+    }
+   ]
   },
   "healthbench_consensus": {
    "task": "inspect_evals/healthbench_consensus",
@@ -6002,7 +7382,17 @@
    "dependency": "healthbench",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 3671
+   "dataset_samples": 3671,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.08775"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/healthbench"
+    }
+   ]
   },
   "healthbench_hard": {
    "task": "inspect_evals/healthbench_hard",
@@ -6041,7 +7431,17 @@
    "dependency": "healthbench",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.08775"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/healthbench"
+    }
+   ]
   },
   "healthbench_meta_eval": {
    "task": "inspect_evals/healthbench_meta_eval",
@@ -6058,7 +7458,17 @@
    "dependency": "healthbench",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 29511
+   "dataset_samples": 29511,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2505.08775"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/healthbench"
+    }
+   ]
   },
   "hellaswag": {
    "task": "inspect_evals/hellaswag",
@@ -6097,7 +7507,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 10042
+   "dataset_samples": 10042,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1905.07830"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/hellaswag"
+    },
+    {
+     "label": "Rowan/hellaswag",
+     "url": "https://huggingface.co/datasets/Rowan/hellaswag"
+    }
+   ]
   },
   "hle": {
    "task": "inspect_evals/hle",
@@ -6151,7 +7575,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 3000
+   "dataset_samples": 3000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2501.14249"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/hle"
+    },
+    {
+     "label": "cais/hle",
+     "url": "https://huggingface.co/datasets/cais/hle"
+    }
+   ]
   },
   "humaneval": {
    "task": "inspect_evals/humaneval",
@@ -6188,7 +7626,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 164
+   "dataset_samples": 164,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2107.03374"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/humaneval"
+    },
+    {
+     "label": "openai/openai_humaneval",
+     "url": "https://huggingface.co/datasets/openai/openai_humaneval"
+    }
+   ]
   },
   "ifeval": {
    "task": "inspect_evals/ifeval",
@@ -6202,7 +7654,21 @@
    "dependency": "ifeval",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 541
+   "dataset_samples": 541,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.07911"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/ifeval"
+    },
+    {
+     "label": "google/IFEval",
+     "url": "https://huggingface.co/datasets/google/IFEval"
+    }
+   ]
   },
   "ifevalcode": {
    "task": "inspect_evals/ifevalcode",
@@ -6238,7 +7704,21 @@
    "dependency": "ifevalcode",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 810
+   "dataset_samples": 810,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2507.22462"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/ifevalcode"
+    },
+    {
+     "label": "Multilingual-Multimodal-NLP/IfEvalCode-testset",
+     "url": "https://huggingface.co/datasets/Multilingual-Multimodal-NLP/IfEvalCode-testset"
+    }
+   ]
   },
   "infinite_bench_code_debug": {
    "task": "inspect_evals/infinite_bench_code_debug",
@@ -6252,7 +7732,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 394
+   "dataset_samples": 394,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_code_run": {
    "task": "inspect_evals/infinite_bench_code_run",
@@ -6266,7 +7760,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 400
+   "dataset_samples": 400,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_kv_retrieval": {
    "task": "inspect_evals/infinite_bench_kv_retrieval",
@@ -6280,7 +7788,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_longbook_choice_eng": {
    "task": "inspect_evals/infinite_bench_longbook_choice_eng",
@@ -6294,7 +7816,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 229
+   "dataset_samples": 229,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_longdialogue_qa_eng": {
    "task": "inspect_evals/infinite_bench_longdialogue_qa_eng",
@@ -6308,7 +7844,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 200
+   "dataset_samples": 200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_math_calc": {
    "task": "inspect_evals/infinite_bench_math_calc",
@@ -6322,7 +7872,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_math_find": {
    "task": "inspect_evals/infinite_bench_math_find",
@@ -6336,7 +7900,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 350
+   "dataset_samples": 350,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_number_string": {
    "task": "inspect_evals/infinite_bench_number_string",
@@ -6350,7 +7928,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 590
+   "dataset_samples": 590,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "infinite_bench_passkey": {
    "task": "inspect_evals/infinite_bench_passkey",
@@ -6364,7 +7956,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 590
+   "dataset_samples": 590,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.13718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/infinite_bench"
+    },
+    {
+     "label": "xinrongzhang2022/InfiniteBench",
+     "url": "https://huggingface.co/datasets/xinrongzhang2022/InfiniteBench"
+    }
+   ]
   },
   "instrumentaleval": {
    "task": "inspect_evals/instrumentaleval",
@@ -6398,7 +8004,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 76
+   "dataset_samples": 76,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2502.12206"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/instrumentaleval"
+    }
+   ]
   },
   "ipi_coding_agent": {
    "task": "inspect_evals/ipi_coding_agent",
@@ -6431,7 +8047,13 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 45
+   "dataset_samples": 45,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/ipi_coding_agent"
+    }
+   ]
   },
   "kernelbench": {
    "task": "inspect_evals/kernelbench",
@@ -6661,7 +8283,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 250
+   "dataset_samples": 250,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/html/2502.10517v1"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/kernelbench"
+    },
+    {
+     "label": "ScalingIntelligence/KernelBench",
+     "url": "https://huggingface.co/datasets/ScalingIntelligence/KernelBench"
+    }
+   ]
   },
   "lab_bench_cloning_scenarios": {
    "task": "inspect_evals/lab_bench_cloning_scenarios",
@@ -6675,7 +8311,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 33
+   "dataset_samples": 33,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_dbqa": {
    "task": "inspect_evals/lab_bench_dbqa",
@@ -6689,7 +8339,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 520
+   "dataset_samples": 520,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_figqa": {
    "task": "inspect_evals/lab_bench_figqa",
@@ -6703,7 +8367,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 181
+   "dataset_samples": 181,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_litqa": {
    "task": "inspect_evals/lab_bench_litqa",
@@ -6717,7 +8395,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 199
+   "dataset_samples": 199,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_protocolqa": {
    "task": "inspect_evals/lab_bench_protocolqa",
@@ -6731,7 +8423,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 108
+   "dataset_samples": 108,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_seqqa": {
    "task": "inspect_evals/lab_bench_seqqa",
@@ -6745,7 +8451,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 600
+   "dataset_samples": 600,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_suppqa": {
    "task": "inspect_evals/lab_bench_suppqa",
@@ -6759,7 +8479,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 82
+   "dataset_samples": 82,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lab_bench_tableqa": {
    "task": "inspect_evals/lab_bench_tableqa",
@@ -6773,7 +8507,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 244
+   "dataset_samples": 244,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.10362"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lab_bench"
+    },
+    {
+     "label": "futurehouse/lab-bench",
+     "url": "https://huggingface.co/datasets/futurehouse/lab-bench"
+    }
+   ]
   },
   "lingoly": {
    "task": "inspect_evals/lingoly",
@@ -6787,7 +8535,25 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 408
+   "dataset_samples": 408,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2406.06196,https://arxiv.org/abs/2503.02972"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lingoly"
+    },
+    {
+     "label": "ambean/lingOly",
+     "url": "https://huggingface.co/datasets/ambean/lingOly"
+    },
+    {
+     "label": "jkhouja/LingOly-TOO",
+     "url": "https://huggingface.co/datasets/jkhouja/LingOly-TOO"
+    }
+   ]
   },
   "lingoly_too": {
    "task": "inspect_evals/lingoly_too",
@@ -6801,7 +8567,25 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1203
+   "dataset_samples": 1203,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2406.06196,https://arxiv.org/abs/2503.02972"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/lingoly"
+    },
+    {
+     "label": "ambean/lingOly",
+     "url": "https://huggingface.co/datasets/ambean/lingOly"
+    },
+    {
+     "label": "jkhouja/LingOly-TOO",
+     "url": "https://huggingface.co/datasets/jkhouja/LingOly-TOO"
+    }
+   ]
   },
   "livebench": {
    "task": "inspect_evals/livebench",
@@ -6837,7 +8621,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 910
+   "dataset_samples": 910,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.19314"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/livebench"
+    },
+    {
+     "label": "livebench/{math,reasoning,coding,language,data_analysis,instruction_following}",
+     "url": "https://huggingface.co/datasets/livebench/{math,reasoning,coding,language,data_analysis,instruction_following}"
+    }
+   ]
   },
   "livecodebench_pro": {
    "task": "inspect_evals/livecodebench_pro",
@@ -6868,7 +8666,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1404
+   "dataset_samples": 1404,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.11928"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/livecodebench_pro"
+    },
+    {
+     "label": "QAQAQAQAQ/LiveCodeBench-Pro",
+     "url": "https://huggingface.co/datasets/QAQAQAQAQ/LiveCodeBench-Pro"
+    }
+   ]
   },
   "macbench": {
    "task": "inspect_evals/macbench",
@@ -6912,7 +8724,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1153
+   "dataset_samples": 1153,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2411.16955"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/macbench"
+    },
+    {
+     "label": "jablonkagroup/MaCBench",
+     "url": "https://huggingface.co/datasets/jablonkagroup/MaCBench"
+    }
+   ]
   },
   "make_me_pay": {
    "task": "inspect_evals/make_me_pay",
@@ -6978,7 +8804,13 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 20
+   "dataset_samples": 20,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/make_me_pay"
+    }
+   ]
   },
   "makemesay": {
    "task": "inspect_evals/makemesay",
@@ -7019,7 +8851,13 @@
    "dependency": "makemesay",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 189
+   "dataset_samples": 189,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/makemesay"
+    }
+   ]
   },
   "mask": {
    "task": "inspect_evals/mask",
@@ -7167,7 +9005,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2503.03750?"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mask"
+    },
+    {
+     "label": "cais/MASK",
+     "url": "https://huggingface.co/datasets/cais/MASK"
+    }
+   ]
   },
   "math": {
    "task": "inspect_evals/math",
@@ -7223,7 +9075,21 @@
    "dependency": "math",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 12500
+   "dataset_samples": 12500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2103.03874"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/math"
+    },
+    {
+     "label": "DigitalLearningGmbH/MATH-lighteval",
+     "url": "https://huggingface.co/datasets/DigitalLearningGmbH/MATH-lighteval"
+    }
+   ]
   },
   "mathvista": {
    "task": "inspect_evals/mathvista",
@@ -7250,7 +9116,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2310.02255"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mathvista"
+    },
+    {
+     "label": "AI4Math/MathVista",
+     "url": "https://huggingface.co/datasets/AI4Math/MathVista"
+    }
+   ]
   },
   "mbpp": {
    "task": "inspect_evals/mbpp",
@@ -7275,7 +9155,21 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 257
+   "dataset_samples": 257,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2108.07732"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mbpp"
+    },
+    {
+     "label": "google-research-datasets/mbpp",
+     "url": "https://huggingface.co/datasets/google-research-datasets/mbpp"
+    }
+   ]
   },
   "medqa": {
    "task": "inspect_evals/medqa",
@@ -7289,7 +9183,21 @@
    "dependency": "medqa",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1273
+   "dataset_samples": 1273,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2009.13081"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/medqa"
+    },
+    {
+     "label": "bigbio/med_qa",
+     "url": "https://huggingface.co/datasets/bigbio/med_qa"
+    }
+   ]
   },
   "mgsm": {
    "task": "inspect_evals/mgsm",
@@ -7342,7 +9250,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 2750
+   "dataset_samples": 2750,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2210.03057"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mgsm"
+    }
+   ]
   },
   "mind2web": {
    "task": "inspect_evals/mind2web",
@@ -7358,7 +9276,21 @@
    "dependency": "mind2web",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 7775
+   "dataset_samples": 7775,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2306.06070"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mind2web"
+    },
+    {
+     "label": "osunlp/Multimodal-Mind2Web",
+     "url": "https://huggingface.co/datasets/osunlp/Multimodal-Mind2Web"
+    }
+   ]
   },
   "mind2web_sc": {
    "task": "inspect_evals/mind2web_sc",
@@ -7387,7 +9319,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 200
+   "dataset_samples": 200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.09187"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mind2web_sc"
+    }
+   ]
   },
   "mle_bench": {
    "task": "inspect_evals/mle_bench",
@@ -7514,7 +9456,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 1
+   "dataset_samples": 1,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.07095"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mle_bench"
+    }
+   ]
   },
   "mle_bench_full": {
    "task": "inspect_evals/mle_bench_full",
@@ -7632,7 +9584,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 75
+   "dataset_samples": 75,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.07095"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mle_bench"
+    }
+   ]
   },
   "mle_bench_lite": {
    "task": "inspect_evals/mle_bench_lite",
@@ -7750,7 +9712,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 22
+   "dataset_samples": 22,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.07095"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mle_bench"
+    }
+   ]
   },
   "mlrc_bench": {
    "task": "inspect_evals/mlrc_bench",
@@ -7834,7 +9806,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 7
+   "dataset_samples": 7,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2504.09702"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mlrc_bench"
+    }
+   ]
   },
   "mmiu": {
    "task": "inspect_evals/mmiu",
@@ -7869,7 +9851,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 11698
+   "dataset_samples": 11698,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2408.02718"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmiu"
+    },
+    {
+     "label": "FanqingM/MMIU-Benchmark",
+     "url": "https://huggingface.co/datasets/FanqingM/MMIU-Benchmark"
+    }
+   ]
   },
   "mmlu_0_shot": {
    "task": "inspect_evals/mmlu_0_shot",
@@ -7930,7 +9926,25 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 14042
+   "dataset_samples": 14042,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2009.03300"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmlu"
+    },
+    {
+     "label": "openai/MMMLU",
+     "url": "https://huggingface.co/datasets/openai/MMMLU"
+    },
+    {
+     "label": "cais/mmlu",
+     "url": "https://huggingface.co/datasets/cais/mmlu"
+    }
+   ]
   },
   "mmlu_5_shot": {
    "task": "inspect_evals/mmlu_5_shot",
@@ -8000,7 +10014,25 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 14042
+   "dataset_samples": 14042,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2009.03300"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmlu"
+    },
+    {
+     "label": "openai/MMMLU",
+     "url": "https://huggingface.co/datasets/openai/MMMLU"
+    },
+    {
+     "label": "cais/mmlu",
+     "url": "https://huggingface.co/datasets/cais/mmlu"
+    }
+   ]
   },
   "mmlu_pro": {
    "task": "inspect_evals/mmlu_pro",
@@ -8043,7 +10075,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 12032
+   "dataset_samples": 12032,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.01574"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmlu_pro"
+    },
+    {
+     "label": "TIGER-Lab/MMLU-Pro",
+     "url": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro"
+    }
+   ]
   },
   "mmmu_multiple_choice": {
    "task": "inspect_evals/mmmu_multiple_choice",
@@ -8071,7 +10117,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 847
+   "dataset_samples": 847,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.16502"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmmu"
+    },
+    {
+     "label": "MMMU/MMMU",
+     "url": "https://huggingface.co/datasets/MMMU/MMMU"
+    }
+   ]
   },
   "mmmu_open": {
    "task": "inspect_evals/mmmu_open",
@@ -8099,7 +10159,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 53
+   "dataset_samples": 53,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2311.16502"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/mmmu"
+    },
+    {
+     "label": "MMMU/MMMU",
+     "url": "https://huggingface.co/datasets/MMMU/MMMU"
+    }
+   ]
   },
   "moru": {
    "task": "inspect_evals/moru",
@@ -8221,7 +10295,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 201
+   "dataset_samples": 201,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/moru"
+    },
+    {
+     "label": "sentientfutures/moru-benchmark",
+     "url": "https://huggingface.co/datasets/sentientfutures/moru-benchmark"
+    },
+    {
+     "label": "sentientfutures/moru-benchmark-dimensions",
+     "url": "https://huggingface.co/datasets/sentientfutures/moru-benchmark-dimensions"
+    }
+   ]
   },
   "musr": {
    "task": "inspect_evals/musr",
@@ -8283,7 +10371,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 250
+   "dataset_samples": 250,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2310.16049"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/musr"
+    },
+    {
+     "label": "TAUR-Lab/MuSR",
+     "url": "https://huggingface.co/datasets/TAUR-Lab/MuSR"
+    }
+   ]
   },
   "niah": {
    "task": "inspect_evals/niah",
@@ -8394,7 +10496,21 @@
    "dependency": "niah",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 225
+   "dataset_samples": 225,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.01437"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/niah"
+    },
+    {
+     "label": "opencompass/NeedleBench",
+     "url": "https://huggingface.co/datasets/opencompass/NeedleBench"
+    }
+   ]
   },
   "novelty_bench": {
    "task": "inspect_evals/novelty_bench",
@@ -8483,7 +10599,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1100
+   "dataset_samples": 1100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2504.05228"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/novelty_bench"
+    },
+    {
+     "label": "yimingzhang/novelty-bench",
+     "url": "https://huggingface.co/datasets/yimingzhang/novelty-bench"
+    }
+   ]
   },
   "onet_m6": {
    "task": "inspect_evals/onet_m6",
@@ -8525,7 +10655,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 397
+   "dataset_samples": 397,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/onet"
+    },
+    {
+     "label": "matichon/thai-onet-m6-exam",
+     "url": "https://huggingface.co/datasets/matichon/thai-onet-m6-exam"
+    }
+   ]
   },
   "osworld": {
    "task": "inspect_evals/osworld",
@@ -8620,7 +10760,17 @@
    "dependency": "osworld",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 369
+   "dataset_samples": 369,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.07972"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/osworld"
+    }
+   ]
   },
   "osworld_small": {
    "task": "inspect_evals/osworld_small",
@@ -8706,7 +10856,17 @@
    "dependency": "osworld",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 39
+   "dataset_samples": 39,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.07972"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/osworld"
+    }
+   ]
   },
   "paperbench": {
    "task": "inspect_evals/paperbench",
@@ -8800,7 +10960,21 @@
    "dependency": "paperbench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 23
+   "dataset_samples": 23,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2504.01848"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/paperbench"
+    },
+    {
+     "label": "josancamon/paperbench",
+     "url": "https://huggingface.co/datasets/josancamon/paperbench"
+    }
+   ]
   },
   "paperbench_score": {
    "task": "inspect_evals/paperbench_score",
@@ -8881,7 +11055,8 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": null
+   "dataset_samples": null,
+   "links": []
   },
   "paws": {
    "task": "inspect_evals/paws",
@@ -8906,7 +11081,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 8000
+   "dataset_samples": 8000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1904.01130"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/paws"
+    },
+    {
+     "label": "google-research-datasets/paws",
+     "url": "https://huggingface.co/datasets/google-research-datasets/paws"
+    }
+   ]
   },
   "persistbench_beneficial_memory": {
    "task": "inspect_evals/persistbench_beneficial_memory",
@@ -8942,7 +11131,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2602.01146"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/persistbench"
+    }
+   ]
   },
   "persistbench_cross_domain": {
    "task": "inspect_evals/persistbench_cross_domain",
@@ -8978,7 +11177,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 200
+   "dataset_samples": 200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2602.01146"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/persistbench"
+    }
+   ]
   },
   "persistbench_sycophancy": {
    "task": "inspect_evals/persistbench_sycophancy",
@@ -9014,7 +11223,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 200
+   "dataset_samples": 200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2602.01146"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/persistbench"
+    }
+   ]
   },
   "personality_BFI": {
    "task": "inspect_evals/personality_BFI",
@@ -9039,7 +11258,17 @@
    "dependency": "personality",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 44
+   "dataset_samples": 44,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/personality"
+    },
+    {
+     "label": "mirlab/TRAIT",
+     "url": "https://huggingface.co/datasets/mirlab/TRAIT"
+    }
+   ]
   },
   "personality_TRAIT": {
    "task": "inspect_evals/personality_TRAIT",
@@ -9089,7 +11318,17 @@
    "dependency": "personality",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 8000
+   "dataset_samples": 8000,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/personality"
+    },
+    {
+     "label": "mirlab/TRAIT",
+     "url": "https://huggingface.co/datasets/mirlab/TRAIT"
+    }
+   ]
   },
   "piqa": {
    "task": "inspect_evals/piqa",
@@ -9103,7 +11342,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1838
+   "dataset_samples": 1838,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1911.11641"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/piqa"
+    },
+    {
+     "label": "ybisk/piqa",
+     "url": "https://huggingface.co/datasets/ybisk/piqa"
+    }
+   ]
   },
   "pre_flight": {
    "task": "inspect_evals/pre_flight",
@@ -9117,7 +11370,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 300
+   "dataset_samples": 300,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2607.01829"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/pre_flight"
+    },
+    {
+     "label": "AirsideLabs/pre-flight-06",
+     "url": "https://huggingface.co/datasets/AirsideLabs/pre-flight-06"
+    }
+   ]
   },
   "pubmedqa": {
    "task": "inspect_evals/pubmedqa",
@@ -9131,7 +11398,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1909.06146"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/pubmedqa"
+    },
+    {
+     "label": "qiaojin/PubMedQA",
+     "url": "https://huggingface.co/datasets/qiaojin/PubMedQA"
+    }
+   ]
   },
   "race_h": {
    "task": "inspect_evals/race_h",
@@ -9156,7 +11437,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 3498
+   "dataset_samples": 3498,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1704.04683"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/race_h"
+    },
+    {
+     "label": "ehovy/race",
+     "url": "https://huggingface.co/datasets/ehovy/race"
+    }
+   ]
   },
   "sad_facts_human_defaults": {
    "task": "inspect_evals/sad_facts_human_defaults",
@@ -9213,7 +11508,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1200
+   "dataset_samples": 1200,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.04694"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sad"
+    }
+   ]
   },
   "sad_facts_llms": {
    "task": "inspect_evals/sad_facts_llms",
@@ -9270,7 +11575,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 249
+   "dataset_samples": 249,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.04694"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sad"
+    }
+   ]
   },
   "sad_influence": {
    "task": "inspect_evals/sad_influence",
@@ -9328,7 +11643,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 255
+   "dataset_samples": 255,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.04694"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sad"
+    }
+   ]
   },
   "sad_stages_full": {
    "task": "inspect_evals/sad_stages_full",
@@ -9386,7 +11711,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 800
+   "dataset_samples": 800,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.04694"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sad"
+    }
+   ]
   },
   "sad_stages_oversight": {
    "task": "inspect_evals/sad_stages_oversight",
@@ -9444,7 +11779,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 400
+   "dataset_samples": 400,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.04694"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sad"
+    }
+   ]
   },
   "scbench": {
    "task": "inspect_evals/scbench",
@@ -9497,7 +11842,17 @@
    "dependency": "scbench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 30
+   "dataset_samples": 30,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2602.09063"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/scbench"
+    }
+   ]
   },
   "scicode": {
    "task": "inspect_evals/scicode",
@@ -9540,7 +11895,17 @@
    "dependency": "scicode",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 65
+   "dataset_samples": 65,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2407.13168"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/scicode"
+    }
+   ]
   },
   "sciknoweval": {
    "task": "inspect_evals/sciknoweval",
@@ -9595,7 +11960,21 @@
    "dependency": "sciknoweval",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 70196
+   "dataset_samples": 70196,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2406.09098v2"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sciknoweval"
+    },
+    {
+     "label": "hicai-zju/SciKnowEval",
+     "url": "https://huggingface.co/datasets/hicai-zju/SciKnowEval"
+    }
+   ]
   },
   "sec_qa_v1": {
    "task": "inspect_evals/sec_qa_v1",
@@ -9609,7 +11988,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 110
+   "dataset_samples": 110,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.15838"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sec_qa"
+    },
+    {
+     "label": "zefang-liu/secqa",
+     "url": "https://huggingface.co/datasets/zefang-liu/secqa"
+    }
+   ]
   },
   "sec_qa_v1_5_shot": {
    "task": "inspect_evals/sec_qa_v1_5_shot",
@@ -9623,7 +12016,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 110
+   "dataset_samples": 110,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.15838"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sec_qa"
+    },
+    {
+     "label": "zefang-liu/secqa",
+     "url": "https://huggingface.co/datasets/zefang-liu/secqa"
+    }
+   ]
   },
   "sec_qa_v2": {
    "task": "inspect_evals/sec_qa_v2",
@@ -9637,7 +12044,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.15838"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sec_qa"
+    },
+    {
+     "label": "zefang-liu/secqa",
+     "url": "https://huggingface.co/datasets/zefang-liu/secqa"
+    }
+   ]
   },
   "sec_qa_v2_5_shot": {
    "task": "inspect_evals/sec_qa_v2_5_shot",
@@ -9651,7 +12072,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.15838"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sec_qa"
+    },
+    {
+     "label": "zefang-liu/secqa",
+     "url": "https://huggingface.co/datasets/zefang-liu/secqa"
+    }
+   ]
   },
   "sevenllm_mcq_en": {
    "task": "inspect_evals/sevenllm_mcq_en",
@@ -9665,7 +12100,17 @@
    "dependency": "sevenllm",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2405.03446"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sevenllm"
+    }
+   ]
   },
   "sevenllm_mcq_zh": {
    "task": "inspect_evals/sevenllm_mcq_zh",
@@ -9679,7 +12124,17 @@
    "dependency": "sevenllm",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2405.03446"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sevenllm"
+    }
+   ]
   },
   "sevenllm_qa_en": {
    "task": "inspect_evals/sevenllm_qa_en",
@@ -9693,7 +12148,17 @@
    "dependency": "sevenllm",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 600
+   "dataset_samples": 600,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2405.03446"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sevenllm"
+    }
+   ]
   },
   "sevenllm_qa_zh": {
    "task": "inspect_evals/sevenllm_qa_zh",
@@ -9707,7 +12172,17 @@
    "dependency": "sevenllm",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 600
+   "dataset_samples": 600,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2405.03446"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sevenllm"
+    }
+   ]
   },
   "simpleqa": {
    "task": "inspect_evals/simpleqa",
@@ -9749,7 +12224,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 4326
+   "dataset_samples": 4326,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2411.04368,https://arxiv.org/abs/2509.07968"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/simpleqa"
+    },
+    {
+     "label": "codelion/SimpleQA-Verified",
+     "url": "https://huggingface.co/datasets/codelion/SimpleQA-Verified"
+    }
+   ]
   },
   "simpleqa_verified": {
    "task": "inspect_evals/simpleqa_verified",
@@ -9791,7 +12280,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2411.04368,https://arxiv.org/abs/2509.07968"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/simpleqa"
+    },
+    {
+     "label": "codelion/SimpleQA-Verified",
+     "url": "https://huggingface.co/datasets/codelion/SimpleQA-Verified"
+    }
+   ]
   },
   "sosbench": {
    "task": "inspect_evals/sosbench",
@@ -9826,7 +12329,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 3000
+   "dataset_samples": 3000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2505.21605"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sosbench"
+    },
+    {
+     "label": "SOSBench/SOSBench",
+     "url": "https://huggingface.co/datasets/SOSBench/SOSBench"
+    }
+   ]
   },
   "squad": {
    "task": "inspect_evals/squad",
@@ -9851,7 +12368,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 11873
+   "dataset_samples": 11873,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1606.05250"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/squad"
+    },
+    {
+     "label": "rajpurkar/squad_v2",
+     "url": "https://huggingface.co/datasets/rajpurkar/squad_v2"
+    }
+   ]
   },
   "stereoset": {
    "task": "inspect_evals/stereoset",
@@ -9889,7 +12420,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 4299
+   "dataset_samples": 4299,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2004.09456"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/stereoset"
+    },
+    {
+     "label": "McGill-NLP/stereoset",
+     "url": "https://huggingface.co/datasets/McGill-NLP/stereoset"
+    }
+   ]
   },
   "strong_reject": {
    "task": "inspect_evals/strong_reject",
@@ -9932,7 +12477,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 324
+   "dataset_samples": 324,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2402.10260"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/strong_reject"
+    }
+   ]
   },
   "swe_bench": {
    "task": "inspect_evals/swe_bench",
@@ -10035,7 +12590,21 @@
    "dependency": "swe_bench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 500
+   "dataset_samples": 500,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2310.06770"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/swe_bench"
+    },
+    {
+     "label": "princeton-nlp/SWE-bench_Verified",
+     "url": "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified"
+    }
+   ]
   },
   "swe_bench_verified_mini": {
    "task": "inspect_evals/swe_bench_verified_mini",
@@ -10120,7 +12689,21 @@
    "dependency": "swe_bench",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2310.06770"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/swe_bench"
+    },
+    {
+     "label": "princeton-nlp/SWE-bench_Verified",
+     "url": "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified"
+    }
+   ]
   },
   "swe_lancer": {
    "task": "inspect_evals/swe_lancer",
@@ -10220,7 +12803,17 @@
    "dependency": "swe_lancer",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 460
+   "dataset_samples": 460,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2502.12115"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/swe_lancer"
+    }
+   ]
   },
   "sycophancy": {
    "task": "inspect_evals/sycophancy",
@@ -10247,7 +12840,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 4888
+   "dataset_samples": 4888,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2310.13548"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/sycophancy"
+    }
+   ]
   },
   "tac": {
    "task": "inspect_evals/tac",
@@ -10275,7 +12878,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 52
+   "dataset_samples": 52,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2606.18142"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tac"
+    },
+    {
+     "label": "sentientfutures/tac",
+     "url": "https://huggingface.co/datasets/sentientfutures/tac"
+    }
+   ]
   },
   "tac_welfare": {
    "task": "inspect_evals/tac_welfare",
@@ -10303,7 +12920,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 52
+   "dataset_samples": 52,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2606.18142"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tac"
+    },
+    {
+     "label": "sentientfutures/tac",
+     "url": "https://huggingface.co/datasets/sentientfutures/tac"
+    }
+   ]
   },
   "tau2_airline": {
    "task": "inspect_evals/tau2_airline",
@@ -10350,7 +12981,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 50
+   "dataset_samples": 50,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.07982"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tau2"
+    }
+   ]
   },
   "tau2_banking": {
    "task": "inspect_evals/tau2_banking",
@@ -10406,7 +13047,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 97
+   "dataset_samples": 97,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.07982"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tau2"
+    }
+   ]
   },
   "tau2_retail": {
    "task": "inspect_evals/tau2_retail",
@@ -10453,7 +13104,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 114
+   "dataset_samples": 114,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.07982"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tau2"
+    }
+   ]
   },
   "tau2_telecom": {
    "task": "inspect_evals/tau2_telecom",
@@ -10500,7 +13161,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 114
+   "dataset_samples": 114,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2506.07982"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/tau2"
+    }
+   ]
   },
   "theagentcompany": {
    "task": "inspect_evals/theagentcompany",
@@ -10543,7 +13214,17 @@
    "dependency": "theagentcompany",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 34
+   "dataset_samples": 34,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2412.14161"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/theagentcompany"
+    }
+   ]
   },
   "threecb": {
    "task": "inspect_evals/threecb",
@@ -10573,7 +13254,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 13
+   "dataset_samples": 13,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2410.09114"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/threecb"
+    }
+   ]
   },
   "truthfulqa": {
    "task": "inspect_evals/truthfulqa",
@@ -10611,7 +13302,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 817
+   "dataset_samples": 817,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2109.07958v2"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/truthfulqa"
+    },
+    {
+     "label": "truthfulqa/truthful_qa",
+     "url": "https://huggingface.co/datasets/truthfulqa/truthful_qa"
+    }
+   ]
   },
   "uccb": {
    "task": "inspect_evals/uccb",
@@ -10663,7 +13368,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1039
+   "dataset_samples": 1039,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://huggingface.co/datasets/CraneAILabs/UCCB"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/uccb"
+    },
+    {
+     "label": "CraneAILabs/UCCB",
+     "url": "https://huggingface.co/datasets/CraneAILabs/UCCB"
+    }
+   ]
   },
   "usaco": {
    "task": "inspect_evals/usaco",
@@ -10723,7 +13442,17 @@
    "dependency": null,
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 307
+   "dataset_samples": 307,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2404.10952"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/usaco"
+    }
+   ]
   },
   "vimgolf_single_turn": {
    "task": "inspect_evals/vimgolf_single_turn",
@@ -10741,7 +13470,17 @@
    "dependency": "vimgolf_challenges",
    "sandbox": true,
    "requires_internet": true,
-   "dataset_samples": 612
+   "dataset_samples": 612,
+   "links": [
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/vimgolf_challenges"
+    },
+    {
+     "label": "cybergod-kevin/vimgolf-public-challenges-inspect-eval",
+     "url": "https://huggingface.co/datasets/cybergod-kevin/vimgolf-public-challenges-inspect-eval"
+    }
+   ]
   },
   "vqa_rad": {
    "task": "inspect_evals/vqa_rad",
@@ -10768,7 +13507,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 451
+   "dataset_samples": 451,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://doi.org/10.1038/sdata.2018.251"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/vqa_rad"
+    },
+    {
+     "label": "flaviagiammarino/vqa-rad",
+     "url": "https://huggingface.co/datasets/flaviagiammarino/vqa-rad"
+    }
+   ]
   },
   "vstar_bench_attribute_recognition": {
    "task": "inspect_evals/vstar_bench_attribute_recognition",
@@ -10784,7 +13537,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 115
+   "dataset_samples": 115,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.14135"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/vstar_bench"
+    },
+    {
+     "label": "craigwu/vstar_bench",
+     "url": "https://huggingface.co/datasets/craigwu/vstar_bench"
+    }
+   ]
   },
   "vstar_bench_spatial_relationship_reasoning": {
    "task": "inspect_evals/vstar_bench_spatial_relationship_reasoning",
@@ -10800,7 +13567,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 76
+   "dataset_samples": 76,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2312.14135"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/vstar_bench"
+    },
+    {
+     "label": "craigwu/vstar_bench",
+     "url": "https://huggingface.co/datasets/craigwu/vstar_bench"
+    }
+   ]
   },
   "winogrande": {
    "task": "inspect_evals/winogrande",
@@ -10861,7 +13642,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1267
+   "dataset_samples": 1267,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/1907.10641"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/winogrande"
+    },
+    {
+     "label": "allenai/winogrande",
+     "url": "https://huggingface.co/datasets/allenai/winogrande"
+    }
+   ]
   },
   "wmdp_bio": {
    "task": "inspect_evals/wmdp_bio",
@@ -10875,7 +13670,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1273
+   "dataset_samples": 1273,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2403.03218"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/wmdp"
+    },
+    {
+     "label": "cais/wmdp",
+     "url": "https://huggingface.co/datasets/cais/wmdp"
+    }
+   ]
   },
   "wmdp_chem": {
    "task": "inspect_evals/wmdp_chem",
@@ -10889,7 +13698,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 408
+   "dataset_samples": 408,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2403.03218"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/wmdp"
+    },
+    {
+     "label": "cais/wmdp",
+     "url": "https://huggingface.co/datasets/cais/wmdp"
+    }
+   ]
   },
   "wmdp_cyber": {
    "task": "inspect_evals/wmdp_cyber",
@@ -10903,7 +13726,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1987
+   "dataset_samples": 1987,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2403.03218"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/wmdp"
+    },
+    {
+     "label": "cais/wmdp",
+     "url": "https://huggingface.co/datasets/cais/wmdp"
+    }
+   ]
   },
   "worldsense": {
    "task": "inspect_evals/worldsense",
@@ -10937,7 +13774,17 @@
    "dependency": "worldsense",
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 87048
+   "dataset_samples": 87048,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2311.15930"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/worldsense"
+    }
+   ]
   },
   "writingbench": {
    "task": "inspect_evals/writingbench",
@@ -10988,7 +13835,17 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 1000
+   "dataset_samples": 1000,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/pdf/2503.05244"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/writingbench"
+    }
+   ]
   },
   "xstest": {
    "task": "inspect_evals/xstest",
@@ -11026,7 +13883,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 250
+   "dataset_samples": 250,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2308.01263"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/xstest"
+    },
+    {
+     "label": "walledai/XSTest",
+     "url": "https://huggingface.co/datasets/walledai/XSTest"
+    }
+   ]
   },
   "zerobench": {
    "task": "inspect_evals/zerobench",
@@ -11055,7 +13926,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 100
+   "dataset_samples": 100,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2502.09696"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/zerobench"
+    },
+    {
+     "label": "jonathan-roberts1/zerobench",
+     "url": "https://huggingface.co/datasets/jonathan-roberts1/zerobench"
+    }
+   ]
   },
   "zerobench_subquestions": {
    "task": "inspect_evals/zerobench_subquestions",
@@ -11093,7 +13978,21 @@
    "dependency": null,
    "sandbox": false,
    "requires_internet": true,
-   "dataset_samples": 335
+   "dataset_samples": 335,
+   "links": [
+    {
+     "label": "paper",
+     "url": "https://arxiv.org/abs/2502.09696"
+    },
+    {
+     "label": "source",
+     "url": "https://github.com/UKGovernmentBEIS/inspect_evals/tree/v0.15.0/src/inspect_evals/zerobench"
+    },
+    {
+     "label": "jonathan-roberts1/zerobench",
+     "url": "https://huggingface.co/datasets/jonathan-roberts1/zerobench"
+    }
+   ]
   }
  }
 }

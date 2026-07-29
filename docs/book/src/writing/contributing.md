@@ -20,6 +20,7 @@ Review reads your repo at the pinned rev, plus the wrapper:
 - **Name** — experiments get bare names (`nix run adb#my-experiment`), so the namespace is registry-wide and collisions are refused at eval time. Pick like a nixpkgs attr.
 - **A keyless path** — the prefilled command should run with zero setup (`mock/model`, or Inspect's `mockllm/model`). That's the smoke test and what CI exercises.
 - **Descriptions** — `summary`, per-param `description`s and suggestions are the GUI; write them for someone who hasn't read your code.
+- **Links** — `links = [ { label; url; } … ]` points readers at the paper, the upstream repo, and any datasets; shown on the experiment page and each run. Links are pointers, not pins — the pinned rev lives in your lockfile.
 - **A tight `src` list** — identity covers behavior only.
 - **Committed `uv.lock`, bounded deps** — the wrapped version of your repo is a deliberate line-edit, not silent drift.
 

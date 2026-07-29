@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtVal } from "@/lib/data";
 import { md } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
-import type { Ev } from "@/shared/types";
+import type { Ev, ExtLink } from "@/shared/types";
 
 /* tiny segmented toggle (rendered|source, rendered|raw, …) */
 export function Segmented({ options, value, onChange }: {
@@ -210,6 +210,30 @@ export function Chip({
     <button type="button" className={cls} onClick={onClick} title={title}>{children}</button>
   ) : (
     <span className={cls} title={title}>{children}</span>
+  );
+}
+
+/* the experiment's external references (manifest `links`) as small outbound chips:
+   paper / source / dataset ids. Long lists (an eval spanning many datasets) wrap;
+   the row stays one visual line of chips, never a section */
+export function ExtLinks({ links }: { links?: ExtLink[] }) {
+  if (!links?.length) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {links.map((l) => (
+        <a
+          key={l.url}
+          href={l.url}
+          target="_blank"
+          rel="noreferrer"
+          title={l.url}
+          className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0 font-mono text-[11px] leading-5 whitespace-nowrap text-muted-foreground hover:border-primary/60 hover:text-foreground"
+        >
+          {l.label}
+          <span aria-hidden className="text-[9px]">↗</span>
+        </a>
+      ))}
+    </span>
   );
 }
 

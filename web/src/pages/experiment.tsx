@@ -3,13 +3,14 @@
    their condition hash, visible on the run detail page, but the GUI does not yet
    group or aggregate by condition.) */
 
-import { displayPhase, useRunsPoll } from "@/lib/data";
-import { PageLoading, PHASES, phaseText } from "@/components/bits";
+import { displayPhase, useManifests, useRunsPoll } from "@/lib/data";
+import { ExtLinks, PageLoading, PHASES, phaseText } from "@/components/bits";
 import { Builder } from "@/components/builder";
 import { RunsTable } from "@/pages/runs";
 
 export function ExperimentPage({ name }: { name: string }) {
   const runs = useRunsPoll();
+  const links = useManifests()?.find((m) => m.name === name)?.links;
 
   const rs = (runs ?? []).filter((r) => r.experiment === name);
 
@@ -18,6 +19,7 @@ export function ExperimentPage({ name }: { name: string }) {
   const header = (
     <div className="flex flex-wrap items-baseline gap-4">
       <h2 className="text-lg font-semibold">{name}</h2>
+      <ExtLinks links={links} />
     </div>
   );
   if (runs === null)
@@ -38,6 +40,7 @@ export function ExperimentPage({ name }: { name: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-4">
         <h2 className="text-lg font-semibold">{name}</h2>
+        <ExtLinks links={links} />
         <span className="flex flex-wrap gap-3 text-xs">
           {PHASES.filter((p) => counts[p]).map((p) => (
             <span key={p} className={phaseText[p]}>{counts[p]} {p}</span>

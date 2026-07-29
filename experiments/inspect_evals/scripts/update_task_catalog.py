@@ -134,6 +134,34 @@ def task_params(fn) -> tuple[dict, dict, list[str]]:
     return params, kwargs_of, sorted(excluded)
 
 
+def eval_links(ev, tag: str) -> list[dict]:
+    """Upstream's declared link metadata -> [{label, url}] for the experiment page.
+
+    `arxiv` is upstream's reference-URL field (not always arxiv); `path` is the
+    eval's directory in the upstream repo, linked at the PINNED tag so the docs
+    match what actually runs; huggingface external assets carry the dataset id.
+    direct_url/git_clone assets are fetch templates (`{SHA}` placeholders), not
+    browsable pages — skipped, they are captured by upstream's pinning, not links.
+    """
+    links = []
+    if ev.arxiv:
+        links.append({"label": "paper", "url": str(ev.arxiv)})
+    if ev.path:
+        links.append({
+            "label": "source",
+            "url": f"https://github.com/UKGovernmentBEIS/inspect_evals/tree/{tag}/{ev.path}",
+        })
+    seen = set()
+    for asset in ev.external_assets or []:
+        if asset.type.value == "huggingface" and asset.source not in seen:
+            seen.add(asset.source)
+            links.append({
+                "label": asset.source,
+                "url": f"https://huggingface.co/datasets/{asset.source}",
+            })
+    return links
+
+
 def first_sentence(text: str) -> str:
     line = " ".join((text or "").strip().split())
     for stop in (". ", "? ", "! "):
@@ -151,6 +179,8 @@ def main() -> int:
     # identity fallback for registry-only tasks (no eval.yaml): the package version —
     # conservative, they re-version on every release
     pkg_version = f"inspect-evals-{importlib.metadata.version('inspect-evals')}"
+    # upstream tags releases vX.Y.Z — source links point at the pinned tag
+    pin_tag = f"v{importlib.metadata.version('inspect-evals')}"
 
     registered = {
         registry_info(t).name.removeprefix("inspect_evals/"): t
@@ -183,6 +213,7 @@ def main() -> int:
                 "sandbox": bool(rt and rt.sandbox),
                 "requires_internet": bool(rt.requires_internet) if rt and rt.requires_internet is not None else True,
                 "dataset_samples": t.dataset_samples,
+                "links": eval_links(ev, pin_tag),
             }
     # registered but absent from the listing: still real, still runnable — carry
     # them with docstring summaries so the catalog never silently drops a task
@@ -202,6 +233,7 @@ def main() -> int:
                 "sandbox": False,
                 "requires_internet": True,
                 "dataset_samples": None,
+                "links": [],
             }
 
     out = {

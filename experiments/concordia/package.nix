@@ -41,6 +41,11 @@ in
     # NOT ./. — tests are not behavior, so a test edit re-versions nothing
     src = [ ./package.nix ./pyproject.toml ./uv.lock ./concordia_sim ];
     summary = "A Concordia generative agent simulation: compose the cast, their goals, and the premise; the transcript streams back as events.";
+    # hand-written (no upstream link registry): the wrapped library and its paper
+    links = [
+      { label = "paper"; url = "https://arxiv.org/abs/2312.03664"; }
+      { label = "source"; url = "https://github.com/google-deepmind/concordia"; }
+    ];
     params = with adb.types; {
       agents = param (listOf (struct {
         name = param str { description = "Character name (the message `from` in the transcript)."; };

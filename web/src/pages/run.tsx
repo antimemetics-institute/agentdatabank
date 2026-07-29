@@ -6,9 +6,9 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { Ev } from "@/shared/types";
-import { api, conds, displayPhase, flattenEv, fmtVal, runCache, uiState, useRunsPoll } from "@/lib/data";
+import { api, conds, displayPhase, flattenEv, fmtVal, runCache, uiState, useManifests, useRunsPoll } from "@/lib/data";
 import type { RunMeta } from "@/shared/types";
-import { Chip, ExitBadge, LiveDot, LoadingBar, PhaseBadge, Skeleton } from "@/components/bits";
+import { Chip, ExitBadge, ExtLinks, LiveDot, LoadingBar, PhaseBadge, Skeleton } from "@/components/bits";
 import { InstanceScoreChips, ResultChip, ResultChips, dedupeMetrics } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
 import { ParamChip } from "@/components/param-value";
@@ -127,6 +127,9 @@ function RunHead({ cid, rid, events, phase }: {
 }) {
   const [details, setDetails] = useState(false);
   const start = events.find((e) => e.type === "run.start") ?? {};
+  /* the experiment's external references (paper / source / datasets) from its
+     manifest — absent for runs of experiments this build doesn't ship */
+  const links = useManifests()?.find((m) => m.name === start.experiment)?.links;
   const end = events.find((e) => e.type === "run.end");
   const lastStatus = [...events].reverse().find((e) => e.type === "status");
   const summary: Record<string, unknown> = end ? end.summary ?? {} : {};
@@ -152,6 +155,7 @@ function RunHead({ cid, rid, events, phase }: {
       </h2>
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
         <span className="font-mono text-xs text-muted-foreground">{cid.slice(0, 12)} · {rid}</span>
+        <ExtLinks links={links} />
         <span>seed <b className="font-semibold">{fmtVal(start.seed)}</b></span>
         <span>replicate <b className="font-semibold">{fmtVal(start.replicate)}</b></span>
         {usage && (

@@ -95,12 +95,20 @@ let
       ${lib.getExe' env "adb-inspect-eval"} "$config"
     '';
   };
+
+  # hand-written (no upstream link registry here). Links are pointers, not pins:
+  # the exact rev lives in pyproject.toml/uv.lock
+  links = [
+    { label = "paper"; url = "https://arxiv.org/abs/2510.20270"; }
+    { label = "source"; url = "https://github.com/safety-research/impossiblebench"; }
+  ];
 in
 {
   impossiblebench-livecodebench = adb.mkExperiment {
     name = "impossiblebench-livecodebench";
     src = ./.;
     summary = "ImpossibleBench LiveCodeBench: function-implementation tasks with impossible test variants — passing an impossible split means the agent gamed the tests";
+    inherit links;
 
     params = with adb.types; {
       model = modelParam;
@@ -142,6 +150,7 @@ in
     name = "impossiblebench-swebench";
     src = ./.;
     summary = "ImpossibleBench SWE-bench: real-repo issue fixing with impossible test variants — passing an impossible split means the agent gamed the tests";
+    inherit links;
 
     params = with adb.types; {
       model = modelParam;

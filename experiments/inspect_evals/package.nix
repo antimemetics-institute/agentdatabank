@@ -22,7 +22,7 @@ let
     (tname: t: lib.nameValuePair
       ("inspect-" + lib.replaceStrings [ "_" ] [ "-" ] tname)
       {
-        inherit (t) task summary sandbox;
+        inherit (t) task summary sandbox links;
         taskParams = t.params;
         paramKwargs = t.param_kwargs;
       })
@@ -53,8 +53,8 @@ let
     { value = "mockllm/model"; description = "Inspect's built-in mock — keyless, offline, deterministic."; }
   ];
 
-  mkTask = name: { task, summary, keyless ? false, sandbox ? false, taskParams ? { }, paramKwargs ? { } }: adb.mkExperiment {
-    inherit name summary;
+  mkTask = name: { task, summary, keyless ? false, sandbox ? false, taskParams ? { }, paramKwargs ? { }, links ? [ ] }: adb.mkExperiment {
+    inherit name summary links;
     # Identity is strict content: the declaration + the env pin — a pin bump
     # re-versions every experiment in the family, and that over-fragmentation is
     # deliberate (identity records, never judges). Read-time pooling re-unifies
