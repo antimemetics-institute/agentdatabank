@@ -18,7 +18,7 @@
    Both modes share the pane: independent scrolling, auto-follow with pause-on-
    scroll-up, and the LiveDot in the header vouching for exactly this stream. */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   Activity, ArrowDown, Brain, CircleCheck, CircleHelp, CircleX, FileJson, FileText,
   Flag, Gauge, Image, Info, Maximize2, MessageSquare, Minimize2, Package, Play,
@@ -30,7 +30,7 @@ import { highlightJson } from "@/lib/markdown";
 import { ExitBadge, InheritedBadge, LiveDot, MdView, PhaseBadge, Segmented } from "@/components/bits";
 import { ResultChip, flattenScores } from "@/components/results";
 import { cn } from "@/lib/utils";
-import { containsElision, elStr, isElided } from "@/lib/content";
+import { containsElision, elStr, isElided, splitContent } from "@/lib/content";
 
 /* ---------------- per-type styling ---------------- */
 
@@ -352,22 +352,22 @@ function LoadFullButton({ onLoad, loading }: { onLoad: () => void; loading: bool
 /* harness-normalized events carry `via: "<normalizer>"` — a provenance stamp:
    secondary record, reconstructed from the tool's session transcript (experiment-
    primary events have no via). Rendered as a subtle badge. */
-/* per-call facts (model, tokens, latency, provenance) — the expansion's first
-   line, not the row header */
-const FactsLine = ({ e }: { e: Ev }) => {
+/* per-call facts (model, tokens, latency, provenance) — one string, two homes:
+   the turn card's first body line (FactsLine) and the flat row's OPEN header
+   (where the collapsed preview was) */
+function factsStr(e: Ev): string {
   const u = e.usage ?? {};
   const served = (e.response as { model?: unknown } | undefined)?.model;
   const model =
     typeof served === "string" && served !== e.model
       ? `${String(e.model ?? "")} → ${served}` /* requested → what the provider reported serving */
       : String(e.model ?? "");
-  return (
-    <div className="font-mono text-[11px] text-muted-foreground">
-      {model} · {fmtVal(u.input_tokens)}+{fmtVal(u.output_tokens)} tok · {fmtVal(e.latency_ms)}ms
-      {e.via ? ` · via ${String(e.via)}` : ""}
-    </div>
-  );
-};
+  return `${model} · ${fmtVal(u.input_tokens)}+${fmtVal(u.output_tokens)} tok · ${fmtVal(e.latency_ms)}ms`
+    + `${e.via ? ` · via ${String(e.via)}` : ""}`;
+}
+const FactsLine = ({ e }: { e: Ev }) => (
+  <div className="font-mono text-[11px] text-muted-foreground">{factsStr(e)}</div>
+);
 
 /* request-section label: new linear streams carry request.derived_from_stream
    (messages: [] — reproducible from the pinned rev + prior events); old pi
@@ -426,37 +426,67 @@ const RawDetails = ({ events, onOpen }: { events: Ev[]; onOpen?: () => void }) =
 const toolsSummary = (chips: { name: string; primary: string }[]): string =>
   chips.map((c) => `${c.name} ${c.primary}`.trim()).join(", ");
 
-/* reasoning is CONTENT, not an attachment: a visible styled block, clamped to ~4
-   lines; only the FULL text hides behind the "show all" expander */
-function ReasoningBlock({ text }: { text: string }) {
-  const [full, setFull] = useState(false);
-  const long = text.length > 300 || text.split("\n").length > 4;
+/* reasoning is CONTENT, not an attachment: a visible styled block. Collapsed it
+   shows a ~4-line plain-text preview; the WHOLE block is the toggle (expand /
+   collapse). Expanding calls onExpand first — on wire-elided events that fetches
+   the full event, so the full reasoning streams into `text` instead of the
+   preview unclamping to itself. Expanded, the text renders as markdown via
+   MdView (with its rendered|source toggle). Clicks on inner controls (the
+   segmented toggle, links) and text selection don't collapse the block.
+   `summarized` comes from the ContentReasoning contract (redacted + summary):
+   the text is a provider-written summary, not the raw chain of thought. */
+function ReasoningBlock({ text, summarized, onExpand }: {
+  text: string; summarized?: boolean; onExpand?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const toggle = (ev: ReactMouseEvent) => {
+    if ((ev.target as HTMLElement).closest("button, a")) return;
+    if (window.getSelection()?.toString()) return;
+    if (!open) onExpand?.();
+    setOpen((o) => !o);
+    /* collapsing removes thousands of px above the viewport when the reader is
+       deep into the text — without this the pane lands on some unrelated later
+       event. Snap back to the (now collapsed) block; "nearest" no-ops when it's
+       already visible. rAF runs after React has committed the collapse. */
+    if (open) requestAnimationFrame(() => ref.current?.scrollIntoView({ block: "nearest" }));
+  };
   return (
     <div
-      className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5"
-      title="the model's reasoning_content — not the assistant message"
+      ref={ref}
+      onClick={toggle}
+      className="cursor-pointer rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 hover:border-border"
+      title={summarized
+        ? "a provider-written summary of the model's thinking — the raw chain of thought was not returned"
+        : "the model's recorded thinking — not the assistant message"}
     >
       <div className="mb-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-        <Brain className="size-3" /> reasoning (provider thinking)
+        <Brain className="size-3" /> reasoning ({summarized ? "provider summary" : "provider thinking"})
+        <span className="ml-auto text-primary">{open ? "collapse" : "expand"}</span>
       </div>
-      <div className={cn(
-        "whitespace-pre-wrap text-xs italic text-muted-foreground",
-        !full && long && "line-clamp-4",
-      )}>
-        {text}
-      </div>
-      {long && (
-        <button
-          type="button"
-          onClick={() => setFull((f) => !f)}
-          className="mt-0.5 text-[10px] text-primary hover:underline"
-        >
-          {full ? "clamp" : `show all · ${text.length} chars`}
-        </button>
+      {open ? (
+        <MdView src={text} />
+      ) : (
+        <div className="line-clamp-4 whitespace-pre-wrap text-xs italic text-muted-foreground">
+          {text}
+        </div>
       )}
     </div>
   );
 }
+
+/* a reasoning block with NO readable text (redacted=true, no summary — e.g.
+   Anthropic redacted_thinking, signature-only Google blocks): a real state that
+   should read as "the model thought, but the provider withheld it", not as
+   nothing having happened */
+const RedactedReasoning = ({ n }: { n: number }) => (
+  <div
+    className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70"
+    title="the provider returned only an opaque reasoning payload (encrypted or signature-only) — no readable text exists for this block"
+  >
+    <Brain className="size-3" /> reasoning redacted by provider{n > 1 ? ` × ${n}` : ""}
+  </div>
+);
 
 /* tool output, visible-by-default: first lines shown, full scrollable block
    behind the expander */
@@ -715,8 +745,7 @@ function TurnCard({ call: callProp, tools, gutters, profile, gutterMode, fetchFu
   };
   const resp = call.response?.message;
   const u = call.usage ?? {};
-  const content = elStr(resp?.content);
-  const reasoning = elStr(resp?.reasoning_content);
+  const { text: content, reasoning, summarized, redacted } = splitContent(resp);
   const respCalls: Ev[] = Array.isArray(resp?.tool_calls) ? resp.tool_calls : [];
   const callEvs = tools.filter((t) => t.kind === "tool_call");
   const resultEvs = tools.filter((t) => t.kind === "tool_result");
@@ -778,9 +807,10 @@ function TurnCard({ call: callProp, tools, gutters, profile, gutterMode, fetchFu
       }))
     : [];
 
-  /* three independent optional components — "empty" means ALL absent */
-  const emptyResp = !call.error && !content.trim() && !reasoning.trim() && !chips.length
-    && (u.output_tokens === 0 || u.output_tokens === undefined);
+  /* three independent optional components — "empty" means ALL absent (a
+     redacted-only turn is thinking we can't read, not a dead turn) */
+  const emptyResp = !call.error && !content.trim() && !reasoning.trim() && !redacted
+    && !chips.length && (u.output_tokens === 0 || u.output_tokens === undefined);
 
   /* seq-range becomes a time-range; seqs + absolute ts stay in the tooltip */
   const g0 = gutters.get(call.seq);
@@ -833,7 +863,10 @@ function TurnCard({ call: callProp, tools, gutters, profile, gutterMode, fetchFu
           </div>
         ) : (
           <>
-            {reasoning.trim() && <ReasoningBlock text={reasoning} />}
+            {reasoning.trim() && (
+              <ReasoningBlock text={reasoning} summarized={summarized} onExpand={ensureFull} />
+            )}
+            {redacted > 0 && <RedactedReasoning n={redacted} />}
             {content.trim() && <MdView src={content} />}
             {elided && (containsElision(resp?.content) || containsElision(resp?.reasoning_content)) && (
               <LoadFullButton onLoad={ensureFull} loading={loadingFull} />
@@ -893,12 +926,12 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
     const u = e.usage ?? {};
     const resp = e.response?.message;
     const respCalls: Ev[] = Array.isArray(resp?.tool_calls) ? resp.tool_calls : [];
-    const content = elStr(resp?.content);
-    const reasoning = elStr(resp?.reasoning_content);
+    const { text: content, reasoning, summarized, redacted } = splitContent(resp);
     /* reasoning, message text, and tool calls are THREE independent optional
-       components; a turn is only "empty" when ALL are absent (~0 output tokens) */
-    const emptyResp = !e.error && !content.trim() && !reasoning.trim() && !respCalls.length
-      && (u.output_tokens === 0 || u.output_tokens === undefined);
+       components; a turn is only "empty" when ALL are absent (~0 output tokens —
+       and a redacted-only turn is thinking we can't read, not a dead turn) */
+    const emptyResp = !e.error && !content.trim() && !reasoning.trim() && !redacted
+      && !respCalls.length && (u.output_tokens === 0 || u.output_tokens === undefined);
     if (e.error) s = { ...s, badge: RED, icon: RED_ICON };
     const toolSum = toolsSummary(respCalls.map((tc) => ({
       name: toolName(tc),
@@ -929,21 +962,26 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
             {content.trim() ? content : reasoning.trim() ? `thinking: ${reasoning}` : `→ ${toolSum}`}
           </span>
         )}
+        {/* open-row header: the preview above hides, the per-call facts take its
+            place — the header stays informative instead of going empty */}
+        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground group-open:inline">
+          {factsStr(e)}
+        </span>
       </>
     );
+    /* facts live in the open header (factsStr span above), not the payload */
     payload = e.error ? (
+      <div className="text-sm text-red-700 dark:text-red-400">
+        error: {e.error.kind} — {e.error.message}
+      </div>
+    ) : reasoning.trim() || redacted > 0 || content.trim() || respCalls.length || e.request ? (
       <>
-        <FactsLine e={e} />
-        <div className="text-sm text-red-700 dark:text-red-400">
-          error: {e.error.kind} — {e.error.message}
-        </div>
-      </>
-    ) : reasoning.trim() || content.trim() || respCalls.length || e.request ? (
-      <>
-        <FactsLine e={e} />
-        {reasoning.trim() && <ReasoningBlock text={reasoning} />}
+        {reasoning.trim() && (
+          <ReasoningBlock text={reasoning} summarized={summarized} onExpand={ensureFull} />
+        )}
+        {redacted > 0 && <RedactedReasoning n={redacted} />}
         {content.trim() && <MdView src={content} />}
-        {elided && (isElided(resp?.content) || isElided(resp?.reasoning_content)) && (
+        {elided && (containsElision(resp?.content) || containsElision(resp?.reasoning_content)) && (
           <LoadFullButton onLoad={ensureFull} loading={loadingFull} />
         )}
         {respCalls.map((tc, i) => {
@@ -1221,6 +1259,9 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
         title={rowTitle}
         className={cn(
         "flex cursor-pointer items-baseline gap-2 px-2 hover:bg-muted/40 [&::-webkit-details-marker]:hidden",
+        /* open rows: keep the header at least two text rows tall — a thin
+           near-empty strip reads as broken and is a poor collapse target */
+        "group-open:min-h-12",
         quiet ? "py-0.5" : "py-1",
       )}>
         <Gutter g={gutter} />
