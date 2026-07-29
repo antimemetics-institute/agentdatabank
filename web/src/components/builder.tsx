@@ -4,11 +4,14 @@
    defaults (a manifest's `initial` only prefills this form), so the oneliner is
    the complete condition spec — nothing hidden at the experiment level, and an
    author changing an `initial` can never change what a pasted oneliner means.
+   Edits persist per experiment across navigation (lib/run-draft, localStorage),
+   and llm params on a fresh form seed from the last model entered anywhere.
    Degrades to a note when the server has no manifests dir (bare dev.sh). */
 
 import { Fragment, useMemo, useState } from "react";
 import { buildCmd, defaultStr, initialStr, orderedParams } from "@/lib/cmd-build";
 import { useCmdPrefs } from "@/lib/cmd-prefs";
+import { clearDraft, getLastLlm, loadDraft, saveDraft, setLastLlm } from "@/lib/run-draft";
 import { rewriteCmd } from "@/lib/cmd-rewrite";
 import { useManifests } from "@/lib/data";
 import { Card } from "@/components/ui/card";
@@ -95,11 +98,13 @@ function NumberInput({ value, onChange, float }: {
   );
 }
 
-/* a field's "empty" value, used for fresh rows and cleared cells */
+/* a field's "empty" value, used for fresh rows and cleared cells — an llm cell
+   starts at the last model entered anywhere, same seed as top-level params */
 const zeroOf = (t: ParamType): unknown =>
   t.kind === "int" || t.kind === "float" ? 0
   : t.kind === "bool" ? false
   : t.kind === "enum" ? (t.values?.[0] ?? "")
+  : t.kind === "llm" ? getLastLlm()
   : "";
 
 /* a struct field is a bare type or a param-wrapped one carrying hints (suggestions,
@@ -161,6 +166,7 @@ export function StructListEditor({ decl, value, onChange }: {
     let v = rawVal === "" ? zeroOf(t.type) : coerce(rawVal, t.type.kind);
     if (typeof v === "number" && Number.isNaN(v)) v = zeroOf(t.type);
     next[i]![f] = v;
+    if (t.type.kind === "llm") setLastLlm(rawVal);
     onChange(serialize(next));
   };
   if (raw || rows === null)
@@ -245,6 +251,7 @@ export function ScalarListEditor({ decl, value, onChange }: {
     let v = rawVal === "" ? zeroOf(of) : coerce(rawVal, of.kind);
     if (typeof v === "number" && Number.isNaN(v)) v = zeroOf(of);
     next[i] = v;
+    if (of.kind === "llm") setLastLlm(rawVal);
     onChange(JSON.stringify(next));
   };
   return (
@@ -357,6 +364,7 @@ function VariantObject({ schema, value, onChange }: {
     const next = { ...obj };
     if (rawVal === "" || rawVal === initialStr(decl)) delete next[f];
     else next[f] = coerce(rawVal, decl.type.kind);
+    if (decl.type.kind === "llm") setLastLlm(rawVal);
     onChange(JSON.stringify(next)); /* "{}" == default → omitted from the oneliner */
   };
   const visible = expanded ? fields : fields.filter(([f]) => f in obj);
@@ -419,9 +427,21 @@ function CopyIcon({ copied }: { copied: boolean }) {
   );
 }
 
+/* remounts the form per experiment: the hash router reuses the tree position when
+   navigating straight from one experiment page to another, so without the key the
+   draft initializer would not rerun (and one experiment's edits would bleed into
+   the next's form) */
 export function Builder({ name }: { name: string }) {
+  return <BuilderForm key={name} name={name} />;
+}
+
+function BuilderForm({ name }: { name: string }) {
   const manifests = useManifests();
-  const [vals, setVals] = useState<Record<string, string>>({});
+  /* edits survive navigating away and back: seeded from the stored draft, written
+     back on every change. The draft holds user edits only — materialized defaults
+     never persist, so a later manifest change still shows through on untouched
+     params. */
+  const [vals, setVals] = useState<Record<string, string>>(() => loadDraft(name));
   const [copied, setCopied] = useState(false);
   /* open by default: the overview's zero-run cards point here to compose a first
      command, so the form is the page's primary content */
@@ -430,23 +450,38 @@ export function Builder({ name }: { name: string }) {
   const manifest = manifests?.find((m) => m.name === name);
   const params = manifest?.params ?? {};
 
+  /* the remembered model layered under the user's edits: a fresh form's llm
+     params start at the last llm value entered anywhere (this form or another
+     experiment's), beating the manifest's declared default — your model, not the
+     author's. Kept out of `vals` so dirty/reset semantics see user edits only.
+     Nullable llm params are excluded: their blank means bound-to-null. Snapshotted
+     at mount (refreshed on reset) so an untouched field never flips live while
+     you type a model elsewhere in the same form. */
+  const [lastLlm, setLastLlmSnap] = useState(getLastLlm);
+  const seeded = useMemo(() => {
+    const out = { ...vals };
+    for (const [k, d] of Object.entries(params))
+      if (d.type.kind === "llm" && !d.nullable && !out[k] && lastLlm) out[k] = lastLlm;
+    return out;
+  }, [vals, params, lastLlm]);
+
   /* what the form shows = what the command carries: the user's value, else the
      param's declared default (initial / first suggestion / first enum member) —
      so a fresh form is already a complete, runnable condition. Nullable params
      stay blank instead: empty means bound-to-null, not defaulted. */
   const eff = (k: string): string => {
     const decl = params[k]!;
-    const v = vals[k] ?? "";
+    const v = seeded[k] ?? "";
     if (v !== "") return v;
     return decl.nullable ? "" : defaultStr(decl);
   };
   const set = (k: string, v: string) => {
-    setVals((s) => {
-      const next: Record<string, string> = { ...s, [k]: v };
-      // a variant object's fields depend on this param — clear it so it re-derives
-      for (const [pk, pd] of Object.entries(params)) if (pd.depends_on === k) delete next[pk];
-      return next;
-    });
+    const next: Record<string, string> = { ...vals, [k]: v };
+    // a variant object's fields depend on this param — clear it so it re-derives
+    for (const [pk, pd] of Object.entries(params)) if (pd.depends_on === k) delete next[pk];
+    setVals(next);
+    saveDraft(name, next);
+    if (params[k]?.type.kind === "llm") setLastLlm(v);
     setCopied(false);
   };
 
@@ -458,9 +493,9 @@ export function Builder({ name }: { name: string }) {
      the copied text. */
   const prefs = useCmdPrefs();
   const { oneliner, missing } = useMemo(() => {
-    const { cmd, missing } = buildCmd(name, params, vals);
+    const { cmd, missing } = buildCmd(name, params, seeded);
     return { oneliner: rewriteCmd(cmd, prefs), missing };
-  }, [name, params, vals, prefs]);
+  }, [name, params, seeded, prefs]);
 
   const copy = () => {
     if (missing.length > 0) return;
@@ -498,7 +533,12 @@ export function Builder({ name }: { name: string }) {
         <div className="space-y-3 px-4 pb-4">
           {dirty && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <button type="button" className={BTN} onClick={() => { setVals({}); setCopied(false); }}>
+              <button type="button" className={BTN}
+                onClick={() => {
+                  /* back to a fresh form — including the llm seed, so reset shows
+                     what a remount would (the model you typed still wins) */
+                  setVals({}); clearDraft(name); setLastLlmSnap(getLastLlm()); setCopied(false);
+                }}>
                 reset
               </button>
             </div>
