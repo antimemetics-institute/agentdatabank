@@ -1,7 +1,16 @@
-# CI mirrors the Taskfile's check surface (task lock:check / test / typecheck) plus
-# the nix acceptance paths: registry eval, a keyless run, entrypoint-identity, and
-# the authoring loop (adb-dev init → build → run). Keyless throughout — mockllm/mock
-# only, no provider credentials, no docker experiments.
+# CI runs exactly what `task ci` runs locally, through the same flake-pinned dev
+# shell — one toolchain (uv, python, pnpm, node, ty, mdbook all from flake.lock),
+# no action-installed versions to keep in sync, and a green `task ci` on a dev
+# machine predicts a green run here. Keyless throughout — mockllm/mock only, no
+# provider credentials, no docker experiments.
+#
+# Per-check visibility lives in the log: task prefixes every command with its
+# target (`task: [typecheck] …`) and a failure names the failing target. The
+# only things that still float are the runner OS and nix itself.
+#
+# Docs are deliberately NOT part of this surface — they build and deploy on
+# their own fast, paths-filtered lane (docs.yml) so doc iteration never waits
+# on the full check suite.
 name: ci
 
 on:
@@ -14,59 +23,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # uv.lock freshness + python unit tests — no nix involved
-  python:
+  ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-
-      - name: uv lock freshness (task lock:check)
-        run: |
-          for dir in $(git ls-files '*uv.lock' | xargs -n1 dirname); do
-            echo "uv lock --check: $dir"
-            (cd "$dir" && uv lock --check) || exit 1
-          done
-
-      - name: runner tests
-        working-directory: runner
-        run: uv run -q pytest -q
-      - name: adb-events tests
-        working-directory: lib/adb-events
-        run: uv run -q pytest -q
-      - name: adb-inspect tests
-        working-directory: lib/adb-inspect
-        run: uv run -q pytest -q
-      - name: concordia tests
-        working-directory: experiments/concordia
-        run: uv run -q pytest -q
-
-  # web unit tests + render guard + production build (the manifest oneliner
-  # sweep self-skips without ADB_WEB_MANIFESTS; the nix job's manifests build
-  # covers that surface at eval level)
-  web:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-      - run: pnpm --dir web install --frozen-lockfile
-      - run: pnpm --dir web typecheck
-      - run: pnpm --dir web test
-      - run: bash web/build.sh
-
-  # the nix acceptance path: everything an experiment consumer or author touches
-  nix:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       # nix-shell -p (the nix-run leg of the entrypoint check) resolves <nixpkgs>
       # from here; the installer action doesn't set one
@@ -88,57 +47,18 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', '**/uv.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 5G
+      # the nix store cache covers the built environments; these cover what the
+      # devshell's own uv/pnpm download at `uv run` / `pnpm install` time
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
 
-      - name: registry eval — build every experiment's manifest
-        run: nix-build --no-out-link -A manifests
-
-      # through the dev shell so CI runs the exact ty the flake pins — classic
-      # nix-shell included: shell.nix defaults pkgs to default.nix, which reads
-      # flake.lock (one lock, two doors), so this ignores NIX_PATH and needs no
-      # version literal kept in sync
-      - name: typecheck — shared libs + runner
-        run: nix-shell --run 'task typecheck'
-
-      - name: keyless run — inspect-hello on the mock model
-        run: |
-          ADB_HOME="$RUNNER_TEMP/adb-home" \
-            "$(nix-build --no-out-link -A exec.inspect-hello)" \
-            --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
-
-      - name: entrypoint identity — nix run / nix run -f / nix-build / nix-run mint the same condition
-        run: ./scripts/check-entrypoint-identity.sh
-
-      - name: authoring loop — init at the parent rev, bump to HEAD, run through every door
-        run: |
-          # a bare mirror whose `main` IS this build's commit — the scaffold's
-          # pin block hardcodes ref = "main", and on PRs the merge commit being
-          # built is not reachable from the real main
-          adbsrc="$RUNNER_TEMP/adb-src.git"
-          git init --bare --quiet -b main "$adbsrc"  # -b: uv fetches HEAD, which must resolve
-          git push --quiet "$adbsrc" HEAD:refs/heads/main
-          head=$(git rev-parse HEAD)
-          parent=$(git rev-parse HEAD^)
-
-          scaffold="$RUNNER_TEMP/ci-chat"
-          adb_dev="$(nix-build --no-out-link -A exec.adb-dev)"
-
-          # init pins the PARENT rev with --no-lock (nothing resolves against
-          # it), so bump has a real move to make; then every pinned surface —
-          # default.nix, pyproject sources, uv.lock — must land on HEAD
-          "$adb_dev" init ci-chat --dir "$scaffold" --adb-url "file://$adbsrc" \
-            --rev "$parent" --no-lock
-          (cd "$scaffold" && "$adb_dev" bump --rev "$head")
-          test "$(cd "$scaffold" && "$adb_dev" pin)" = "$head"
-          grep -q "rev = \"$head\"" "$scaffold/pyproject.toml"
-          grep -qF "$head" "$scaffold/uv.lock"
-
-          # a real keyless run through the adb checkout's --arg door
-          ADB_HOME="$RUNNER_TEMP/adb-home" \
-            "$(nix-build --no-out-link -A exec.ci-chat --arg experiments "$scaffold")" \
-            --set 'prompt=Say one surprising thing.' --set turns=2 \
-            --set model=mock/model --set temperature=0.7
-
-          # and the scaffold's own doors (its default.nix + fetchGit pin) agree
-          ./scripts/check-entrypoint-identity.sh --dir "$scaffold" --exp ci-chat -- \
-            --set 'prompt=Say one surprising thing.' --set turns=2 \
-            --set model=mock/model --set temperature=0.7
+      - name: task ci — the full check surface, same command as local
+        run: nix-shell --run 'task ci'

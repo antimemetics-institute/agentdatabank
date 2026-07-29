@@ -24,11 +24,16 @@ tasks:
   test:
     desc: run python unit tests (runner, the event emitters, the shared inspect wrapper, concordia) via uv, then the web suite
     cmds:
+      - task: test:python
+      - task: web:test
+
+  test:python:
+    desc: the python unit tests alone (runner, the event emitters, the shared inspect wrapper, concordia) via uv
+    cmds:
       - cd runner && uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
       - cd experiments/concordia && uv run -q pytest -q
-      - task: web:test
 
   typecheck:
     desc: ty over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first
@@ -44,6 +49,11 @@ tasks:
     desc: web unit tests + render guard, with the nix-built manifests so the oneliner sweep runs against every real experiment
     cmds:
       - ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" pnpm --dir web test
+
+  web:typecheck:
+    desc: typescript check of the web app (tsc --noEmit)
+    cmds:
+      - pnpm --dir web typecheck
 
   web:build:
     desc: build the web dist (vite frontend + server bundle) into web/dist
@@ -158,6 +168,27 @@ tasks:
     dir: lib/adb-inspect
     cmds:
       - uv run -q python scripts/update_generate_fields.py
+
+  ci:
+    desc: the full check surface, cheap checks first — CI runs exactly this (ci.yml is setup + `nix-shell --run 'task ci'`), so a green run here predicts a green CI, modulo the runner's OS
+    cmds:
+      - task: lock:check
+      - task: typecheck
+      - task: test:python
+      - pnpm --dir web install --frozen-lockfile
+      - task: web:typecheck
+      - task: web:test
+      - task: web:build
+      # docs deliberately excluded — they ride their own fast lane (docs.yml)
+      # registry eval through the classic door (web:test forced the flake door)
+      - nix-build --no-out-link -A manifests
+      # keyless run — inspect-hello on the mock model, databank in a throwaway home
+      - |
+        ADB_HOME="$(mktemp -d)" \
+          "$(nix-build --no-out-link -A exec.inspect-hello)" \
+          --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
+      - ./scripts/check-entrypoint-identity.sh
+      - ./scripts/check-authoring-loop.sh
 
   check:
     desc: nix flake check + uv lock freshness

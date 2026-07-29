@@ -1,3 +1,11 @@
+# Docs on their own fast lane, deliberately OUTSIDE task ci and the ci workflow:
+# a docs-only push deploys in about a minute instead of riding the full check
+# suite. mdbook still comes from the flake-pinned nixpkgs (default.nix reads
+# flake.lock — same mdbook as `task docs:build`), but through a one-package shell
+# so the workflow downloads mdbook's closure, not the whole devshell.
+#
+# pull_request builds the book as a check (no deploy) — a doc-breaking PR
+# surfaces before merge, not at deploy time on main.
 name: docs
 
 on:
@@ -6,46 +14,46 @@ on:
     paths:
       - "docs/book/**"
       - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/book/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: NixOS/nix-installer-action@main
 
-      - name: Install mdBook
-        env:
-          MDBOOK_VERSION: v0.5.2
+      - name: Build book — flake-pinned mdbook, without the full devshell
         run: |
-          mkdir -p "$HOME/.local/bin"
-          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/${MDBOOK_VERSION}/mdbook-${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar -xz -C "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Build book
-        working-directory: docs/book
-        run: mdbook build
+          nix-shell -E 'let pkgs = (import ./. { }).pkgs; in pkgs.mkShell { packages = [ pkgs.mdbook ]; }' \
+            --run 'mdbook build docs/book'
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: docs/book/book
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
