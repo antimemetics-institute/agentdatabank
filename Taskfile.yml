@@ -22,9 +22,10 @@ tasks:
       - nix run .#impossiblebench-livecodebench -- --describe | jq .
 
   test:
-    desc: run python unit tests (runner, the shared inspect wrapper, concordia) via uv, then the web suite
+    desc: run python unit tests (runner, the event emitters, the shared inspect wrapper, concordia) via uv, then the web suite
     cmds:
       - cd runner && uv run -q pytest -q
+      - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
       - cd experiments/concordia && uv run -q pytest -q
       - task: web:test

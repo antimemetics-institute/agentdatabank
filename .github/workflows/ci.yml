@@ -32,6 +32,9 @@ jobs:
       - name: runner tests
         working-directory: runner
         run: uv run -q pytest -q
+      - name: adb-events tests
+        working-directory: lib/adb-events
+        run: uv run -q pytest -q
       - name: adb-inspect tests
         working-directory: lib/adb-inspect
         run: uv run -q pytest -q
