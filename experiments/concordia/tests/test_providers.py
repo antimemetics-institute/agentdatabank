@@ -42,17 +42,13 @@ def test_openrouter_keeps_org_in_served_model():
     assert ep.base_url == "https://openrouter.ai/api/v1"
 
 
-def test_azure_and_bedrock_take_the_full_mount_verbatim():
+def test_azure_takes_the_full_mount_verbatim():
     ep = resolve("azureai/my-gpt5-deployment",
                  {"AZUREAI_API_KEY": "k",
                   "AZUREAI_BASE_URL": "https://myres.openai.azure.com/openai/v1"})
     assert ep.base_url == "https://myres.openai.azure.com/openai/v1"
     assert ep.served_model == "my-gpt5-deployment"
-    ep = resolve("bedrock/us.anthropic.claude-sonnet-4-6",
-                 {"AWS_BEARER_TOKEN_BEDROCK": "k",
-                  "BEDROCK_BASE_URL": "https://bedrock-runtime.us-east-1.amazonaws.com/v1"})
-    assert ep.served_model == "us.anthropic.claude-sonnet-4-6"
-    # no universal origin for either — the base-url env var is required
+    # no universal origin — the base-url env var is required
     with pytest.raises(ValueError, match="AZUREAI_BASE_URL"):
         resolve("azureai/my-deployment", {"AZUREAI_API_KEY": "k"})
 

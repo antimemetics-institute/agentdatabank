@@ -10,7 +10,7 @@
 
 let
   catalog = builtins.fromJSON (builtins.readFile ./model_catalog.json);
-  order = [ "anthropic" "openai" "google" "groq" "mistral" "grok" "moonshotai" "bedrock" "openrouter" ];
+  order = [ "anthropic" "openai" "google" "groq" "mistral" "grok" "moonshotai" "openrouter" ];
   fromCatalog = lib.concatMap
     (prefix:
       let p = catalog.providers.${prefix}; in

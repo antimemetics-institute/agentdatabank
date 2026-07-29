@@ -48,7 +48,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 <div class="adb-tabs">
   <input type="radio" name="adb-provider-tab" id="ptab-anthropic" checked>
   <input type="radio" name="adb-provider-tab" id="ptab-openai">
-  <input type="radio" name="adb-provider-tab" id="ptab-gemini">
+  <input type="radio" name="adb-provider-tab" id="ptab-google">
   <input type="radio" name="adb-provider-tab" id="ptab-groq">
   <input type="radio" name="adb-provider-tab" id="ptab-moonshotai">
   <input type="radio" name="adb-provider-tab" id="ptab-openrouter">
@@ -57,7 +57,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
   <div class="adb-tab-labels">
     <label for="ptab-anthropic">anthropic</label>
     <label for="ptab-openai">openai</label>
-    <label for="ptab-gemini">gemini</label>
+    <label for="ptab-google">google</label>
     <label for="ptab-groq">groq</label>
     <label for="ptab-moonshotai">moonshotai</label>
     <label for="ptab-openrouter">openrouter</label>
@@ -90,11 +90,11 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
   <div>
 
 > ```text
-> GEMINI_API_KEY [unset]: ****
-> save 'gemini' for future runs? [Y/n]:
+> GOOGLE_API_KEY [unset]: ****
+> save 'google' for future runs? [Y/n]:
 > ```
 >
-> Model ids: `gemini/…`, e.g. `gemini/gemini-2.5-pro`.
+> Model ids: `google/…`, e.g. `google/gemini-2.5-pro`.
 
   </div>
   <div>

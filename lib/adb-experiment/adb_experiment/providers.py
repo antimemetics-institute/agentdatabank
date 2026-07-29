@@ -56,13 +56,10 @@ PROVIDERS: dict[str, _Spec] = {
                         "https://api.moonshot.ai/v1"),
     "openrouter": _Spec("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL",
                         "https://openrouter.ai/api/v1"),
-    # No universal origin for these two — the base-url env var is required and holds
-    # the full mount verbatim. azureai: the v1 surface, `https://<resource>
-    # .openai.azure.com/openai/v1`, model = your deployment name. bedrock: e.g.
-    # `https://bedrock-runtime.<region>.amazonaws.com/v1` with a Bedrock API key,
-    # model = the Bedrock model id (`us.anthropic.claude-...`).
+    # No universal origin — the base-url env var is required and holds the full
+    # mount verbatim: the v1 surface, `https://<resource>.openai.azure.com/openai/v1`,
+    # model = your deployment name.
     "azureai": _Spec("AZUREAI_API_KEY", "AZUREAI_BASE_URL", None),
-    "bedrock": _Spec("AWS_BEARER_TOKEN_BEDROCK", "BEDROCK_BASE_URL", None),
 }
 
 

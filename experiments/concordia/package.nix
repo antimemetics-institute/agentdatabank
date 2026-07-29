@@ -13,8 +13,8 @@
 # network), against any OpenAI-compatible /chat/completions server via
 # `openai/<served-name>`, or against a hosted provider's OpenAI-compatibility
 # endpoint (`anthropic/`, `google/`, `groq/`, `mistral/`, `grok/`, `openrouter/`,
-# `azureai/`, `bedrock/` — see adb_experiment/providers.py) — endpoint and key come
-# from the credential store, never from params.
+# `azureai/` — see adb_experiment/providers.py) — endpoint and key come from the
+# credential store, never from params.
 { adb, lib, writeShellApplication, jq }:
 
 let
@@ -86,7 +86,7 @@ in
         group = "scenario";
       };
       model = param llm {
-        description = "Model for the game master and every agent whose roster row leaves its override empty (provider/model). `mock/model` runs keyless and offline; `openai/<served-name>` reaches any OpenAI-compatible /chat/completions server; `anthropic/`, `google/`, `groq/`, `mistral/`, `grok/`, `openrouter/`, `azureai/`, and `bedrock/` reach those providers' OpenAI-compatibility endpoints.";
+        description = "Model for the game master and every agent whose roster row leaves its override empty (provider/model). `mock/model` runs keyless and offline; `openai/<served-name>` reaches any OpenAI-compatible /chat/completions server; `anthropic/`, `google/`, `groq/`, `mistral/`, `grok/`, `openrouter/`, and `azureai/` reach those providers' OpenAI-compatibility endpoints.";
         initial = "mock/model";
         suggestions = [ mockSuggestion ];
         order = 1000;

@@ -33,7 +33,6 @@ REGISTRY: dict[str, list[tuple[str, bool, str | None]]] = {
                ("OPENAI_BASE_URL", False, "https://api.openai.com/v1")],
     "anthropic": [("ANTHROPIC_API_KEY", True, None),
                   ("ANTHROPIC_BASE_URL", False, "https://api.anthropic.com")],
-    "gemini": [("GEMINI_API_KEY", True, None)],
     "google": [("GOOGLE_API_KEY", True, None)],
     "groq": [("GROQ_API_KEY", True, None)],
     "mistral": [("MISTRAL_API_KEY", True, None)],

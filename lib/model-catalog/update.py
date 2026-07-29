@@ -70,7 +70,6 @@ PROVIDERS = {
     # moonshotai = the global api.moonshot.ai endpoint (models.dev's moonshotai-cn
     # is the .cn mainland deployment — separate lineup, not listed)
     "moonshotai": ("moonshotai", "moonshot", "moonshot/", "Needs MOONSHOTAI_API_KEY (asked for on first run)."),
-    "bedrock": ("amazon-bedrock", None, "", "Uses your AWS credentials (AWS_ACCESS_KEY_ID / profile) and region."),
 }
 
 # live /models endpoints, queried only when the key env var is set: the public

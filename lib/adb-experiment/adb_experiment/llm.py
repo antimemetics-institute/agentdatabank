@@ -7,7 +7,7 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
 
   * the model id's provider prefix picks the endpoint and credential set
     (:mod:`adb_experiment.providers` — openai, anthropic, google, groq, mistral, grok,
-    openrouter, azureai, bedrock; each an OpenAI-compatible mount), and ``mock/...``
+    openrouter, azureai; each an OpenAI-compatible mount), and ``mock/...``
     runs keyless and offline with a deterministic responder — the smoke/CI path,
     uniform across experiments (the runner's mock convention);
   * every call emits one ``llm.call`` event — the verbatim reply, token usage, and
