@@ -132,6 +132,15 @@ tasks:
           (cd "$dir" && uv lock --check) || exit 1
         done
 
+  lock:update:
+    desc: relock every uv project — run after any pyproject edit; a lib change cascades (consumer locks embed path-dep metadata, e.g. adb-inspect deps → the inspect experiments' locks)
+    cmds:
+      - |
+        for dir in $(git ls-files '*uv.lock' | xargs -n1 dirname); do
+          echo "uv lock: $dir"
+          (cd "$dir" && uv lock) || exit 1
+        done
+
   models:update:
     desc: regenerate lib/model-catalog/model_catalog.json (the types.llm model hints — provider knowledge, wrapper-agnostic) from first-party id sources + public catalogs
     dir: lib/model-catalog
