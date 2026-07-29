@@ -27,10 +27,14 @@ newest are); (2) the provider's authenticated /models endpoint, when a key is
 available in the environment or the adb runner's credential store
 (`adb-runner providers` / ~/.config/adb/providers.toml). Keyless runs are
 first-class: SDK literals cover the id-form question without credentials.
-Providers listed here are exactly the API-backed providers whose SDKs adb-inspect
-installs (an explicit map, deliberately not discovered); pattern-style providers
-(azureai deployments, openai-api/openrouter passthrough) are static hints in
-suggestions.nix instead, since they have no enumerable model list.
+Providers listed here are the API-backed providers with a first-party enumerable
+model list and a declared mapping in at least one wrapper (an explicit map,
+deliberately not discovered) — first-class in the `types.llm` vocabulary whether
+they have a dedicated SDK (anthropic, groq, …) or are reached over an
+OpenAI-compatible mount (moonshotai); which wire a wrapper uses is that wrapper's
+concern, not the user's. Pattern-style providers (azureai deployments,
+openai-api/openrouter passthrough) are static hints in suggestions.nix instead,
+since they have no enumerable (or no bounded) model list.
 
 Output is deterministic for unchanged upstream data (no timestamps): a clean
 `git diff` after running IS the update.
@@ -57,6 +61,9 @@ PROVIDERS = {
     "groq": ("groq", "groq", "groq/", "Needs GROQ_API_KEY (asked for on first run)."),
     "mistral": ("mistral", "mistral", "mistral/", "Needs MISTRAL_API_KEY (asked for on first run)."),
     "grok": ("xai", "xai", "xai/", "Needs GROK_API_KEY (asked for on first run)."),
+    # moonshotai = the global api.moonshot.ai endpoint (models.dev's moonshotai-cn
+    # is the .cn mainland deployment — separate lineup, not listed)
+    "moonshotai": ("moonshotai", "moonshot", "moonshot/", "Needs MOONSHOTAI_API_KEY (asked for on first run)."),
     "bedrock": ("amazon-bedrock", None, "", "Uses your AWS credentials (AWS_ACCESS_KEY_ID / profile) and region."),
 }
 
@@ -70,6 +77,7 @@ PROVIDER_APIS = {
     "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1/models", "bearer"),
     "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1/models", "bearer"),
     "grok": ("XAI_API_KEY", "https://api.x.ai/v1/models", "bearer"),
+    "moonshotai": ("MOONSHOTAI_API_KEY", "https://api.moonshot.ai/v1/models", "bearer"),
 }
 
 # First-party, public, keyless id lists — each provider's own declaration of the

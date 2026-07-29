@@ -38,6 +38,8 @@ REGISTRY: dict[str, list[tuple[str, bool, str | None]]] = {
     "groq": [("GROQ_API_KEY", True, None)],
     "mistral": [("MISTRAL_API_KEY", True, None)],
     "grok": [("GROK_API_KEY", True, None)],
+    "moonshotai": [("MOONSHOTAI_API_KEY", True, None),
+                   ("MOONSHOTAI_BASE_URL", False, "https://api.moonshot.ai/v1")],
     "openrouter": [("OPENROUTER_API_KEY", True, None),
                    ("OPENROUTER_BASE_URL", False, "https://openrouter.ai/api/v1")],
     "azureai": [("AZUREAI_API_KEY", True, None),

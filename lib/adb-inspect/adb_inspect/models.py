@@ -8,7 +8,37 @@ resulting EvalLog into ADB events (docs/plan/experiments/inspect.md).
 
 from __future__ import annotations
 
+import os
+
 from pydantic import BaseModel, ConfigDict, Field
+
+# ADB canonical provider prefix -> (inspect's name for the same backend, env-var
+# bridge from ADB's canonical vars to the vars inspect's provider reads). The
+# `types.llm` vocabulary speaks provider names (`moonshotai/kimi-k3`, matching the
+# provider's own org naming); which spelling inspect_ai gives its backend for that
+# provider is this wrapper's concern. Explicit per provider — never inferred from
+# the id's shape.
+INSPECT_PROVIDER_REMAP: dict[str, tuple[str, dict[str, str]]] = {
+    "moonshotai": ("moonshot", {"MOONSHOTAI_API_KEY": "MOONSHOT_API_KEY",
+                                "MOONSHOTAI_BASE_URL": "MOONSHOT_BASE_URL"}),
+}
+
+
+def inspect_model(model: str) -> str:
+    """The model id `inspect_ai.eval` should receive for an ADB model id.
+
+    Params and emitted events keep the canonical ADB id (it is the condition);
+    only the eval call sees inspect's spelling. Bridged env vars are copied,
+    never overwritten — an explicitly set inspect-native var wins."""
+    provider, sep, rest = model.partition("/")
+    remap = INSPECT_PROVIDER_REMAP.get(provider) if sep else None
+    if remap is None:
+        return model
+    name, env_bridge = remap
+    for src, dst in env_bridge.items():
+        if os.environ.get(src) and not os.environ.get(dst):
+            os.environ[dst] = os.environ[src]
+    return f"{name}/{rest}"
 
 
 class Params(BaseModel):

@@ -42,7 +42,7 @@ nix run .#adb-runner -- credentials <list|set|remove|path>
 | `remove <name>` | Delete a set. |
 | `path` | Print the store file path. |
 
-File: `~/.config/adb/credentials.toml` (0600); override with `$ADB_CREDENTIALS_FILE` (also the CI interface — materialize it from your pipeline's secret manager). Built-in names (`openai`, `anthropic`, `gemini`, `groq`, `openrouter`, `azureai`) are prompt templates only; any other name is a named set (`<NAME>_API_KEY`/`<NAME>_BASE_URL`, reached by `openai-api/<name>/<model>` ids). An interactive run that needs an unconfigured set prompts for it inline. See [Credentials](../running/secrets.md).
+File: `~/.config/adb/credentials.toml` (0600); override with `$ADB_CREDENTIALS_FILE` (also the CI interface — materialize it from your pipeline's secret manager). Built-in names (`openai`, `anthropic`, `gemini`, `groq`, `moonshotai`, `openrouter`, `azureai`) are prompt templates only; any other name is a named set (`<NAME>_API_KEY`/`<NAME>_BASE_URL`, reached by `openai-api/<name>/<model>` ids). An interactive run that needs an unconfigured set prompts for it inline. See [Credentials](../running/secrets.md).
 
 ## Environment variables
 

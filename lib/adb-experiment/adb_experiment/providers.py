@@ -52,6 +52,8 @@ PROVIDERS: dict[str, _Spec] = {
     "groq": _Spec("GROQ_API_KEY", "GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
     "mistral": _Spec("MISTRAL_API_KEY", "MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
     "grok": _Spec("GROK_API_KEY", "GROK_BASE_URL", "https://api.x.ai/v1"),
+    "moonshotai": _Spec("MOONSHOTAI_API_KEY", "MOONSHOTAI_BASE_URL",
+                        "https://api.moonshot.ai/v1"),
     "openrouter": _Spec("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL",
                         "https://openrouter.ai/api/v1"),
     # No universal origin for these two — the base-url env var is required and holds

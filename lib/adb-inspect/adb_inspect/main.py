@@ -23,7 +23,7 @@ from pathlib import Path
 import yaml
 
 from adb_events.emit import artifact, emit_raw, log, metric, set_output, status
-from .models import Params
+from .models import Params, inspect_model
 from .translate import (emit_aggregate, emit_live_model_event, emit_provenance,
                         emit_sample)
 
@@ -47,7 +47,7 @@ def resolve_task(spec: str):
 
 def eval_kwargs(params: Params, log_dir: Path) -> dict:
     kw: dict = {
-        "model": params.model,
+        "model": inspect_model(params.model),
         "task_args": params.task_args,
         "model_args": params.model_args,
         "log_dir": str(log_dir),

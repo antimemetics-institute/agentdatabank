@@ -50,6 +50,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
   <input type="radio" name="adb-provider-tab" id="ptab-openai">
   <input type="radio" name="adb-provider-tab" id="ptab-gemini">
   <input type="radio" name="adb-provider-tab" id="ptab-groq">
+  <input type="radio" name="adb-provider-tab" id="ptab-moonshotai">
   <input type="radio" name="adb-provider-tab" id="ptab-openrouter">
   <input type="radio" name="adb-provider-tab" id="ptab-azureai">
   <input type="radio" name="adb-provider-tab" id="ptab-local">
@@ -58,6 +59,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
     <label for="ptab-openai">openai</label>
     <label for="ptab-gemini">gemini</label>
     <label for="ptab-groq">groq</label>
+    <label for="ptab-moonshotai">moonshotai</label>
     <label for="ptab-openrouter">openrouter</label>
     <label for="ptab-azureai">azure</label>
     <label for="ptab-local">local server</label>
@@ -103,6 +105,17 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 > ```
 >
 > Model ids: `groq/…`, e.g. `groq/llama-3.3-70b-versatile`.
+
+  </div>
+  <div>
+
+> ```text
+> MOONSHOTAI_API_KEY [unset]: ****
+> MOONSHOTAI_BASE_URL [default: https://api.moonshot.ai/v1]:
+> save 'moonshotai' for future runs? [Y/n]:
+> ```
+>
+> Model ids: `moonshotai/…`, e.g. `moonshotai/kimi-k3` — Moonshot's own API. The same models served through OpenRouter are `openrouter/moonshotai/…` ids: a different provider, so a different condition.
 
   </div>
   <div>
