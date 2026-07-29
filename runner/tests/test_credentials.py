@@ -194,3 +194,14 @@ def test_cli_remove(cfg, monkeypatch, capsys):
     assert _cli(["set", "openai"], stdin="sk-k\nhttp://h/v1\n", monkeypatch=monkeypatch) == 0
     assert _cli(["remove", "openai"]) == 0
     assert credentials.load() == {}
+
+
+def test_registry_base_urls_are_prompted_with_defaults(cfg, monkeypatch):
+    # the canonical registry (registry.py) declares a base-URL var for every
+    # built-in — key entered, base prompt left empty → the default origin is stored,
+    # so a proxy/regional endpoint is one retype away without a config file edit
+    code = _cli(["set", "groq"], stdin="gsk-k\n\n", monkeypatch=monkeypatch)
+    assert code == 0
+    assert credentials.load()["groq"] == {
+        "GROQ_API_KEY": "gsk-k", "GROQ_BASE_URL": "https://api.groq.com/openai/v1"
+    }

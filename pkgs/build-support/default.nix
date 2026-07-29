@@ -149,6 +149,9 @@ in
         // lib.optionalAttrs (prev ? adb-experiment) {
           adb-experiment = inRepo "adb-experiment" ../../lib/adb-experiment;
         }
+        // lib.optionalAttrs (prev ? adb-providers) {
+          adb-providers = inRepo "adb-providers" ../../lib/adb-providers;
+        }
         // lib.optionalAttrs (prev ? adb-inspect) {
           adb-inspect = inRepo "adb-inspect" ../../lib/adb-inspect;
         };

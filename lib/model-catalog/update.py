@@ -51,39 +51,81 @@ import json
 import os
 import re
 import sys
+import tomllib
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
+
+# the canonical provider registry (the adb-providers package's providers.toml:
+# names + credential templates) — this catalog is a LAYER over it: foreign catalog
+# spellings and /models endpoints are declared here; provider names, env var
+# names, and hints are the registry's facts. Read directly (this script runs as
+# bare python3, deliberately dependency-free).
+_REGISTRY = tomllib.loads(
+    (Path(__file__).resolve().parents[1]
+     / "adb-providers" / "adb_providers" / "providers.toml").read_text()
+)
+SECRET_VARS: dict[str, str] = {
+    name: p["api_key"]["name"] for name, p in _REGISTRY["providers"].items()
+}
 
 MODELS_DEV_URL = "https://models.dev/api.json"
 LITELLM_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/models"
 
-# inspect provider prefix -> (models.dev provider key, litellm_provider key,
-# litellm id prefix to strip, credential hint shown in the GUI)
-PROVIDERS = {
-    "anthropic": ("anthropic", "anthropic", "", "Needs ANTHROPIC_API_KEY (asked for on first run)."),
-    "openai": ("openai", "openai", "", "Needs OPENAI_API_KEY (asked for on first run)."),
-    "google": ("google", "gemini", "gemini/", "Needs GOOGLE_API_KEY (asked for on first run)."),
-    "groq": ("groq", "groq", "groq/", "Needs GROQ_API_KEY (asked for on first run)."),
-    "mistral": ("mistral", "mistral", "mistral/", "Needs MISTRAL_API_KEY (asked for on first run)."),
-    "grok": ("xai", "xai", "xai/", "Needs GROK_API_KEY (asked for on first run)."),
+
+@dataclass(frozen=True, kw_only=True)
+class _Source:
+    """Where a canonical provider's model list lives in the FOREIGN catalogs —
+    their spellings (models.dev says `xai`, litellm says `gemini`), never ours."""
+
+    models_dev: str
+    litellm: str | None
+
+
+PROVIDERS: dict[str, _Source] = {
+    "anthropic": _Source(models_dev="anthropic", litellm="anthropic"),
+    "openai": _Source(models_dev="openai", litellm="openai"),
+    "google": _Source(models_dev="google", litellm="gemini"),
+    "groq": _Source(models_dev="groq", litellm="groq"),
+    "mistral": _Source(models_dev="mistral", litellm="mistral"),
+    "grok": _Source(models_dev="xai", litellm="xai"),
     # moonshotai = the global api.moonshot.ai endpoint (models.dev's moonshotai-cn
     # is the .cn mainland deployment — separate lineup, not listed)
-    "moonshotai": ("moonshotai", "moonshot", "moonshot/", "Needs MOONSHOTAI_API_KEY (asked for on first run)."),
+    "moonshotai": _Source(models_dev="moonshotai", litellm="moonshot"),
 }
 
-# live /models endpoints, queried only when the key env var is set: the public
-# catalogs lag on dated snapshot ids for the newest models, the providers don't.
-# (env var, url, auth style); google's REST list takes the key as a query param.
-PROVIDER_APIS = {
-    "anthropic": ("ANTHROPIC_API_KEY", "https://api.anthropic.com/v1/models?limit=1000", "anthropic"),
-    "openai": ("OPENAI_API_KEY", "https://api.openai.com/v1/models", "bearer"),
-    "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/models", "google"),
-    "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1/models", "bearer"),
-    "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1/models", "bearer"),
-    "grok": ("XAI_API_KEY", "https://api.x.ai/v1/models", "bearer"),
-    "moonshotai": ("MOONSHOTAI_API_KEY", "https://api.moonshot.ai/v1/models", "bearer"),
+
+@dataclass(frozen=True, kw_only=True)
+class _ModelsApi:
+    """A provider's live /models endpoint, queried only when its key (the registry's
+    secret var — never redeclared here) is available: the public catalogs lag on
+    dated snapshot ids for the newest models, the providers don't. Google's REST
+    list takes the key as a query param."""
+
+    url: str
+    auth: str = "bearer"
+
+
+PROVIDER_APIS: dict[str, _ModelsApi] = {
+    "anthropic": _ModelsApi(url="https://api.anthropic.com/v1/models?limit=1000",
+                            auth="anthropic"),
+    "openai": _ModelsApi(url="https://api.openai.com/v1/models"),
+    "google": _ModelsApi(url="https://generativelanguage.googleapis.com/v1beta/models",
+                         auth="google"),
+    "groq": _ModelsApi(url="https://api.groq.com/openai/v1/models"),
+    "mistral": _ModelsApi(url="https://api.mistral.ai/v1/models"),
+    "grok": _ModelsApi(url="https://api.x.ai/v1/models"),
+    "moonshotai": _ModelsApi(url="https://api.moonshot.ai/v1/models"),
 }
+
+for _p in list(PROVIDERS) + list(PROVIDER_APIS):
+    assert _p in SECRET_VARS, f"{_p}: catalog layer names a non-canonical provider"
+
+
+def credential_hint(prefix: str) -> str:
+    """The GUI hint for a provider — derived from the registry, never hand-written."""
+    return f"Needs {SECRET_VARS[prefix]} (asked for on first run)."
 
 # First-party, public, keyless id lists — each provider's own declaration of the
 # ids its API accepts, as (url, extraction regex) pairs. SDK literal-type modules
@@ -175,17 +217,18 @@ def live_provider_ids(prefix: str, stored: dict[str, str]) -> list[str]:
     """The provider's own current model ids, [] when no key is configured."""
     if prefix not in PROVIDER_APIS:
         return []
-    env, url, auth = PROVIDER_APIS[prefix]
+    api = PROVIDER_APIS[prefix]
+    env = SECRET_VARS[prefix]
     key = os.environ.get(env, "") or stored.get(env, "")
     if not key:
         return []
-    if auth == "anthropic":
-        data = fetch(url, {"x-api-key": key, "anthropic-version": "2023-06-01"})
-    elif auth == "google":
-        data = fetch(f"{url}?key={key}")
+    if api.auth == "anthropic":
+        data = fetch(api.url, {"x-api-key": key, "anthropic-version": "2023-06-01"})
+    elif api.auth == "google":
+        data = fetch(f"{api.url}?key={key}")
         return [m["name"].removeprefix("models/") for m in data.get("models", [])]
     else:
-        data = fetch(url, {"Authorization": f"Bearer {key}"})
+        data = fetch(api.url, {"Authorization": f"Bearer {key}"})
     return [m["id"] for m in data.get("data", [])]
 
 
@@ -267,7 +310,7 @@ def main() -> int:
 
     providers = {}
     keyless = []
-    for prefix, (mdev_key, ll_key, _strip, cred) in PROVIDERS.items():
+    for prefix, source in PROVIDERS.items():
         # First-party id lists: SDK literals (keyless) + the live /models endpoint
         # (when a key is available). When ANY first-party list exists it is the
         # EXCLUSIVE snapshot source — community catalogs have shipped dated ids the
@@ -283,7 +326,7 @@ def main() -> int:
                     snapshots.setdefault(m["stem"], []).append((m["date"].replace("-", ""), fp_id))
         else:
             for (ll_provider, stem), dated in ll_snapshots.items():
-                if ll_provider == ll_key:
+                if ll_provider == source.litellm:
                     snapshots.setdefault(stem, []).extend(dated)
         if doc_ids:
             print(f"{prefix}: first-party id list used ({len(doc_ids)} ids)")
@@ -292,7 +335,7 @@ def main() -> int:
         elif prefix in PROVIDER_APIS and not doc_ids:
             keyless.append(prefix)
 
-        lineup = [m for m in models_dev[mdev_key]["models"].values() if text_chat_model(m)]
+        lineup = [m for m in models_dev[source.models_dev]["models"].values() if text_chat_model(m)]
         models = [
             {
                 "id": qualified_id(prefix, m["id"], snapshots),
@@ -329,12 +372,12 @@ def main() -> int:
         for m in models:
             if fp_set and m["id"] not in fp_set:
                 print(f"note: {prefix}/{m['id']} absent from the first-party id list")
-        providers[prefix] = {"credential_hint": cred, "models": models}
+        providers[prefix] = {"credential_hint": credential_hint(prefix), "models": models}
 
     or_models = openrouter_models()
     print(f"openrouter: first-party /models list used ({len(or_models)} ids)")
     providers["openrouter"] = {
-        "credential_hint": "Needs OPENROUTER_API_KEY (asked for on first run).",
+        "credential_hint": credential_hint("openrouter"),
         "models": or_models,
     }
 

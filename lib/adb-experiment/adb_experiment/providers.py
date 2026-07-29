@@ -7,11 +7,13 @@ mount. Each mapping is declared in ``PROVIDERS`` — explicit per provider, neve
 inferred from the id's shape. The runner injects the env vars from its credential
 store (``adb-runner credentials``); this module only reads them.
 
-Stdlib only. A provider belongs here only if its endpoint takes a plain bearer key
-over the OpenAI protocol — OAuth-only surfaces (Vertex) have no entry;
-degraded-but-correct beats a mapping that half-works. (The runner keeps its own
-prompt-template registry for `credentials set`; unifying the two tables is part of
-the credentials-design migration.)
+No third-party deps. Every canonical provider (the adb-providers package's
+registry) is routed: env var names, defaults, and requiredness are consumed
+directly, restated nowhere. A provider belongs in the registry only if its
+endpoint takes a plain bearer key over HTTP — OAuth-only surfaces (Vertex) have
+no entry; degraded-but-correct beats a mapping that half-works. Should a
+registry provider ever NOT speak the OpenAI protocol, this client grows an
+exclusion — its concern, not the registry's.
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+from adb_providers import PROVIDERS
 
 
 @dataclass(frozen=True)
@@ -31,36 +35,11 @@ class Endpoint:
     api_key: str
 
 
-@dataclass(frozen=True)
-class _Spec:
-    key_env: str
-    base_env: str
-    default_base: str | None  # None = the base-url env var is required
-    mount_suffix: str = ""    # appended to the base: where the compat layer is mounted
-    keyless_ok: bool = False  # local servers (llama.cpp, ollama) often need no key
-
-
-# The base-url env var overrides the default origin/mount for a provider (proxies,
-# regional endpoints); `mount_suffix` is appended to either, so e.g. the stored
-# ANTHROPIC_BASE_URL stays the plain API origin the rest of the ecosystem expects.
-PROVIDERS: dict[str, _Spec] = {
-    "openai": _Spec("OPENAI_API_KEY", "OPENAI_BASE_URL", None, keyless_ok=True),
-    "anthropic": _Spec("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL",
-                       "https://api.anthropic.com", mount_suffix="/v1"),
-    "google": _Spec("GOOGLE_API_KEY", "GOOGLE_BASE_URL",
-                    "https://generativelanguage.googleapis.com/v1beta/openai"),
-    "groq": _Spec("GROQ_API_KEY", "GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
-    "mistral": _Spec("MISTRAL_API_KEY", "MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
-    "grok": _Spec("GROK_API_KEY", "GROK_BASE_URL", "https://api.x.ai/v1"),
-    "moonshotai": _Spec("MOONSHOTAI_API_KEY", "MOONSHOTAI_BASE_URL",
-                        "https://api.moonshot.ai/v1"),
-    "openrouter": _Spec("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL",
-                        "https://openrouter.ai/api/v1"),
-    # No universal origin — the base-url env var is required and holds the full
-    # mount verbatim: the v1 surface, `https://<resource>.openai.azure.com/openai/v1`,
-    # model = your deployment name.
-    "azureai": _Spec("AZUREAI_API_KEY", "AZUREAI_BASE_URL", None),
-}
+# Where a provider mounts its OpenAI-compat surface when it isn't at the stored
+# base itself — exceptions-only, this client's own knowledge (the same shape as
+# adb-inspect's name remap): the stored ANTHROPIC_BASE_URL stays the plain API
+# origin the rest of the ecosystem expects, and the /v1 mount is appended here.
+_MOUNT_SUFFIX = {"anthropic": "/v1"}
 
 
 def _supported() -> str:
@@ -69,10 +48,13 @@ def _supported() -> str:
 
 def resolve(model_id: str, env: Mapping[str, str] = os.environ) -> Endpoint:
     """Resolve a real (non-mock) model id to an Endpoint, or raise ValueError with an
-    actionable message. Every error names the env var or credential set to fix."""
+    actionable message. Every error names the env var or credential set to fix.
+
+    The env var overrides the registry default (proxies, regional endpoints,
+    self-hosted servers); a `_MOUNT_SUFFIX` entry is appended to either."""
     provider, sep, served = model_id.partition("/")
-    spec = PROVIDERS.get(provider) if sep else None
-    if spec is None:
+    p = PROVIDERS.get(provider) if sep else None
+    if p is None:
         raise ValueError(
             f"model {model_id!r}: this experiment's client only speaks the OpenAI "
             f"chat protocol — supported prefixes: {_supported()} (each provider's "
@@ -80,33 +62,33 @@ def resolve(model_id: str, env: Mapping[str, str] = os.environ) -> Endpoint:
             "server: llama.cpp, vLLM, ollama, or api.openai.com itself), or a "
             "`mock/...` id to run keyless"
         )
-    base = (env.get(spec.base_env) or spec.default_base or "").rstrip("/")
+    base = (env.get(p.base_url.name) or p.base_url.default).rstrip("/")
     if not base:
         raise ValueError(
             f"model {model_id!r} needs an OpenAI-compatible endpoint but "
-            f"${spec.base_env} is unset — configure the credential set with "
+            f"${p.base_url.name} is unset — configure the credential set with "
             f"`nix run .#adb-runner -- credentials set {provider}`, or use a mock/ "
             "model to run keyless"
         )
     if not base.startswith(("http://", "https://")):
         raise ValueError(
-            f"${spec.base_env} is {base!r} but must be a full http(s) URL including "
+            f"${p.base_url.name} is {base!r} but must be a full http(s) URL including "
             "scheme, host, port, and any path prefix the server mounts the OpenAI "
             "API under — e.g. http://llama.local:11434/v1 for a local llama.cpp "
             "(the client appends /chat/completions itself)"
         )
-    api_key = env.get(spec.key_env) or ""
+    api_key = env.get(p.api_key.name) or ""
     if not api_key:
-        if not spec.keyless_ok:
+        if p.api_key.required:
             raise ValueError(
-                f"model {model_id!r} needs ${spec.key_env} — configure the credential "
-                f"set with `nix run .#adb-runner -- credentials set {provider}`, or "
-                "use a mock/ model to run keyless"
+                f"model {model_id!r} needs ${p.api_key.name} — configure the "
+                f"credential set with `nix run .#adb-runner -- credentials set "
+                f"{provider}`, or use a mock/ model to run keyless"
             )
         api_key = "dummy"  # a bearer token local servers will ignore
     return Endpoint(
         provider=provider,
         served_model=served,
-        base_url=base + spec.mount_suffix,
+        base_url=base + _MOUNT_SUFFIX.get(provider, ""),
         api_key=api_key,
     )

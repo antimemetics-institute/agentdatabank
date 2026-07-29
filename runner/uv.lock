@@ -17,11 +17,17 @@ requires-dist = [{ name = "msgspec", specifier = ">=0.18" }]
 dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
+name = "adb-providers"
+version = "0.1.0"
+source = { directory = "../lib/adb-providers" }
+
+[[package]]
 name = "adb-runner"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "adb-events" },
+    { name = "adb-providers" },
     { name = "rfc8785" },
 ]
 
@@ -33,6 +39,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "adb-events", directory = "../lib/adb-events" },
+    { name = "adb-providers", directory = "../lib/adb-providers" },
     { name = "rfc8785", specifier = ">=0.1.4" },
 ]
 

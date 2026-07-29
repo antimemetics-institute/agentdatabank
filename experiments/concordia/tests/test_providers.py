@@ -7,13 +7,14 @@ import pytest
 from adb_experiment.providers import PROVIDERS, resolve
 
 
-def test_openai_needs_base_url_and_tolerates_no_key():
+def test_openai_env_overrides_default_and_tolerates_no_key():
     ep = resolve("openai/qwen3.5-9b", {"OPENAI_BASE_URL": "http://llama.local:11434/v1"})
     assert ep.base_url == "http://llama.local:11434/v1"
     assert ep.served_model == "qwen3.5-9b"
     assert ep.api_key == "dummy"  # local servers ignore the bearer token
-    with pytest.raises(ValueError, match="OPENAI_BASE_URL"):
-        resolve("openai/qwen3.5-9b", {})
+    # nothing set at all: fall back to the registry default, like the OpenAI SDK does
+    ep = resolve("openai/gpt-4o", {})
+    assert ep.base_url == "https://api.openai.com/v1"
 
 
 def test_anthropic_mounts_compat_layer_under_v1():
@@ -54,11 +55,11 @@ def test_azure_takes_the_full_mount_verbatim():
 
 
 def test_hosted_providers_require_their_key():
-    for prefix, spec in PROVIDERS.items():
-        if spec.keyless_ok:
-            continue
-        env = {spec.base_env: "https://api.example/v1"}
-        with pytest.raises(ValueError, match=spec.key_env):
+    for prefix, p in PROVIDERS.items():
+        if not p.api_key.required:
+            continue  # openai/: local OpenAI-compatible servers ignore auth
+        env = {p.base_url.name: "https://api.example/v1"}
+        with pytest.raises(ValueError, match=p.api_key.name):
             resolve(f"{prefix}/some-model", env)
 
 
@@ -71,3 +72,5 @@ def test_unsupported_or_bare_ids_rejected():
 def test_malformed_base_url_rejected():
     with pytest.raises(ValueError, match="http"):
         resolve("openai/x", {"OPENAI_BASE_URL": "llama.local:11434"})
+
+

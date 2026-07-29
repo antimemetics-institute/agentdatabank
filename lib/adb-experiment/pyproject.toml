@@ -10,6 +10,8 @@ description = "The Python experiment-side toolkit for ADB — protocol scaffold,
 requires-python = ">=3.13"
 dependencies = [
     "adb-events",
+    # the canonical provider registry: names, credential templates, chat routing
+    "adb-providers",
 ]
 
 # adb_experiment.llm needs the OpenAI SDK; experiments that call models depend on
@@ -24,6 +26,7 @@ dev = ["pytest>=8"]
 # overrides it to the same source.
 [tool.uv.sources]
 adb-events = { path = "../adb-events" }
+adb-providers = { path = "../adb-providers" }
 
 [build-system]
 requires = ["hatchling"]

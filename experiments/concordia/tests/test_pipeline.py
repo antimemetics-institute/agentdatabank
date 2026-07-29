@@ -58,10 +58,14 @@ def test_anthropic_without_key_fails_fast(capsys, monkeypatch):
     capsys.readouterr()
 
 
-def test_openai_without_base_url_fails_fast(capsys, monkeypatch):
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    with pytest.raises(RuntimeError, match="OPENAI_BASE_URL"):
-        AdbLanguageModel(Params(default_model="openai/qwen3.5-9b", seed=1))
+def test_azureai_without_base_url_fails_fast(capsys, monkeypatch):
+    # azureai's base has no registry default (per-resource endpoint), so a missing
+    # env var is caught at construction, before any turn runs. (openai/ falls back
+    # to api.openai.com/v1 — the registry default — so it no longer fails here.)
+    monkeypatch.delenv("AZUREAI_BASE_URL", raising=False)
+    monkeypatch.setenv("AZUREAI_API_KEY", "k")
+    with pytest.raises(RuntimeError, match="AZUREAI_BASE_URL"):
+        AdbLanguageModel(Params(default_model="azureai/my-deployment", seed=1))
     capsys.readouterr()
 
 

@@ -72,6 +72,7 @@ version = "0.1.0"
 source = { directory = "../../lib/adb-experiment" }
 dependencies = [
     { name = "adb-events" },
+    { name = "adb-providers" },
 ]
 
 [package.optional-dependencies]
@@ -82,12 +83,18 @@ llm = [
 [package.metadata]
 requires-dist = [
     { name = "adb-events", directory = "../../lib/adb-events" },
+    { name = "adb-providers", directory = "../../lib/adb-providers" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.60" },
 ]
 provides-extras = ["llm"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
+name = "adb-providers"
+version = "0.1.0"
+source = { directory = "../../lib/adb-providers" }
 
 [[package]]
 name = "annotated-types"

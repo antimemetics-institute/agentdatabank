@@ -25,29 +25,9 @@ import sys
 import tomllib
 from pathlib import Path
 
-# Built-in names and the env vars each uses: (var, secret, default). These are prompt
-# templates only — no routing semantics. secret = hidden prompt; default (non-secret
-# vars only) is adopted when the prompt is left empty and nothing is stored yet.
-REGISTRY: dict[str, list[tuple[str, bool, str | None]]] = {
-    "openai": [("OPENAI_API_KEY", True, None),
-               ("OPENAI_BASE_URL", False, "https://api.openai.com/v1")],
-    "anthropic": [("ANTHROPIC_API_KEY", True, None),
-                  ("ANTHROPIC_BASE_URL", False, "https://api.anthropic.com")],
-    "google": [("GOOGLE_API_KEY", True, None)],
-    "groq": [("GROQ_API_KEY", True, None)],
-    "mistral": [("MISTRAL_API_KEY", True, None)],
-    "grok": [("GROK_API_KEY", True, None)],
-    "moonshotai": [("MOONSHOTAI_API_KEY", True, None),
-                   ("MOONSHOTAI_BASE_URL", False, "https://api.moonshot.ai/v1")],
-    "openrouter": [("OPENROUTER_API_KEY", True, None),
-                   ("OPENROUTER_BASE_URL", False, "https://openrouter.ai/api/v1")],
-    "azureai": [("AZUREAI_API_KEY", True, None),
-                ("AZUREAI_BASE_URL", False, None)],
-}
-
-# prefixes that mean "keyless built-in mock" (adb experiments use mock/, inspect's own
-# is mockllm/) — they route to no credential set and never need one
-MOCK_PREFIXES = {"mock", "mockllm"}
+# Built-in names come from the canonical provider registry (the adb-providers
+# package). Here they are prompt templates only — no routing semantics.
+from adb_providers import MOCK_PREFIXES, PROVIDERS
 
 
 def config_path() -> Path:
@@ -165,7 +145,7 @@ def missing_sets(manifest: dict, realized_params: dict) -> list[str]:
     """Credential sets this run's model ids route to with no section in the store. The
     store is the ONLY source of credentials — a key exported in the shell neither
     reaches a run nor suppresses this gate (it would silently skip the setup prompt
-    while the run still launched keyless). Only built-in names the REGISTRY knows need
+    while the run still launched keyless). Only built-in names the registry knows need
     credentials are reported: an unknown prefix (ollama, vllm, a local server) may
     legitimately need nothing, and blocking on a guess would be inferred-but-wrong.
     A run naming a built-in with zero configuration can only fail, so the runner
@@ -174,16 +154,19 @@ def missing_sets(manifest: dict, realized_params: dict) -> list[str]:
     return [
         name
         for name in sorted(sets_used(manifest, realized_params))
-        if name in REGISTRY and name not in store
+        if name in PROVIDERS and name not in store
     ]
 
 
 # -- the `adb-runner credentials` CLI --------------------------------------------------
 
 def _is_secret(name: str, key: str) -> bool:
-    for k, secret, _default in REGISTRY.get(name, []):
-        if k == key:
-            return secret
+    provider = PROVIDERS.get(name)
+    if provider is not None:
+        if key == provider.api_key.name:
+            return True
+        if key == provider.base_url.name:
+            return False
     return key.endswith("_KEY") or key.endswith("_TOKEN") or "SECRET" in key
 
 
@@ -231,37 +214,41 @@ def prompt_set(name: str) -> int:
     ever enters the store by: the CLI `set`, and the runner's ask-on-first-use. Secrets
     are hidden; non-secret prompts show the stored value or the known default (Enter
     adopts it). Scripted use pipes one line per prompt on stdin (non-tty)."""
-    spec = REGISTRY.get(name)
-    if spec is None:
+    provider = PROVIDERS.get(name)
+    if provider is not None:
+        # the template's two roles, key first: (env var, secret?, prompt default)
+        rows = ((provider.api_key.name, True, ""),
+                (provider.base_url.name, False, provider.base_url.default))
+    else:
         # not a built-in: a NAMED credential set with the conventional env var names —
         # exactly what `openai-api/<name>/<model>` ids read
         prefix = re.sub(r"[^A-Za-z0-9]+", "_", name).upper()
-        spec = [(f"{prefix}_API_KEY", True, None), (f"{prefix}_BASE_URL", False, None)]
+        rows = ((f"{prefix}_API_KEY", True, ""), (f"{prefix}_BASE_URL", False, ""))
         print(f"{name!r} isn't a built-in name (built-ins: "
-              f"{', '.join(sorted(REGISTRY))}) — storing it as a named credential set "
+              f"{', '.join(sorted(PROVIDERS))}) — storing it as a named credential set "
               f"({prefix}_API_KEY / {prefix}_BASE_URL); model ids reach it as "
               f"openai-api/{name}/<model>. Leave a prompt empty to skip it.",
               file=sys.stderr)
     store = load()
     vals = dict(store.get(name, {}))
-    for key, secret, default in spec:
-        current = vals.get(key, "")
+    for var, secret, default in rows:
+        current = vals.get(var, "")
         if secret:
             state = "<set>" if current else "unset"
         else:
             state = current or (f"default: {default}" if default else "unset")
         while True:
-            entered = _read(f"{key} [{state}]: ", secret)
+            entered = _read(f"{var} [{state}]: ", secret)
             if not entered and not current and default and not secret:
                 entered = default  # empty prompt adopts the shown default
-            problem = _url_problem(key, entered)
+            problem = _url_problem(var, entered)
             if problem is None:
                 break
             print(problem, file=sys.stderr)
             if not sys.stdin.isatty():
                 return 2  # scripted input can't retype — fail rather than desync
         if entered:
-            vals[key] = entered
+            vals[var] = entered
     store[name] = vals
     path = save(store)
     print(f"saved credential set {name!r} -> {path}")

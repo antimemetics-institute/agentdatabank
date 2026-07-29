@@ -91,6 +91,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 
 > ```text
 > GOOGLE_API_KEY [unset]: ****
+> GOOGLE_BASE_URL [default: https://generativelanguage.googleapis.com/v1beta/openai]:
 > save 'google' for future runs? [Y/n]:
 > ```
 >
@@ -101,6 +102,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 
 > ```text
 > GROQ_API_KEY [unset]: ****
+> GROQ_BASE_URL [default: https://api.groq.com/openai/v1]:
 > save 'groq' for future runs? [Y/n]:
 > ```
 >

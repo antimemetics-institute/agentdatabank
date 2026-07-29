@@ -8,11 +8,15 @@ dependencies = [
     # the event vocabulary lives in adb-events (one definition, shared with every
     # python experiment); the runner uses it for ingestion validation + `adb-emit`
     "adb-events",
+    # the canonical provider registry (names + credential templates); the runner
+    # uses it for the credential store's prompt templates and the missing-set gate
+    "adb-providers",
 ]
 
 # adb-events is in-repo (not yet on PyPI); the nix build resolves it from the same path
 [tool.uv.sources]
 adb-events = { path = "../lib/adb-events" }
+adb-providers = { path = "../lib/adb-providers" }
 
 [project.scripts]
 adb-runner = "adb_runner.cli:main"
