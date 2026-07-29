@@ -77,6 +77,24 @@ function TypeBadge({ decl }: { decl: ParamDecl }) {
   );
 }
 
+/* number field with a transient edit draft: the parent echoes a cleared value back
+   as its semantic rendering (default / zeroOf / initial), which would snap "0" into
+   the box the instant you backspace it — so while focused, the raw text you typed
+   wins. Every keystroke still commits upward (including "", so clearing a nullable
+   param binds null); blur drops the draft and the field reverts to the committed
+   value. Empty is a presentation state only — the oneliner never sees it. */
+function NumberInput({ value, onChange, float }: {
+  value: string; onChange: (v: string) => void; float: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input type="number" className={INPUT} value={draft ?? value}
+      step={float ? "any" : "1"}
+      onChange={(e) => { setDraft(e.target.value); onChange(e.target.value); }}
+      onBlur={() => setDraft(null)} />
+  );
+}
+
 /* a field's "empty" value, used for fresh rows and cleared cells */
 const zeroOf = (t: ParamType): unknown =>
   t.kind === "int" || t.kind === "float" ? 0
@@ -279,11 +297,7 @@ function Widget({ decl, value, onChange, optional }: {
       </select>
     );
   if (kind === "int" || kind === "float")
-    return (
-      <input type="number" className={INPUT} value={value}
-        step={kind === "float" ? "any" : "1"}
-        onChange={(e) => onChange(e.target.value)} />
-    );
+    return <NumberInput value={value} onChange={onChange} float={kind === "float"} />;
   if (kind === "list") {
     /* typed editors from the manifest's element schema — a list is only ever a raw
        JSON textarea when its element type gives us nothing to build a form from */
