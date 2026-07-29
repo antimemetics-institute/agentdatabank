@@ -1,19 +1,19 @@
-"""Local provider credentials & endpoints — secrets and base URLs for real models, kept
-out of experiment params and off the command line.
+"""Local credential store — secrets and base URLs for real models, kept out of
+experiment params and off the command line.
 
-The split (specs/comparability.md): a model *name* is the condition (a `param llm`, e.g.
-``openai/qwen3.5-9b``); *where* it is served and *which key* reaches it are environment,
-not a condition. So the runner resolves each `llm`-typed param's provider — the segment
-before the first ``/`` — and injects that provider's stored env vars (``OPENAI_API_KEY``,
-``OPENAI_BASE_URL``, …) into the experiment subprocess. Experiments read the standard env
-var names they already use (litellm / inspect_ai / concordia's client all do); they never
-see this module.
+The split (docs/plan/comparability.md): a model *name* is the condition (a `param llm`,
+e.g. ``openai/qwen3.5-9b``); *where* it is served and *which key* reaches it are
+environment, not a condition. So the runner resolves each `llm`-typed param's provider
+prefix — the segment before the first ``/`` — to a credential set and injects that set's
+stored env vars (``OPENAI_API_KEY``, ``OPENAI_BASE_URL``, …) into the experiment
+subprocess. Experiments read the standard env var names they already use (litellm /
+inspect_ai / concordia's client all do); they never see this module.
 
-Storage: ``~/.config/adb/credentials.toml`` (0600), one section per provider mapping env var
-→ value. Managed with ``adb-runner credentials set <provider>``, which prompts for every
-value — secrets via a hidden prompt, NEVER argv (argv is visible in ``ps`` and shell
-history, so there deliberately is no ``KEY=VALUE`` form). Scripted use pipes one line
-per prompt on stdin.
+Storage: ``~/.config/adb/credentials.toml`` (0600), one section per credential set
+mapping env var → value. Managed with ``adb-runner credentials set <name>``, which
+prompts for every value — secrets via a hidden prompt, NEVER argv (argv is visible in
+``ps`` and shell history, so there deliberately is no ``KEY=VALUE`` form). Scripted use
+pipes one line per prompt on stdin.
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ import sys
 import tomllib
 from pathlib import Path
 
-# Known providers and the env vars each uses: (var, secret, default). secret = hidden
-# prompt; default (non-secret vars only) is adopted when the prompt is left empty and
-# nothing is stored yet.
+# Built-in names and the env vars each uses: (var, secret, default). These are prompt
+# templates only — no routing semantics. secret = hidden prompt; default (non-secret
+# vars only) is adopted when the prompt is left empty and nothing is stored yet.
 REGISTRY: dict[str, list[tuple[str, bool, str | None]]] = {
     "openai": [("OPENAI_API_KEY", True, None),
                ("OPENAI_BASE_URL", False, "https://api.openai.com/v1")],
@@ -47,7 +47,7 @@ REGISTRY: dict[str, list[tuple[str, bool, str | None]]] = {
 }
 
 # prefixes that mean "keyless built-in mock" (adb experiments use mock/, inspect's own
-# is mockllm/) — they reference no provider and never need credentials
+# is mockllm/) — they route to no credential set and never need one
 MOCK_PREFIXES = {"mock", "mockllm"}
 
 
@@ -66,8 +66,8 @@ def load() -> dict[str, dict[str, str]]:
     with open(path, "rb") as f:
         data = tomllib.load(f)
     return {
-        provider: {k: str(v) for k, v in vals.items()}
-        for provider, vals in data.items()
+        name: {k: str(v) for k, v in vals.items()}
+        for name, vals in data.items()
         if isinstance(vals, dict)
     }
 
@@ -83,15 +83,15 @@ def save(data: dict[str, dict[str, str]]) -> Path:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "# ADB provider credentials & endpoints — managed by `adb-runner credentials`.",
+        "# ADB credentials & endpoints — managed by `adb-runner credentials`.",
         "# Secrets live here (0600), never in experiment params or on the command line.",
         "",
     ]
-    for provider in sorted(data):
-        vals = {k: v for k, v in data[provider].items() if v != ""}
+    for name in sorted(data):
+        vals = {k: v for k, v in data[name].items() if v != ""}
         if not vals:
             continue
-        lines.append(f"[{provider}]")
+        lines.append(f"[{name}]")
         for key in sorted(vals):
             lines.append(f'{key} = "{_toml_escape(str(vals[key]))}"')
         lines.append("")
@@ -124,7 +124,7 @@ def _iter_model_ids(value, tdesc: dict):
 
 
 def section_for(model_id: str) -> str | None:
-    """The credential-store section a model id routes to. Normally the prefix before
+    """The credential set a model id routes to. Normally the provider prefix before
     the first `/`; for inspect's OpenAI-compatible services — `openai-api/<service>/
     <model>`, which read `<SERVICE>_API_KEY` / `<SERVICE>_BASE_URL` — it is the
     *service* segment, so a named credential set (e.g. `credentials set llama`) serves
@@ -138,8 +138,8 @@ def section_for(model_id: str) -> str | None:
     return head
 
 
-def providers_used(manifest: dict, realized_params: dict) -> set[str]:
-    """The credential sections referenced by this run's `llm` params (mocks excluded)."""
+def sets_used(manifest: dict, realized_params: dict) -> set[str]:
+    """The credential sets referenced by this run's `llm` params (mocks excluded)."""
     schema = manifest.get("params") or {}
     used: set[str] = set()
     for name, pschema in schema.items():
@@ -154,35 +154,35 @@ def providers_used(manifest: dict, realized_params: dict) -> set[str]:
 
 
 def env_for_run(manifest: dict, realized_params: dict) -> dict[str, str]:
-    """Stored env vars to inject for the providers this run's models reference."""
+    """Stored env vars to inject for the credential sets this run's models route to."""
     store = load()
     env: dict[str, str] = {}
-    for provider in providers_used(manifest, realized_params):
-        env.update(store.get(provider, {}))
+    for name in sets_used(manifest, realized_params):
+        env.update(store.get(name, {}))
     return env
 
 
-def missing_providers(manifest: dict, realized_params: dict) -> list[str]:
-    """Providers this run's model ids reference with no section in the store. The
-    store is the ONLY source of provider credentials — a key exported in the shell
-    neither reaches a run nor suppresses this gate (it would silently skip the
-    setup prompt while the run still launched keyless). Only providers the
-    REGISTRY knows need credentials are reported: an unknown prefix (ollama, vllm, a
-    local server) may legitimately need nothing, and blocking on a guess would be
-    inferred-but-wrong. A run naming a known provider with zero configuration can
-    only fail, so the runner refuses it up front with the fix in hand."""
+def missing_sets(manifest: dict, realized_params: dict) -> list[str]:
+    """Credential sets this run's model ids route to with no section in the store. The
+    store is the ONLY source of credentials — a key exported in the shell neither
+    reaches a run nor suppresses this gate (it would silently skip the setup prompt
+    while the run still launched keyless). Only built-in names the REGISTRY knows need
+    credentials are reported: an unknown prefix (ollama, vllm, a local server) may
+    legitimately need nothing, and blocking on a guess would be inferred-but-wrong.
+    A run naming a built-in with zero configuration can only fail, so the runner
+    refuses it up front with the fix in hand."""
     store = load()
     return [
-        provider
-        for provider in sorted(providers_used(manifest, realized_params))
-        if provider in REGISTRY and provider not in store
+        name
+        for name in sorted(sets_used(manifest, realized_params))
+        if name in REGISTRY and name not in store
     ]
 
 
-# -- the `adb-runner credentials` CLI ----------------------------------------------------
+# -- the `adb-runner credentials` CLI --------------------------------------------------
 
-def _is_secret(provider: str, key: str) -> bool:
-    for k, secret, _default in REGISTRY.get(provider, []):
+def _is_secret(name: str, key: str) -> bool:
+    for k, secret, _default in REGISTRY.get(name, []):
         if k == key:
             return secret
     return key.endswith("_KEY") or key.endswith("_TOKEN") or "SECRET" in key
@@ -217,34 +217,34 @@ def _cmd_list() -> int:
     if not store:
         print(f"no credentials configured ({config_path()})")
         return 0
-    for provider in sorted(store):
-        vals = store[provider]
+    for name in sorted(store):
+        vals = store[name]
         shown = ", ".join(
-            f"{k}=<set>" if _is_secret(provider, k) else f"{k}={vals[k]}"
+            f"{k}=<set>" if _is_secret(name, k) else f"{k}={vals[k]}"
             for k in sorted(vals)
         )
-        print(f"{provider}: {shown}")
+        print(f"{name}: {shown}")
     return 0
 
 
-def prompt_provider(provider: str) -> int:
-    """Prompt for a provider's values and save them — the ONE path a credential ever
-    enters the store by: the CLI `set`, and the runner's ask-on-first-use. Secrets are
-    hidden; non-secret prompts show the stored value or the known default (Enter
+def prompt_set(name: str) -> int:
+    """Prompt for a credential set's values and save them — the ONE path a credential
+    ever enters the store by: the CLI `set`, and the runner's ask-on-first-use. Secrets
+    are hidden; non-secret prompts show the stored value or the known default (Enter
     adopts it). Scripted use pipes one line per prompt on stdin (non-tty)."""
-    spec = REGISTRY.get(provider)
+    spec = REGISTRY.get(name)
     if spec is None:
         # not a built-in: a NAMED credential set with the conventional env var names —
         # exactly what `openai-api/<name>/<model>` ids read
-        prefix = re.sub(r"[^A-Za-z0-9]+", "_", provider).upper()
+        prefix = re.sub(r"[^A-Za-z0-9]+", "_", name).upper()
         spec = [(f"{prefix}_API_KEY", True, None), (f"{prefix}_BASE_URL", False, None)]
-        print(f"{provider!r} isn't a built-in provider (built-ins: "
+        print(f"{name!r} isn't a built-in name (built-ins: "
               f"{', '.join(sorted(REGISTRY))}) — storing it as a named credential set "
               f"({prefix}_API_KEY / {prefix}_BASE_URL); model ids reach it as "
-              f"openai-api/{provider}/<model>. Leave a prompt empty to skip it.",
+              f"openai-api/{name}/<model>. Leave a prompt empty to skip it.",
               file=sys.stderr)
     store = load()
-    vals = dict(store.get(provider, {}))
+    vals = dict(store.get(name, {}))
     for key, secret, default in spec:
         current = vals.get(key, "")
         if secret:
@@ -263,9 +263,9 @@ def prompt_provider(provider: str) -> int:
                 return 2  # scripted input can't retype — fail rather than desync
         if entered:
             vals[key] = entered
-    store[provider] = vals
+    store[name] = vals
     path = save(store)
-    print(f"saved provider {provider!r} -> {path}")
+    print(f"saved credential set {name!r} -> {path}")
     return 0
 
 
@@ -273,38 +273,38 @@ def _cmd_set(argv: list[str]) -> int:
     # values are ONLY ever prompted (or piped line-per-prompt on stdin): a KEY=VALUE
     # argv form would put secrets in `ps` output and shell history, so it doesn't exist
     if len(argv) != 1:
-        print("usage: adb-runner credentials set <provider>\n"
+        print("usage: adb-runner credentials set <name>\n"
               "values are prompted (secrets hidden), never taken on the command line —\n"
               "argv is visible in `ps` and shell history. Scripts pipe one line per "
               "prompt on stdin.", file=sys.stderr)
         return 2
-    return prompt_provider(argv[0])
+    return prompt_set(argv[0])
 
 
 def _cmd_remove(argv: list[str]) -> int:
     if not argv:
-        print("usage: adb-runner credentials remove <provider>", file=sys.stderr)
+        print("usage: adb-runner credentials remove <name>", file=sys.stderr)
         return 2
     store = load()
     if argv[0] not in store:
-        print(f"provider {argv[0]!r} not configured", file=sys.stderr)
+        print(f"credential set {argv[0]!r} not configured", file=sys.stderr)
         return 1
     del store[argv[0]]
     save(store)
-    print(f"removed provider {argv[0]!r}")
+    print(f"removed credential set {argv[0]!r}")
     return 0
 
 
 def credentials_cli(argv: list[str]) -> int:
-    """`adb-runner credentials <list|set|remove|path>` — manage local model credentials."""
+    """`adb-runner credentials <list|set|remove|path>` — manage the local credential store."""
     if not argv or argv[0] in ("-h", "--help"):
         print(
             "adb-runner credentials — local model credentials & endpoints\n\n"
-            "  list                show configured credential sets\n"
-            "  set <provider>      add/update a provider — every value is prompted\n"
-            "                      (secrets hidden; never on the command line)\n"
-            "  remove <provider>   delete a provider\n"
-            "  path                print the config file path\n"
+            "  list             show configured credential sets\n"
+            "  set <name>       add/update a credential set — every value is prompted\n"
+            "                   (secrets hidden; never on the command line)\n"
+            "  remove <name>    delete a credential set\n"
+            "  path             print the config file path\n"
         )
         return 0 if argv else 2
     cmd, rest = argv[0], argv[1:]

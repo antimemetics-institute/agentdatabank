@@ -21,16 +21,16 @@ import threading
 import time
 
 from . import __version__
-from . import providers
+from . import credentials
 from .events_schema import validate_event
 from .store import RunStore
 from .ulid import ulid
 
 # DOCKER_HOST: sandboxed experiments must find the machine's docker daemon (a
-# per-user rootless socket on dev boxes — see `task docker:up`); like provider
+# per-user rootless socket on dev boxes — see `task docker:up`); like model
 # endpoints, where the daemon lives is environment, never condition identity.
-# Nothing else ambient — provider credentials/endpoints reach a run ONLY through
-# the providers store (docs/plan/credentials.md), so a stray key exported in the
+# Nothing else ambient — credentials/endpoints reach a run ONLY through the
+# credential store (docs/plan/credentials.md), so a stray key exported in the
 # shell can neither leak into a run nor shadow the stored value.
 ENV_ALLOWLIST = ["PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "DOCKER_HOST"]
 
@@ -49,13 +49,13 @@ def _now() -> str:
     )
 
 
-def child_env(run_id: str, run_dir: str, seed: int, provider_env: dict | None = None) -> dict:
+def child_env(run_id: str, run_dir: str, seed: int, credential_env: dict | None = None) -> dict:
     # constructed from scratch: system basics from the allowlist, then the stored
-    # provider credentials/endpoints (providers.py) — the store always wins over the
+    # credentials/endpoints (credentials.py) — the store always wins over the
     # host — then ADB_* run vars. This is how a real model reaches its key without
     # the key ever appearing on the command line or being readable from the shell.
     env = {key: value for key, value in os.environ.items() if key in ENV_ALLOWLIST}
-    env.update(provider_env or {})
+    env.update(credential_env or {})
     env.update(
         ADB_RUN_ID=run_id,
         ADB_RUN_DIR=run_dir,
@@ -151,16 +151,16 @@ def execute_run(
         },
     })
 
-    # resolve stored credentials/endpoints for the providers this run's model ids
-    # reference (specs/comparability.md: endpoint + key are environment, not condition)
-    provider_env = providers.env_for_run(manifest, realized_params)
+    # resolve stored credentials/endpoints for the credential sets this run's model ids
+    # route to (docs/plan/comparability.md: endpoint + key are environment, not condition)
+    credential_env = credentials.env_for_run(manifest, realized_params)
     proc = subprocess.Popen(
         [program],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=store.workspace,
-        env=child_env(run_id, str(store.dir), seed, provider_env),
+        env=child_env(run_id, str(store.dir), seed, credential_env),
         text=True,
     )
     run_meta["phase"] = "running"

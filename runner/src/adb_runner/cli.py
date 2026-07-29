@@ -16,7 +16,7 @@ import random
 import sys
 from pathlib import Path
 
-from . import providers
+from . import credentials
 from .canonical import abbrev, condition_id
 from .protocol import execute_run
 from .schema import (
@@ -114,11 +114,11 @@ def resolve_condition(args, manifest: dict, source: str) -> dict:
 
 
 def main() -> int:
-    # `adb-runner providers …` manages local model credentials; it is a standalone
+    # `adb-runner credentials …` manages the local credential store; it is a standalone
     # management command, not a run, so it needs no manifest/experiment env.
-    if sys.argv[1:2] == ["providers"]:
-        from .providers import providers_cli
-        return providers_cli(sys.argv[2:])
+    if sys.argv[1:2] == ["credentials"]:
+        from .credentials import credentials_cli
+        return credentials_cli(sys.argv[2:])
 
     args = build_parser().parse_args()
 
@@ -178,24 +178,24 @@ def main() -> int:
                 # no distributions in the MVP: realized params ARE the spec params
                 realized = cond["params"]
                 validate_realized(realized, manifest)
-                # a model naming a known provider with zero configuration can only
-                # fail. Interactively, set it up right here — the run continues with
-                # the freshly stored credential (secrets never touch argv; managing
-                # them later is `adb-runner providers`). Headless (piped stdin or
-                # --json), refuse with the fix instead of hanging on a prompt.
-                missing = providers.missing_providers(manifest, realized)
+                # a model naming a built-in credential set with zero configuration can
+                # only fail. Interactively, set it up right here — the run continues
+                # with the freshly stored credential (secrets never touch argv;
+                # managing them later is `adb-runner credentials`). Headless (piped
+                # stdin or --json), refuse with the fix instead of hanging on a prompt.
+                missing = credentials.missing_sets(manifest, realized)
                 if missing and sys.stdin.isatty() and not args.json:
                     for p in missing:
-                        _log(f"model params need provider {p!r}, which isn't "
-                             f"configured — setting it up now (stored 0600 in "
-                             f"{providers.config_path()}; change later with "
-                             f"`nix run .#adb-runner -- providers set {p}`)")
-                        providers.prompt_provider(p)
-                    missing = providers.missing_providers(manifest, realized)
+                        _log(f"this run needs credential set {p!r} — setting it up "
+                             f"now (stored 0600 in {credentials.config_path()}; "
+                             f"change later with "
+                             f"`nix run .#adb-runner -- credentials set {p}`)")
+                        credentials.prompt_set(p)
+                    missing = credentials.missing_sets(manifest, realized)
                 if missing:
                     raise SchemaError(
-                        f"model params need provider(s) {missing} but none are "
-                        f"configured — run `nix run .#adb-runner -- providers set "
+                        f"this run needs credential set(s) {missing} but none are "
+                        f"configured — run `nix run .#adb-runner -- credentials set "
                         f"{missing[0]}` (scripts pipe one line per prompt on stdin; "
                         f"exported env vars are never read)")
             except SchemaError as exc:

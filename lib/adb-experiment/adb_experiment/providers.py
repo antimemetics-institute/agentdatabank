@@ -5,12 +5,12 @@ credential set to read and which endpoint to talk to; every provider here serves
 OpenAI **/chat/completions** wire protocol, either natively or through a compatibility
 mount. Each mapping is declared in ``PROVIDERS`` — explicit per provider, never
 inferred from the id's shape. The runner injects the env vars from its credential
-store (``adb-runner providers``); this module only reads them.
+store (``adb-runner credentials``); this module only reads them.
 
 Stdlib only. A provider belongs here only if its endpoint takes a plain bearer key
 over the OpenAI protocol — OAuth-only surfaces (Vertex) have no entry;
 degraded-but-correct beats a mapping that half-works. (The runner keeps its own
-prompt-template registry for `providers set`; unifying the two tables is part of
+prompt-template registry for `credentials set`; unifying the two tables is part of
 the credentials-design migration.)
 """
 
@@ -87,8 +87,8 @@ def resolve(model_id: str, env: Mapping[str, str] = os.environ) -> Endpoint:
     if not base:
         raise ValueError(
             f"model {model_id!r} needs an OpenAI-compatible endpoint but "
-            f"${spec.base_env} is unset — configure the provider with "
-            f"`nix run .#adb-runner -- providers set {provider}`, or use a mock/ "
+            f"${spec.base_env} is unset — configure the credential set with "
+            f"`nix run .#adb-runner -- credentials set {provider}`, or use a mock/ "
             "model to run keyless"
         )
     if not base.startswith(("http://", "https://")):
@@ -102,9 +102,9 @@ def resolve(model_id: str, env: Mapping[str, str] = os.environ) -> Endpoint:
     if not api_key:
         if not spec.keyless_ok:
             raise ValueError(
-                f"model {model_id!r} needs ${spec.key_env} — configure the provider "
-                f"with `nix run .#adb-runner -- providers set {provider}`, or use a "
-                "mock/ model to run keyless"
+                f"model {model_id!r} needs ${spec.key_env} — configure the credential "
+                f"set with `nix run .#adb-runner -- credentials set {provider}`, or "
+                "use a mock/ model to run keyless"
             )
         api_key = "dummy"  # a bearer token local servers will ignore
     return Endpoint(

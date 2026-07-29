@@ -75,7 +75,7 @@ EOF
     echo "llama.forest.local unreachable — clip 2 shows a mock run instead"
     RUN_MODEL=mockllm/model
   }
-  ADB_PROVIDERS_FILE="$CREDS" nix run .#inspect-hello -- \
+  ADB_CREDENTIALS_FILE="$CREDS" nix run .#inspect-hello -- \
     --out "$CACHE" \
     --set model="$RUN_MODEL" \
     --set limit=0 \

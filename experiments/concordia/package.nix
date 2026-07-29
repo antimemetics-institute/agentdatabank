@@ -13,7 +13,7 @@
 # network), against any OpenAI-compatible /chat/completions server via
 # `openai/<served-name>`, or against a hosted provider's OpenAI-compatibility
 # endpoint (`anthropic/`, `google/`, `groq/`, `mistral/`, `grok/`, `openrouter/`,
-# `azureai/`, `bedrock/` — see concordia_sim/providers.py) — endpoint and key come
+# `azureai/`, `bedrock/` — see adb_experiment/providers.py) — endpoint and key come
 # from the credential store, never from params.
 { adb, lib, writeShellApplication, jq }:
 

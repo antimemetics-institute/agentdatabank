@@ -29,7 +29,7 @@
             program = "${exp.app}/bin/adb-${name}";
           })
           adbPkgs.experiments
-        # `nix run .#adb-runner -- providers …` to manage local model credentials
+        # `nix run .#adb-runner -- credentials …` to manage local model credentials
         # (endpoints + keys), which the runner injects into experiments so they never
         # land in params or on the command line.
         // {

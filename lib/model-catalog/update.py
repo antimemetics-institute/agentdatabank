@@ -25,7 +25,7 @@ every accepted id, which both supplies dated ids the catalogs missed and
 proves when a new model's canonical id is genuinely undated (Anthropic's
 newest are); (2) the provider's authenticated /models endpoint, when a key is
 available in the environment or the adb runner's credential store
-(`adb-runner providers` / ~/.config/adb/providers.toml). Keyless runs are
+(`adb-runner credentials` / ~/.config/adb/credentials.toml). Keyless runs are
 first-class: SDK literals cover the id-form question without credentials.
 Providers listed here are the API-backed providers with a first-party enumerable
 model list and a declared mapping in at least one wrapper (an explicit map,
@@ -134,17 +134,17 @@ def fetch(url: str, headers: dict | None = None) -> dict:
 def stored_credentials() -> dict[str, str]:
     """Env-var -> value from the adb runner's credential store (never printed).
 
-    Mirrors adb_runner.providers.config_path(): $ADB_PROVIDERS_FILE overrides,
-    else $XDG_CONFIG_HOME/adb/providers.toml, else ~/.config/adb/providers.toml.
+    Mirrors adb_runner.credentials.config_path(): $ADB_CREDENTIALS_FILE overrides,
+    else $XDG_CONFIG_HOME/adb/credentials.toml, else ~/.config/adb/credentials.toml.
     """
     import tomllib
 
-    override = os.environ.get("ADB_PROVIDERS_FILE")
+    override = os.environ.get("ADB_CREDENTIALS_FILE")
     if override:
         path = Path(override)
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-        path = Path(base) / "adb" / "providers.toml"
+        path = Path(base) / "adb" / "credentials.toml"
     if not path.is_file():
         return {}
     data = tomllib.loads(path.read_text())
@@ -353,7 +353,7 @@ def main() -> int:
         print(
             f"WARNING: no first-party id source for {', '.join(keyless)} (no SDK literal "
             f"list, no credentials) — their newest ids may be undated aliases. Configure "
-            f"keys (`nix run .#adb-runner -- providers set ...`) and rerun to check them "
+            f"keys (`nix run .#adb-runner -- credentials set ...`) and rerun to check them "
             f"against the providers' own /models endpoints."
         )
     return 0
