@@ -47,18 +47,21 @@
   //             commands already carry, so only the head token changes)
   //  nix-build: `$(nix-build --no-out-link [<src>] -A exec.<name>) args` — the
   //             exec.* output IS the executable, so the `--` separator is dropped
+  // The tarball URL is long enough to push the -A target off-screen, so the
+  // github-source forms continue onto a fresh line before it (backslash-newline
+  // holds inside $(…) and inside the nix-shell --run double quotes alike).
   function flakelessHead(cmd, p) {
     if (p.mode === "nix-build") {
       cmd = cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
-        var src = p.source === "local" ? "" : " " + TARBALL;
-        return "$(nix-build --no-out-link" + src + " -A exec." + name + ")";
+        var src = p.source === "local" ? " " : " " + TARBALL + " \\\n  ";
+        return "$(nix-build --no-out-link" + src + "-A exec." + name + ")";
       });
       return cmd.replace(/(-A exec\.\S+\)) --(?=\s|$)/, "$1");
     }
     return cmd.replace(/^nix run \.#(\S+)/, function (_, name) {
       var pkg = name.indexOf("adb-") === 0 ? name : "experiment-" + name;
-      var src = p.source === "local" ? "." : TARBALL;
-      return "nix-run " + src + " -A " + pkg;
+      var src = p.source === "local" ? ". " : TARBALL + " \\\n  ";
+      return "nix-run " + src + "-A " + pkg;
     });
   }
   function rewriteLine(line, p) {

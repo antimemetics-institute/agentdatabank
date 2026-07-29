@@ -42,19 +42,22 @@ function ref(p: CmdPrefs): string {
                meta.mainProgram itself, takes program args after `--` (which our
                commands already carry, so only the head token changes)
     nix-build: `$(nix-build --no-out-link [<src>] -A exec.<name>) args` — the
-               exec.* output IS the executable, so the `--` separator is dropped */
+               exec.* output IS the executable, so the `--` separator is dropped
+   The tarball URL is long enough to push the -A target off-screen, so the
+   github-source forms continue onto a fresh line before it (backslash-newline
+   holds inside $(…) and inside the nix-shell --run double quotes alike). */
 function flakelessHead(cmd: string, p: CmdPrefs): string {
   if (p.mode === "nix-build") {
     cmd = cmd.replace(/^nix run \.#(\S+)/, (_, name: string) => {
-      const src = p.source === "local" ? "" : " " + TARBALL;
-      return `$(nix-build --no-out-link${src} -A exec.${name})`;
+      const src = p.source === "local" ? " " : " " + TARBALL + " \\\n  ";
+      return `$(nix-build --no-out-link${src}-A exec.${name})`;
     });
     return cmd.replace(/(-A exec\.\S+\)) --(?=\s|$)/, "$1");
   }
   return cmd.replace(/^nix run \.#(\S+)/, (_, name: string) => {
     const pkg = name.startsWith("adb-") ? name : `experiment-${name}`;
-    const src = p.source === "local" ? "." : TARBALL;
-    return `nix-run ${src} -A ${pkg}`;
+    const src = p.source === "local" ? ". " : TARBALL + " \\\n  ";
+    return `nix-run ${src}-A ${pkg}`;
   });
 }
 

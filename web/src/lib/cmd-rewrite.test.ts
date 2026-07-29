@@ -12,10 +12,10 @@ const GITHUB = "github:antimemetics-institute/agentdatabank";
 const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";
 
-test("defaults: stock nix-build exec one-liner from the tarball", () => {
+test("defaults: stock nix-build exec form, tarball continued before -A", () => {
   assert.equal(
     rewriteCmd("nix run .#inspect-hello -- --set model=m", p({})),
-    `$(nix-build --no-out-link ${TARBALL} -A exec.inspect-hello) --set model=m`,
+    `$(nix-build --no-out-link ${TARBALL} \\\n  -A exec.inspect-hello) --set model=m`,
   );
 });
 
@@ -45,7 +45,7 @@ test("local checkout with global flakes is the canonical identity", () => {
 test("nix-build mode: $(nix-build …) head, `--` separator dropped", () => {
   assert.equal(
     rewriteCmd("nix run .#foo -- --set a=1", p({ mode: "nix-build" })),
-    `$(nix-build --no-out-link ${TARBALL} -A exec.foo) --set a=1`,
+    `$(nix-build --no-out-link ${TARBALL} \\\n  -A exec.foo) --set a=1`,
   );
   assert.equal(
     rewriteCmd("nix run .#foo", p({ mode: "nix-build", source: "local" })),
@@ -60,7 +60,7 @@ test("nix-run installed: head swap, experiment- prefix except adb-* packages", (
   );
   assert.equal(
     rewriteCmd("nix run .#adb-web", p({ mode: "nix-run", nixRun: true })),
-    `nix-run ${TARBALL} -A adb-web`,
+    `nix-run ${TARBALL} \\\n  -A adb-web`,
   );
 });
 
