@@ -34,6 +34,21 @@ The scaffold is plain Nix, and that's the one shape — there is no flake scaffo
 
 </div>
 
+## Or fork one
+
+Any experiment already in the registry can be the starting point instead of the scaffold:
+
+```bash
+nix run .#adb-dev -- \
+  fork concordia my-concordia
+```
+
+Forking is [contributing](contributing.md) run backwards: where contributing wraps your repo into the registry, `fork` lifts an experiment's directory out of the pinned ADB and points the adb libraries back at git. What lands is the scaffold's exact shape — pin block, `bump`, the web catalog, everything on this page applies as written — with a real experiment where the example would be.
+
+The fork needs its own name because the registry refuses duplicates — and that's the point: the original stays runnable next to yours, baseline beside variant. `fork` renames the declared experiments for you and reports each rename (a directory declaring several gets your name as the prefix: `impossiblebench-swebench` → `my-fork-swebench`). The unit is the directory — you fork the thing with a `package.nix`, and trimming what it declares afterward is normal editing.
+
+A fork mints new condition IDs before you change any behavior: the rename and the source rewrite are content, and the dependency provenance genuinely changed. That is identity doing its job, not a penalty — the generated README records the lineage (source experiment, adb rev), and relating the fork's runs to the original's is read-time comparability.
+
 ## Run it
 
 Every param binds explicitly — the run *is* its command line (run it bare and it prints the completed command to copy). `mock/model` is keyless and offline:

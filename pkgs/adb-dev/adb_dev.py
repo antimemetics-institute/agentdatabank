@@ -1,14 +1,17 @@
 """adb-dev — the ADB authoring CLI.
 
-    adb-dev init NAME    scaffold an external experiment repo (plain Nix)
-    adb-dev bump         move the repo's adb pin (default.nix + uv sources + uv.lock)
-    adb-dev pin          print the adb rev this repo (or this tool) is pinned to
+    adb-dev init NAME       scaffold an external experiment repo (plain Nix)
+    adb-dev fork EXP NAME   copy a registry experiment out into an external repo
+    adb-dev bump            move the repo's adb pin (default.nix + uv sources + uv.lock)
+    adb-dev pin             print the adb rev this repo (or this tool) is pinned to
 
 The wrapper bakes in ADB_PINNED_REV (the rev of the adb this tool was built from —
-empty when built from an unpinned checkout) and ADB_REPO_URL. The tool never parses
-flake.lock/npins/anything: the rev either arrives baked, is read from the scaffold's
-own managed pin block, or is stated with --rev. uv is the assumed Python tool; a
-project without `[tool.uv.sources]` gets printed instructions instead of edits.
+empty when built from an unpinned checkout), ADB_REPO_URL, and ADB_EXPERIMENTS_DIR
+(the registry tree of that same adb — what `fork` copies from). The tool never
+parses flake.lock/npins/anything: the rev either arrives baked, is read from the
+scaffold's own managed pin block, or is stated with --rev. uv is the assumed Python
+tool; a project without `[tool.uv.sources]` gets printed instructions instead of
+edits.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -116,6 +120,58 @@ def rewrite_uv_sources(pyproject: Path, rev: str) -> list[str]:
     return touched
 
 
+def repath_uv_sources(pyproject: Path, dirname: str, url: str, rev: str) -> list[str]:
+    """In-tree path sources for the adb libraries → git sources at `rev`.
+
+    The exact inverse of the contributing rewrite: a registry directory reaches
+    the adb libraries as `{ path = "../../lib/…" }`; outside the tree those
+    paths resolve nowhere, so they become git sources on the adb repo.
+    """
+    doc = tomlkit.parse(pyproject.read_text())
+    sources = doc.get("tool", {}).get("uv", {}).get("sources", None)
+    if sources is None:
+        return []
+    touched = []
+    for name in LIB_NAMES:
+        entry = sources.get(name)
+        if entry is not None and "path" in entry:
+            # the path is relative to experiments/<dirname>/ in the adb tree
+            sub = os.path.normpath(f"experiments/{dirname}/{entry['path']}")
+            git = tomlkit.inline_table()
+            git["git"] = url
+            git["subdirectory"] = sub
+            git["rev"] = rev
+            sources[name] = git
+            touched.append(name)
+    if touched:
+        pyproject.write_text(tomlkit.dumps(doc))
+    return touched
+
+
+def rename_experiments(package_nix: Path, old: str, new: str) -> list[tuple[str, str]]:
+    """Rename `old`(-suffixed) declarations in package.nix to `new`(-suffixed).
+
+    Textual and deliberately narrow — only the two identity-bearing positions:
+    attribute bindings at line start and `name = "…"` strings. Anything else
+    that mentions the old name (upstream URLs, `pkg:` refs, prose) is not a
+    declaration and stays untouched. Returns the (old, new) pairs applied.
+    """
+    text = package_nix.read_text()
+    renamed: dict[str, str] = {}
+
+    def sub(m: re.Match[str]) -> str:
+        target = new + m.group(2)[len(old):]
+        renamed[m.group(2)] = target
+        return m.group(1) + target + m.group(3)
+
+    stem = rf"({re.escape(old)}(?:-[a-z0-9-]+)?)"
+    text = re.sub(rf"(?m)^(\s*){stem}(\s*=)", sub, text)
+    text = re.sub(rf'(name\s*=\s*"){stem}(")', sub, text)
+    if renamed:
+        package_nix.write_text(text)
+    return sorted(renamed.items())
+
+
 def uv_lock(cwd: Path) -> bool:
     lock = cwd / "uv.lock"
     if lock.exists() and lock.stat().st_size == 0:
@@ -177,7 +233,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
 SCAFFOLD = {
     "default.nix": '''\
-# @NAME@ — an ADB experiment (scaffolded by `adb-dev init`).
+# @NAME@ — an ADB experiment (@PROVENANCE@).
 #
 #   $(nix-build --no-out-link -A exec.@NAME@) --set turns=3
 #   $(nix-build --no-out-link -A exec.adb-web)      # web GUI; @NAME@ is in the catalog
@@ -410,7 +466,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     # pin somewhere local — prose is for readers, the pin block is for fetchers
     web_url = os.environ.get("ADB_REPO_URL") or url
     subst = {"@NAME@": name, "@PKG@": pkg, "@URL@": url, "@REV@": rev,
-             "@SHORTREV@": rev[:12], "@REF@": "main", "@WEBURL@": web_url}
+             "@SHORTREV@": rev[:12], "@REF@": "main", "@WEBURL@": web_url,
+             "@PROVENANCE@": "scaffolded by `adb-dev init`"}
 
     for relpath, template in SCAFFOLD.items():
         out = dest / _render(relpath, subst)
@@ -426,6 +483,121 @@ def cmd_init(args: argparse.Namespace) -> int:
 next steps:
   cd {dest}
   $(nix-build --no-out-link -A exec.{name}) --set turns=3
+  $(nix-build --no-out-link -A exec.adb-web)""")
+    return 0
+
+
+FORK_README = '''\
+# @NAME@
+
+Forked from the [ADB](@WEBURL@) registry's `@SRC@` directory (adb `@SHORTREV@`)
+by `adb-dev fork` — an external experiment repo of its own from here on.
+Conditions are versioned by the content of this repo's experiment files, so the
+fork mints new condition IDs from the very first run (the rename and the
+dependency rewrite are content — the provenance genuinely changed); this
+paragraph records the lineage.
+
+## Run it
+
+Every param binds explicitly — run it bare and it prints the completed command
+to copy:
+
+```sh
+$(nix-build --no-out-link -A exec.@NAME@)
+```
+
+And the web GUI, with this experiment in its catalog next to the built-in ones:
+
+```sh
+$(nix-build --no-out-link -A exec.adb-web)
+```
+
+## Change it
+
+The `src` list in `package.nix` is condition identity — the content hash of
+exactly those paths versions your conditions, so tests and scaffolding stay
+out of it. New Python dependencies are ordinary `uv add`.
+
+## Move the pin
+
+```sh
+$(nix-build --no-out-link -A exec.adb-dev) bump --latest
+```
+
+moves `default.nix` and the `pyproject.toml` adb sources to the same adb rev
+and relocks. `adb-dev pin` prints the current one.
+'''
+
+
+def cmd_fork(args: argparse.Namespace) -> int:
+    old, new = args.experiment, args.name
+    if not re.fullmatch(r"[a-z][a-z0-9_-]*", old):
+        die("EXPERIMENT must be a registry directory name (lowercase)")
+    if not re.fullmatch(r"[a-z][a-z0-9-]*", new):
+        die("NAME must be lowercase, alphanumeric with dashes, starting with a letter")
+    if new == old:
+        die(f"pick a new name — the registry already claims {old!r}, and duplicates are refused at eval time")
+
+    root = os.environ.get("ADB_EXPERIMENTS_DIR")
+    if not root:
+        die("this adb-dev carries no experiments tree — run the packaged adb-dev, not the bare script")
+    src_dir = Path(root) / old
+    if not (src_dir / "package.nix").exists():
+        have = sorted(p.parent.name for p in Path(root).glob("*/package.nix"))
+        die(f"no registry directory {old!r} — have: {', '.join(have)}")
+    if (src_dir / "default.nix").exists():
+        die(f"{old!r} has its own default.nix — not forkable as a scaffold")
+
+    dest = Path(args.dir or new)
+    if dest.exists():
+        die(f"{dest} already exists")
+
+    url = repo_url(args.adb_url)
+    rev = args.rev or baked_rev()
+    if rev is None:
+        print("adb-dev: built from an unpinned adb — asking the repo for its main rev")
+        rev = ls_remote(url, "main")
+
+    shutil.copytree(src_dir, dest)
+    for p in [dest, *dest.rglob("*")]:  # the source is a store path: read-only
+        p.chmod(p.stat().st_mode | 0o200)
+    print(f"adb-dev: forked {old}/ → {dest}/")
+
+    renamed = rename_experiments(dest / "package.nix", old, new)
+    for a, b in renamed:
+        print(f"adb-dev: renamed {a} → {b} (package.nix)")
+    if not renamed:
+        print(f"adb-dev: package.nix declares nothing named after {old!r} — rename its "
+              "experiments yourself (duplicate names are refused at eval time)")
+    # the bare fork name if the directory declared one, else the first rename —
+    # only for the generated prose (README, default.nix header), never behavior
+    primary = dict(renamed).get(old) or (renamed[0][1] if renamed else new)
+
+    touched = repath_uv_sources(dest / "pyproject.toml", old, url, rev)
+    if touched:
+        print(f"adb-dev: pyproject.toml adb sources path → git @ {rev[:12]} ({', '.join(touched)})")
+    else:
+        print("adb-dev: no in-tree adb path sources in pyproject.toml — nothing to repoint")
+
+    web_url = os.environ.get("ADB_REPO_URL") or url
+    subst = {"@NAME@": primary, "@SRC@": old, "@URL@": url, "@REV@": rev,
+             "@SHORTREV@": rev[:12], "@REF@": "main", "@WEBURL@": web_url,
+             "@PROVENANCE@": f"forked from the adb registry's `{old}` by `adb-dev fork`"}
+    (dest / "default.nix").write_text(_render(SCAFFOLD["default.nix"], subst))
+    if not (dest / "README.md").exists():
+        (dest / "README.md").write_text(_render(FORK_README, subst))
+    if not (dest / ".gitignore").exists():
+        (dest / ".gitignore").write_text(SCAFFOLD[".gitignore"])
+    print(f"adb-dev: pinned to adb {rev[:12]} (default.nix)")
+
+    if args.no_lock or not uv_lock(dest):
+        (dest / "uv.lock").write_text("")
+        print("adb-dev: uv.lock not resolved yet — the copied lock pointed at in-tree "
+              "paths; run `uv lock` in the new directory before building")
+    print(f"""
+next steps:
+  cd {dest}
+  $(nix-build --no-out-link -A exec.{primary})
   $(nix-build --no-out-link -A exec.adb-web)""")
     return 0
 
@@ -447,6 +619,15 @@ def main() -> int:
     p_init.add_argument("--adb-url", help="adb git URL (default: the canonical repo)")
     p_init.add_argument("--no-lock", action="store_true", help="skip running `uv lock`")
     p_init.set_defaults(fn=cmd_init)
+
+    p_fork = sub.add_parser("fork", help="copy a registry experiment out into an external repo")
+    p_fork.add_argument("experiment", help="registry experiment directory to fork (e.g. concordia)")
+    p_fork.add_argument("name", help="the fork's experiment name (and default target directory)")
+    p_fork.add_argument("--dir", help="target directory (default: ./NAME)")
+    p_fork.add_argument("--rev", help="adb rev to pin (default: the rev this tool was built from)")
+    p_fork.add_argument("--adb-url", help="adb git URL (default: the canonical repo)")
+    p_fork.add_argument("--no-lock", action="store_true", help="skip running `uv lock`")
+    p_fork.set_defaults(fn=cmd_fork)
 
     p_bump = sub.add_parser("bump", help="move this repo's adb pin (nix + uv together)")
     p_bump.add_argument("--rev", help="target rev (default: the rev this tool was built from)")

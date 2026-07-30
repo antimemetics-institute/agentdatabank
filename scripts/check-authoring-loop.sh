@@ -50,3 +50,17 @@ ADB_HOME="$tmp/adb-home" \
 ./scripts/check-entrypoint-identity.sh --dir "$scaffold" --exp ci-chat -- \
   --set 'prompt=Say one surprising thing.' --set turns=2 \
   --set model=mock/model --set temperature=0.7
+
+# fork: a registry experiment lifted out into the same external shape — verify
+# the copy, the rename, and the path→git source rewrite land where the pin says.
+# --no-lock keeps this leg cheap: resolving and building the fork re-proves what
+# the init leg and the in-tree experiment's own CI already cover.
+fork="$tmp/ci-concordia"
+"$adb_dev" fork concordia ci-concordia --dir "$fork" \
+  --adb-url "file://$adbsrc" --rev "$head" --no-lock
+grep -q "rev = \"$head\"" "$fork/default.nix"
+grep -q "ci-concordia = adb.mkExperiment" "$fork/package.nix"
+grep -q "name = \"ci-concordia\"" "$fork/package.nix"
+grep -q "subdirectory = \"lib/adb-events\"" "$fork/pyproject.toml"
+grep -q "rev = \"$head\"" "$fork/pyproject.toml"
+! grep -q "path = \"\.\./\.\./lib" "$fork/pyproject.toml"
