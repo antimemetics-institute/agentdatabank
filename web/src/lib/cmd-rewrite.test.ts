@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CMD_PREFS_DEFAULTS, previewCmd, rewriteCmd, type CmdPrefs } from "./cmd-rewrite.ts";
+import { CMD_PREFS_DEFAULTS, REPO_LOCAL_PREFS, previewCmd, rewriteCmd, type CmdPrefs } from "./cmd-rewrite.ts";
 
 const p = (over: Partial<CmdPrefs>): CmdPrefs => ({ ...CMD_PREFS_DEFAULTS, ...over });
 
@@ -97,6 +97,16 @@ test("non-command text and indentation are preserved", () => {
   assert.equal(
     rewriteCmd("  nix run .#foo", p({ mode: "flakes", flakes: true })),
     `  nix run ${GITHUB}#foo --refresh`,
+  );
+});
+
+test("external experiments pin the repo-local stock-nix form, palette ignored", () => {
+  // REPO_LOCAL_PREFS is what the builder substitutes for the user's palette when
+  // a manifest's origin is "external" — the adb sources cannot name those, so
+  // the only truthful command runs from the experiment repo's own directory
+  assert.equal(
+    rewriteCmd("nix run .#my-exp -- --set model=m", REPO_LOCAL_PREFS),
+    "$(nix-build --no-out-link -A exec.my-exp) --set model=m",
   );
 });
 

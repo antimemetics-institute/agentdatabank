@@ -33,6 +33,19 @@ export const CMD_PREFS_DEFAULTS: CmdPrefs = {
   latest: true,
 };
 
+/* External experiments (manifest origin "external") live in the author's own
+   repo — the adb github/tarball sources cannot name them, so the palette does
+   not apply: their oneliner is always the repo-local stock-nix form the
+   scaffold README teaches, run from the experiment's own directory. */
+export const REPO_LOCAL_PREFS: CmdPrefs = {
+  mode: "nix-build",
+  source: "local",
+  flakes: false,
+  registry: false,
+  nixRun: false,
+  latest: false,
+};
+
 const GITHUB = "github:antimemetics-institute/agentdatabank";
 const TARBALL = "https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz";
 const ARMOR = " --extra-experimental-features 'nix-command flakes'";

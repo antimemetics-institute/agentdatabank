@@ -12,7 +12,7 @@ import { Fragment, useMemo, useState } from "react";
 import { buildCmd, defaultStr, initialStr, orderedParams } from "@/lib/cmd-build";
 import { useCmdPrefs } from "@/lib/cmd-prefs";
 import { clearDraft, getLastLlm, loadDraft, saveDraft, setLastLlm } from "@/lib/run-draft";
-import { rewriteCmd } from "@/lib/cmd-rewrite";
+import { REPO_LOCAL_PREFS, rewriteCmd } from "@/lib/cmd-rewrite";
 import { useManifests } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import type { ParamDecl, ParamType, StructField, Suggestion } from "@/shared/types";
@@ -492,10 +492,14 @@ function BuilderForm({ name }: { name: string }) {
      shown but copy is gated: the incomplete state lives in the UI, never in
      the copied text. */
   const prefs = useCmdPrefs();
+  /* an external experiment exists only in its author's repo — the palette's
+     github/tarball forms cannot name it, so its oneliner is pinned to the
+     repo-local form regardless of the settings menu */
+  const external = manifest?.origin === "external";
   const { oneliner, missing } = useMemo(() => {
     const { cmd, missing } = buildCmd(name, params, seeded);
-    return { oneliner: rewriteCmd(cmd, prefs), missing };
-  }, [name, params, seeded, prefs]);
+    return { oneliner: rewriteCmd(cmd, external ? REPO_LOCAL_PREFS : prefs), missing };
+  }, [name, params, seeded, prefs, external]);
 
   const copy = () => {
     if (missing.length > 0) return;
@@ -592,7 +596,14 @@ function BuilderForm({ name }: { name: string }) {
 
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">
-              oneliner{copied && <span className="ml-1 text-emerald-600 dark:text-emerald-400">copied ✓</span>}
+              oneliner
+              {external && (
+                <span className="ml-1 text-muted-foreground/70">
+                  — run from this experiment&apos;s own repo directory (the Nix settings menu
+                  doesn&apos;t apply to it)
+                </span>
+              )}
+              {copied && <span className="ml-1 text-emerald-600 dark:text-emerald-400">copied ✓</span>}
               {missing.length > 0 && (
                 <span className="ml-1 text-amber-600 dark:text-amber-400">
                   — set {missing.map((k) => <code key={k} className="mx-0.5">{k}</code>)} to copy
