@@ -320,35 +320,68 @@ def _pick_profile(name: str, profiles: dict[str, dict[str, str]], *,
             f"remembered choice for {experiment!r} — run interactively once to "
             f"choose, or `credentials set {name}.default` to create a default")
     has_default = "default" in profiles
-    others = [n for n in names if n != "default"]
-    menu = ("[default] " if has_default else "") + " ".join(others + ["new"])
+    # A numbered list, one entry per line, with "set up a new profile" as an ordinary
+    # numbered entry rather than a keyword sitting among the profile names (gcloud's
+    # shape). Every legal answer is then a number, so nothing y/n-shaped is ever valid
+    # here -- the confusion is structurally impossible instead of diagnosed after the
+    # fact. Static text only: these lines interleave with build/status output on stderr,
+    # so nothing may redraw or assume it owns the terminal.
+    ordered = (["default"] if has_default else []) + [n for n in names if n != "default"]
+    new_index = len(ordered) + 1
+    block = ["", f"adb: this run needs {name!r} credentials", ""]
+    block += [f" [{i}] {p}" for i, p in enumerate(ordered, 1)]
+    block.append(f" [{new_index}] set up a new profile")
+    block.append("")
+    print("\n".join(block), file=sys.stderr)
+    # `[N]` means "menu entry N" everywhere, so a pre-filled bracket on the prompt line
+    # is what Enter gives you -- no second sentence needed to say so (update-alternatives
+    # puts its Enter hint in the prompt line for the same reason).
+    prompt = "choice [1]: " if has_default else "choice: "
+    # restates the constraint; says nothing about what the rejected answer was (that
+    # belongs in the raised error, where a scripted caller reads it)
+    constraint = f"enter a number between 1 and {new_index}, or a profile name"
     while True:
-        answer = _read(f"which {name!r} credentials? {menu}: ", False)
+        answer = _read(prompt, False)
         if not answer:
             if has_default:
                 choice = "default"
                 break
-            print(f"pick one of: {menu}", file=sys.stderr)
+            print(constraint, file=sys.stderr)
             if not sys.stdin.isatty():
-                raise ValueError(f"credential set {name!r} needs a choice of: {menu}")
+                raise ValueError(f"credential set {name!r} needs a choice -- {constraint}")
             continue
-        if answer in profiles:
-            choice = answer
+        # the number wins over a same-named profile: a numbered menu whose numbers can
+        # be shadowed is a menu that lies. `new` stays typeable (it is reserved, so no
+        # profile can take it) -- scripted callers written against the old picker keep
+        # working, and the reserved-name check keeps it unambiguous.
+        selected: str | None = None
+        if answer.isdigit():
+            index = int(answer)
+            if 1 <= index <= len(ordered):
+                selected = ordered[index - 1]
+            elif index == new_index:
+                selected = "new"
+        elif answer in profiles or answer == "new":
+            selected = answer
+        if selected is None:
+            print(constraint, file=sys.stderr)
+            if not sys.stdin.isatty():
+                raise ValueError(f"no {name!r} profile {answer!r}")
+            continue
+        if selected != "new":
+            choice = selected
             break
-        if answer == "new":
-            vals = _prompt_values(name, current=None)
-            profile = _prompt_profile_name(suggestion=None, taken=set(profiles))
-            if vals is None or profile is None:
-                raise ValueError(f"invalid input while creating a {name!r} profile")
-            store = load()
-            store.setdefault(name, {})[profile] = vals
-            save(store)
-            profiles[profile] = vals
-            choice = profile
-            break
-        print(f"no {name!r} profile {answer!r} (choices: {menu})", file=sys.stderr)
-        if not sys.stdin.isatty():
-            raise ValueError(f"no {name!r} profile {answer!r}")
+        vals = _prompt_values(name, current=None)
+        profile = _prompt_profile_name(suggestion=None, taken=set(profiles))
+        if vals is None or profile is None:
+            raise ValueError(f"invalid input while creating a {name!r} profile")
+        store = load()
+        store.setdefault(name, {})[profile] = vals
+        save(store)
+        profiles[profile] = vals
+        choice = profile
+        break
+    print(f"adb: using {name}.{choice}", file=sys.stderr)
     remember = _read(f"always use {choice!r} for {experiment!r}? [y/N]: ", False)
     if remember.lower() in ("y", "yes"):
         prefs.setdefault(experiment, {})[name] = choice

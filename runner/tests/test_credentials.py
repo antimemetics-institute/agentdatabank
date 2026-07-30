@@ -437,7 +437,11 @@ def test_picker_unknown_choice_complains(cfg, monkeypatch, capsys):
     _stdin(monkeypatch, "wrok\n")  # scripted input can't retype — complain and fail
     with pytest.raises(ValueError, match="wrok"):
         _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"})
-    assert "no 'openai' profile 'wrok'" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # the printed line restates the constraint and does not editorialize about the
+    # rejected answer; the value itself rides on the raised error, for scripted callers
+    assert "enter a number between 1 and 3, or a profile name" in err
+    assert "wrok" not in err
 
 
 def test_picker_empty_without_default_reasks_cleanly(cfg, monkeypatch, capsys):
@@ -447,8 +451,29 @@ def test_picker_empty_without_default_reasks_cleanly(cfg, monkeypatch, capsys):
     with pytest.raises(ValueError, match="needs a choice"):
         _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"})
     err = capsys.readouterr().err
-    assert "pick one of: personal work new" in err
-    assert "profile ''" not in err  # the clean message, not the unknown-choice one
+    # the numbered block, with "new" as an ordinary entry; nothing is pre-filled on the
+    # prompt line, because Enter selects nothing here
+    assert " [1] personal\n [2] work\n [3] set up a new profile" in err
+    assert "choice: " in err and "choice [" not in err
+    assert "enter a number between 1 and 3, or a profile name" in err
+
+
+def test_picker_accepts_number_or_name(cfg, monkeypatch, capsys):
+    credentials.save({"openai": {"default": {"OPENAI_API_KEY": "d"},
+                                 "work": {"OPENAI_API_KEY": "w"}}})
+    # [1] default, [2] work, [3] set up a new profile — the number picks the entry
+    _stdin(monkeypatch, "2\nn\n")
+    assert _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"}) == {
+        "OPENAI_API_KEY": "w"}
+    err = capsys.readouterr().err
+    assert " [1] default\n [2] work\n [3] set up a new profile" in err
+    assert "choice [1]: " in err  # the pre-filled bracket is what Enter gives you
+    assert "adb: using openai.work" in err
+    # the new-profile entry is reachable by its number, not only by the word
+    _stdin(monkeypatch, "3\nsk-p\nhttp://p/v1\npersonal\nn\n")
+    env = _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"})
+    assert env["OPENAI_API_KEY"] == "sk-p"
+    assert "personal" in credentials.load()["openai"]
 
 
 def test_first_use_rejects_reserved_profile_name(cfg, monkeypatch, capsys):
