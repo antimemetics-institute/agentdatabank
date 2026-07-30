@@ -10,6 +10,8 @@ $ nix run .#adb-web
 
 It binds `127.0.0.1:8340` (walking up to the next free port if 8340 is taken) and reads the same run store the runner writes (default `~/.local/share/adb`).
 
+Every run the runner starts prints a link straight to its page here. It finds the viewer by asking the ports it may have walked to which store each is serving, so the printed link points at a viewer that will actually show that run — and when none is running, the runner says so and prints the command above.
+
 | Flag | Meaning |
 |---|---|
 | `--host ADDR` | Bind address. Default loopback; `--host 0.0.0.0` exposes it to the network (no auth — trusted networks only). |

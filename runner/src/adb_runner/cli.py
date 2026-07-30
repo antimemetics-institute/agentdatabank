@@ -13,7 +13,10 @@ import hashlib
 import json
 import os
 import random
+import socket
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from . import credentials
@@ -32,13 +35,65 @@ from .store import RunStore, default_home, ensure_condition
 from .ulid import ulid
 
 
-# the local viewer (adb-web). One constant so the startup hint and the per-run links
-# can't drift apart; run links use the bare-id route the web app resolves itself.
-VIEWER_URL = "http://127.0.0.1:8340"
+# the local viewer (adb-web): it binds VIEWER_PORT, walking up when that's taken, so
+# the link a run prints is only right if we look. resolve_viewer() probes the ports it
+# would have walked and keeps the one serving THIS run store; the default URL is the
+# fallback. Run links use the bare-id route the web app resolves itself.
+VIEWER_HOST = "127.0.0.1"
+VIEWER_PORT = 8340
+VIEWER_PROBE_PORTS = 4
+VIEWER_URL = f"http://{VIEWER_HOST}:{VIEWER_PORT}"
 
 
 def _log(msg: str) -> None:
     print(f"adb: {msg}", file=sys.stderr)
+
+
+def _sgr(text: str, *codes: str) -> str:
+    """ANSI-styled on a terminal, plain text anywhere else (pipes, CI, NO_COLOR)."""
+    if not sys.stderr.isatty() or os.environ.get("NO_COLOR") or os.environ.get("TERM") == "dumb":
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
+
+def _viewer_ping(port: int, timeout: float = 0.3) -> dict | None:
+    """adb-web's identity endpoint: {"adb": "web", "home": <store it serves>}. Whatever
+    else might hold the port answers wrong, or not at all, and is skipped. Proxies are
+    bypassed explicitly — an http_proxy in the environment must not swallow a probe of
+    the machine's own loopback."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"http://{VIEWER_HOST}:{port}/api/ping", timeout=timeout) as r:
+            body = json.loads(r.read(4096))
+    except (OSError, ValueError):
+        return None
+    return body if isinstance(body, dict) and body.get("adb") == "web" else None
+
+
+def resolve_viewer(home: Path) -> tuple[str, str | None]:
+    """(base_url, hint) — where to watch these runs, plus a one-line fix when clicking
+    that link won't work yet. A viewer serving a *different* store would never show
+    these runs, so it counts as no viewer; we point at it and say how to re-home it."""
+    mismatched: tuple[str, str] | None = None
+    for port in range(VIEWER_PORT, VIEWER_PORT + VIEWER_PROBE_PORTS):
+        ping = _viewer_ping(port)
+        if ping is None:
+            continue
+        base = f"http://{VIEWER_HOST}:{port}"
+        served = str(ping.get("home") or "")
+        try:
+            same = bool(served) and Path(served).resolve() == home.resolve()
+        except OSError:
+            same = False
+        if same:
+            return base, None
+        if mismatched is None:
+            mismatched = (base, served or "somewhere else")
+    if mismatched is not None:
+        base, served = mismatched
+        return base, (f"the viewer at {base} is serving {served}, not {home} — restart it "
+                      f"with: nix run .#adb-web -- --home {home}")
+    return VIEWER_URL, "no viewer running — start one with: nix run .#adb-web"
 
 
 def _parse_kv(raw: str, flag: str) -> tuple[str, str]:
@@ -163,7 +218,6 @@ def main() -> int:
     home.mkdir(parents=True, exist_ok=True)
     _log(f"{manifest['name']}: {replicates} replicate(s) of condition "
          f"{abbrev(cond['cid'])}, base seed {base_seed}")
-    _log(f"watch runs live at {VIEWER_URL} — start the viewer with: nix run .#adb-web")
 
     json_out = (lambda e: print(json.dumps(e, separators=(",", ":")), flush=True)) if args.json else None
 
@@ -182,6 +236,13 @@ def main() -> int:
         _log(f"provisioning failed: {exc}")
         return 2
 
+    # Where to watch, resolved once the gate is behind us: the credential dialogue is
+    # the last thing between "I typed a command" and "it's running", so the link lands
+    # here — at the bottom of the scroll, where a click actually follows.
+    viewer, viewer_hint = resolve_viewer(home)
+    if viewer_hint:
+        _log(viewer_hint)
+
     counts = {"completed": 0, "failed": 0, "interrupted": 0}
     try:
         ensure_condition(home, cond["cid"], {
@@ -198,7 +259,12 @@ def main() -> int:
             run_id = ulid()
             store = RunStore(home, cond["cid"], run_id)
             label = f"[{abbrev(cond['cid'])} r{replicate}]"
-            _log(f"{label} {run_id} writing to {store.dir}")
+            # two aligned fields, the clickable one first: the URL is the thing a reader
+            # wants at the moment a run starts, and it's underlined/cyan so it reads as a
+            # link (terminals cmd-click it; it survives a plain copy either way).
+            _log(f"{label} run {run_id} started")
+            _log(f"  {_sgr('▸ watch', '2')}  {_sgr(f'{viewer}/#/runs/{run_id}', '1;4;36')}")
+            _log(f"  {_sgr('▸ store', '2')}  {_sgr(str(store.dir), '2')}")
 
             def on_event(envelope, _label=label):
                 # an experiment's error-level log is the "why it failed" — say it on
@@ -230,7 +296,7 @@ def main() -> int:
                  f"{summary} ({result.duration_s:.1f}s, "
                  f"{result.usage['llm_calls']} calls, "
                  f"{result.usage['input_tokens']}+{result.usage['output_tokens']} tok) "
-                 f"— {VIEWER_URL}/#/runs/{result.run_id}")
+                 f"— {viewer}/#/runs/{result.run_id}")
     except KeyboardInterrupt:
         _log("interrupted — partial runs kept (garbage is data)")
         counts["interrupted"] += 1

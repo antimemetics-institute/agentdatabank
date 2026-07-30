@@ -84,7 +84,14 @@ save 'anthropic' for future runs? [Y/n]:
 
 See [Credentials](secrets.md) for more details.
 
-After typing in your credentials, navigate to [the runs page](http://127.0.0.1:8340/#/runs) to look at the run progress live, and click into the run to read the transcript:
+After typing in your credentials the run starts, and prints the link to watch it — click that (or [the runs page](http://127.0.0.1:8340/#/runs)) to follow the progress live and read the transcript:
+
+```text
+adb: [258b80e5323e r1] run 01KYS…H3 started
+adb:   ▸ watch  http://127.0.0.1:8340/#/runs/01KYS…H3
+adb:   ▸ store  ~/.local/share/adb/runs/258b80e5323e…/01KYS…H3
+```
+
 
 <video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm"></video>
 <video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm"></video>

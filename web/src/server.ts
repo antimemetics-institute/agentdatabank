@@ -22,9 +22,9 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { join, extname, normalize, sep } from "node:path";
+import { join, extname, normalize, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { parseArgs } from "node:util";
 import type { Ev, RunMeta } from "./shared/types";
@@ -330,6 +330,16 @@ const server = createServer(async (req, res) => {
         const scan = await scanRuns();
         return withEtag(req, res, `"runs-${scan.count}-${Math.round(scan.maxMtimeMs)}"`,
           "no-cache", () => scan.runs);
+      }
+      if (parts[1] === "ping" && parts.length === 2) {
+        /* identity probe: the runner walks the ports this server might have bound to
+           (8340 upward) looking for a viewer serving the store its runs go to, so it
+           can print a link that actually resolves. Deliberately tiny and store-scan
+           free — it's hit at every run start. The home is real-pathed so the two sides
+           compare equal through symlinks and relative --home. */
+        let home = resolve(HOME);
+        try { home = realpathSync(home); } catch { /* not created yet — absolute is enough */ }
+        return json(req, res, 200, { adb: "web", home }, { "cache-control": "no-store" });
       }
       if (parts[1] === "experiments" && parts.length === 2) {
         /* manifests are per-build-immutable; no-cache is fine (tiny, rarely fetched) */

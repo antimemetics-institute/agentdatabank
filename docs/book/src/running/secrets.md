@@ -12,8 +12,12 @@ ANTHROPIC_API_KEY [unset]: ****
 ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
 save 'anthropic' for future runs? [Y/n]:
 name this profile [default]:
-adb: [258b80e5323e r1] … running
+adb: [258b80e5323e r1] run 01KYS…H3 started
+adb:   ▸ watch  http://127.0.0.1:8340/#/runs/01KYS…H3
+adb:   ▸ store  ~/.local/share/adb/runs/258b80e5323e…/01KYS…H3
 ```
+
+The gate is the last thing before the run moves, so the link to watch it live is the last thing printed — click it (if the viewer isn't up yet, the line above it says so, and how to start it).
 
 - Secret prompts are hidden — never echoed, and never on the command line. (There is deliberately no `KEY=VALUE` argv form: argv shows up in `ps` and shell history.)
 - `Enter` accepts a shown `[default: …]`.
