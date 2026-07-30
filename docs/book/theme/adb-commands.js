@@ -89,11 +89,24 @@
     });
     return before + cmd;
   }
+  // The `--run "…"` payload is read twice: the shell you paste into resolves the
+  // double-quoted string, then nix-shell hands the result to another shell to run.
+  // So everything the outer pass would eat ($ ` " \) has to be escaped for the
+  // inner command to arrive intact. The one exception is a backslash that continues
+  // a line: it stays live, and the outer pass folding the span back into one line
+  // is exactly what the inner shell wants.
+  var CONTINUATION = /\\\s*$/;
+  function dqEscape(text) {
+    return text.split("\n").map(function (line) {
+      var m = CONTINUATION.exec(line);
+      var cut = m ? m.index : line.length;
+      return line.slice(0, cut).replace(/[$`"\\]/g, "\\$&") + line.slice(cut);
+    }).join("\n");
+  }
   // Block-level pass: commands span multiple lines via trailing backslashes, and
   // the no-nix-run-installed form must wrap the WHOLE span in
   //   nix-shell -p nix-run --run "…"
-  // (inside double quotes backslash-newline still continues the line, and our
-  // values only ever carry single quotes, so the nesting is paste-safe).
+  // with the span dq-escaped so the nesting is paste-safe.
   function rewrite(text, p) {
     var lines = text.split("\n");
     var out = [];
@@ -110,7 +123,8 @@
       var head = rewriteLine(line, p);
       var tail = span.slice(1);
       if (p.mode === "nix-run" && !p.nixRun) {
-        head = before + 'nix-shell -p nix-run --run "' + head.slice(before.length);
+        head = before + 'nix-shell -p nix-run --run "' + dqEscape(head.slice(before.length));
+        tail = tail.map(dqEscape);
         if (tail.length) tail[tail.length - 1] += '"';
         else head += '"';
       }

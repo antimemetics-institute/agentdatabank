@@ -4,7 +4,9 @@
    real declared value — its `initial`, else its first suggestion, else an enum's
    first member — so the copy button never gates and a pasted oneliner is always a
    complete, runnable condition spec. Only a param with no declared value anywhere
-   (and not nullable) lands in `missing`. */
+   (and not nullable) lands in `missing`. The second invariant: whatever the user
+   typed is shell-encoded (shQuote), so a value carrying a quote, a space, or a
+   newline changes that param's value and nothing else about the command. */
 
 import type { ParamDecl } from "@/shared/types";
 
@@ -33,21 +35,51 @@ export const orderedParams = (params: Record<string, ParamDecl>): [string, Param
   Object.entries(params).sort(
     ([ak, a], [bk, b]) => ((a.order ?? 100) - (b.order ?? 100)) || ak.localeCompare(bk));
 
-/* one `--set key=value`, JSON- and shell-encoded so the runner (which JSON-parses
-   `--set` values) sees the right type. Numbers/bools go bare; list/struct values are
-   raw JSON the user typed (single-quoted for the shell). Strings go BARE when that
-   round-trips (shell-safe chars, not JSON-parseable — the runner's bare-string
-   fallback keeps them strings), so `--set model=anthropic/claude-…` reads like the
-   docs; anything else becomes a quoted JSON string literal. */
+/* POSIX single-quoting, the encoding `shlex.quote` applies on the runner side: a
+   value's own single quotes close the quoting, escape, and reopen (`'\''`). NOTHING
+   the user typed is interpolated into the command unquoted except through the
+   narrow bare forms below — a param value can never terminate its own token and
+   turn the rest of the oneliner into shell syntax. */
+export const shQuote = (s: string): string => `'${s.replace(/'/g, "'\\''")}'`;
+
+/* the shapes that may appear unquoted: a shell-safe string, a JSON number, a bool.
+   Everything else is quoted, including a half-typed number ("1e", "-") — the runner
+   rejects it either way, but the command around it stays intact. */
 const BARE_STRING = /^[A-Za-z0-9_./:@=+-]+$/;
+const NUMBER_LITERAL = /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 function jsonParses(s: string): boolean {
   try { JSON.parse(s); return true; } catch { return false; }
 }
+
+/* a JSON-typed value is re-serialized compact when it parses: pasting a
+   pretty-printed blob into a raw textarea would otherwise splice literal newlines
+   through the command text. The value is unchanged either way (the runner
+   JSON-parses it, so the condition id is identical) — only its spelling is. Text
+   that does not parse passes through untouched: the form already flags it, and
+   quoting keeps the rest of the command intact meanwhile. */
+function compactJson(raw: string): string {
+  try { return JSON.stringify(JSON.parse(raw)); } catch { return raw; }
+}
+
+/* one `--set key=value`, JSON- and shell-encoded so the runner (which JSON-parses
+   `--set` values) sees the right type. Numbers/bools go bare; list/struct values are
+   the JSON the user typed. Strings go BARE when that round-trips (shell-safe chars,
+   not JSON-parseable — the runner's bare-string fallback keeps them strings), so
+   `--set model=anthropic/claude-…` reads like the docs; anything else becomes a
+   quoted JSON string literal. A leading `@` forces the quoted form: bare, it would
+   read as the runner's @file shorthand, so the command would mean something other
+   than the literal string the form is showing. */
 export function encodeSet(key: string, raw: string, kind: string): string {
-  if (kind === "int" || kind === "float" || kind === "bool") return `--set ${key}=${raw}`;
-  if (kind === "list" || kind === "struct" || kind === "object") return `--set '${key}=${raw}'`;
-  if (BARE_STRING.test(raw) && !jsonParses(raw)) return `--set ${key}=${raw}`;
-  return `--set '${key}=${JSON.stringify(raw)}'`;
+  const set = (v: string) => `--set ${key}=${v}`;
+  const quoted = (v: string) => `--set ${shQuote(`${key}=${v}`)}`;
+  if (kind === "int" || kind === "float")
+    return NUMBER_LITERAL.test(raw.trim()) ? set(raw.trim()) : quoted(raw);
+  if (kind === "bool")
+    return raw === "true" || raw === "false" ? set(raw) : quoted(raw);
+  if (kind === "list" || kind === "struct" || kind === "object")
+    return quoted(compactJson(raw));
+  if (BARE_STRING.test(raw) && raw[0] !== "@" && !jsonParses(raw)) return set(raw);
+  return quoted(JSON.stringify(raw));
 }
 
 export interface BuiltCmd {

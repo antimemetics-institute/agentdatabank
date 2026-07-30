@@ -10,6 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCmd, defaultStr } from "./cmd-build.ts";
@@ -80,6 +81,89 @@ test("user value overrides initial; strings quote when not shell-bare", () => {
 
 test("no params at all -> bare nix run, nothing missing", () => {
   assert.deepEqual(buildCmd("x", {}, {}), { cmd: "nix run .#x", missing: [] });
+});
+
+/* ── shell round trip ────────────────────────────────────────────────────────
+   Quoting is only right if a real shell agrees, so these run the generated
+   command through /bin/sh — head swapped for a printf that prints each argument
+   on its own line — and decode the values the way the runner's parse_value does
+   (JSON, else the bare text). What comes back must be what was typed into the
+   form, whatever characters it carried. */
+
+function setArgs(cmd: string): Record<string, unknown> {
+  const script = cmd.replace(/^nix run \S+(?: --)?/, "printf '%s\\n'");
+  const argv = execFileSync("sh", ["-c", script], { encoding: "utf8" }).split("\n").slice(0, -1);
+  const out: Record<string, unknown> = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    assert.equal(argv[i], "--set", `expected --set at argv[${i}], got ${argv[i]}`);
+    const entry = argv[i + 1]!;
+    const eq = entry.indexOf("=");
+    const raw = entry.slice(eq + 1).trim(); /* parse_value strips before parsing */
+    let value: unknown;
+    try { value = JSON.parse(raw); } catch { value = raw; }
+    out[entry.slice(0, eq)] = value;
+  }
+  return out;
+}
+
+test("awkward string values survive the shell verbatim", () => {
+  const params: Record<string, ParamDecl> = {
+    apostrophe: { type: { kind: "str" } },
+    quotes: { type: { kind: "str" } },
+    backslash: { type: { kind: "str" } },
+    dollars: { type: { kind: "str" } },
+    atfile: { type: { kind: "str" } },
+    mixed: { type: { kind: "str" } },
+  };
+  const vals = {
+    apostrophe: "it's fine",
+    quotes: 'say "hi"',
+    backslash: "C:\\tmp\\x",
+    dollars: "$HOME and `date`",
+    /* bare, this would read as the runner's @file shorthand — a different value
+       than the one the form is showing */
+    atfile: "@prompt.txt",
+    mixed: `'; rm -rf / #`,
+  };
+  assert.deepEqual(setArgs(buildCmd("x", params, vals).cmd), vals);
+});
+
+test("typed values keep their type through the shell", () => {
+  const params: Record<string, ParamDecl> = {
+    n: { type: { kind: "int" } },
+    f: { type: { kind: "float" } },
+    b: { type: { kind: "bool" } },
+    model: { type: { kind: "llm" } },
+    numeric_str: { type: { kind: "str" } },
+    items: { type: { kind: "list", of: { kind: "str" } } },
+  };
+  const got = setArgs(buildCmd("x", params, {
+    n: "3", f: "-0.5", b: "true",
+    model: "anthropic/claude-haiku-4-5-20251001",
+    numeric_str: "42",            /* a string that looks like a number stays a string */
+    items: `["it's", "a \\"b\\""]`,
+  }).cmd);
+  assert.deepEqual(got, {
+    n: 3, f: -0.5, b: true,
+    model: "anthropic/claude-haiku-4-5-20251001",
+    numeric_str: "42",
+    items: ["it's", 'a "b"'],
+  });
+});
+
+test("pretty-printed JSON is compacted, not spliced across lines", () => {
+  const params: Record<string, ParamDecl> = {
+    agents: { type: { kind: "list", of: { kind: "struct", fields: {} } } },
+  };
+  const { cmd } = buildCmd("x", params, { agents: '[\n  {\n    "name": "O\'Brien"\n  }\n]' });
+  assert.match(cmd, /--set 'agents=\[\{"name":"O'\\''Brien"\}\]'/);
+  assert.deepEqual(setArgs(cmd), { agents: [{ name: "O'Brien" }] });
+});
+
+test("a half-typed number is quoted rather than spliced in bare", () => {
+  const params: Record<string, ParamDecl> = { n: { type: { kind: "int" } } };
+  /* the NumberInput commits every keystroke, so mid-edit text reaches the composer */
+  assert.equal(buildCmd("x", params, { n: "1e" }).cmd, "nix run .#x -- \\\n  --set 'n=1e'");
 });
 
 /* the real manifests: with a blank form, `missing` must be exactly the params

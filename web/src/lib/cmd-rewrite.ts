@@ -101,11 +101,25 @@ function rewriteLine(line: string, p: CmdPrefs): string {
   return before + cmd;
 }
 
+/* The `--run "…"` payload is read twice: the shell you paste into resolves the
+   double-quoted string, then nix-shell hands the result to another shell to run. So
+   everything the outer pass would eat ($ ` " \) has to be escaped for the inner
+   command to arrive intact — param values carry spaces, JSON double quotes, and
+   `'\''` escapes, none of which survive verbatim. The one exception is a backslash
+   that continues a line: it stays live, and the outer pass folding the span back
+   into one line is exactly what the inner shell wants. */
+const CONTINUATION = /\\\s*$/;
+function dqEscape(text: string): string {
+  return text.split("\n").map((line) => {
+    const cut = CONTINUATION.exec(line)?.index ?? line.length;
+    return line.slice(0, cut).replace(/[$`"\\]/g, "\\$&") + line.slice(cut);
+  }).join("\n");
+}
+
 /* Block-level pass: commands span multiple lines via trailing backslashes, and
    the no-nix-run-installed form must wrap the WHOLE span in
      nix-shell -p nix-run --run "…"
-   (inside double quotes backslash-newline still continues the line, and our
-   values only ever carry single quotes, so the nesting is paste-safe). */
+   with the span dq-escaped so the nesting is paste-safe. */
 export function rewriteCmd(text: string, p: CmdPrefs): string {
   const lines = text.split("\n");
   const out: string[] = [];
@@ -123,9 +137,10 @@ export function rewriteCmd(text: string, p: CmdPrefs): string {
     }
     const before = line.slice(0, idx);
     let head = rewriteLine(line, p);
-    const tail = span.slice(1);
+    let tail = span.slice(1);
     if (p.mode === "nix-run" && !p.nixRun) {
-      head = before + 'nix-shell -p nix-run --run "' + head.slice(before.length);
+      head = before + 'nix-shell -p nix-run --run "' + dqEscape(head.slice(before.length));
+      tail = tail.map(dqEscape);
       if (tail.length) tail[tail.length - 1] += '"';
       else head += '"';
     }

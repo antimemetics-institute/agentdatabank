@@ -4,6 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { CMD_PREFS_DEFAULTS, REPO_LOCAL_PREFS, previewCmd, rewriteCmd, type CmdPrefs } from "./cmd-rewrite.ts";
 
 const p = (over: Partial<CmdPrefs>): CmdPrefs => ({ ...CMD_PREFS_DEFAULTS, ...over });
@@ -90,6 +91,27 @@ test("nix-run not installed wraps the whole span in nix-shell --run", () => {
     rewriteCmd("nix run .#foo -- \\\n  --set a=1 \\\n  --set b=2", p({ mode: "nix-run", source: "local" })),
     'nix-shell -p nix-run --run "nix-run . -A experiment-foo -- \\\n  --set a=1 \\\n  --set b=2"',
   );
+});
+
+/* The wrap is a nesting, not a text decoration: whatever the shell you paste into
+   hands nix-shell must be exactly the command the nix-run-installed form spells,
+   for any param value. Checked against /bin/sh — head swapped for a printf, so what
+   is printed IS the --run argument as the shell resolved it. */
+function runPayload(wrapped: string): string {
+  /* the payload stays printf's ARGUMENT, never part of its format — a format string
+     would process backslash escapes and quietly launder the very thing under test */
+  const script = wrapped.replace("nix-shell -p nix-run --run ", "printf '%s' ");
+  return execFileSync("sh", ["-c", script], { encoding: "utf8" });
+}
+
+test("the nix-shell wrap survives param values carrying quotes and specials", () => {
+  const cmd = "nix run .#foo -- \\\n" +
+    `  --set 'note="it'\\''s $HOME"' \\\n` +
+    `  --set 'agents=[{"name":"a b"}]'`;
+  const wrapped = rewriteCmd(cmd, p({ mode: "nix-run", source: "local" }));
+  const installed = rewriteCmd(cmd, p({ mode: "nix-run", source: "local", nixRun: true }));
+  /* the outer shell folds our backslash-newlines away; nothing else changes */
+  assert.equal(runPayload(wrapped), installed.replace(/\\\n/g, ""));
 });
 
 test("non-command text and indentation are preserved", () => {
