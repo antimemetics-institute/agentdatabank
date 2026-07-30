@@ -22,6 +22,7 @@ Review reads your repo at the pinned rev, plus the wrapper:
 - **Descriptions** — `summary`, per-param `description`s and suggestions are the GUI; write them for someone who hasn't read your code.
 - **Links** — `links = [ { label; url; } … ]` points readers at the paper, the upstream repo, and any datasets; shown on the experiment page and each run. Links are pointers, not pins — the pinned rev lives in your lockfile.
 - **A tight `src` list** — identity covers behavior only.
+- **No paths above the directory** — the declaration must evaluate outside this tree (that is what [forking](external.md#or-fork-one) produces); shared adb data comes through the `adb` argument, never a `../..` path.
 - **Committed `uv.lock`, bounded deps** — the wrapped version of your repo is a deliberate line-edit, not silent drift.
 
 ## Updating

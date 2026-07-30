@@ -148,6 +148,23 @@ def repath_uv_sources(pyproject: Path, dirname: str, url: str, rev: str) -> list
     return touched
 
 
+def warn_relative_escapes(dest: Path) -> None:
+    """A forked directory must evaluate anywhere — a `../` in its nix files
+    resolves against wherever the fork lands, not the adb tree. Registry files
+    route shared adb data through the `adb` attrset instead; if something
+    slipped through, say where, and let the author judge."""
+    for nix in sorted(dest.rglob("*.nix")):
+        if nix == dest / "default.nix":
+            continue  # the generated pin block legitimately knows no ../
+        hits = [i for i, line in enumerate(nix.read_text().splitlines(), 1)
+                if "../" in line and not line.lstrip().startswith("#")]
+        if hits:
+            rel = nix.relative_to(dest)
+            print(f"adb-dev: WARNING: {rel} line(s) {', '.join(map(str, hits))} mention `../` — "
+                  "paths above the directory resolve nowhere outside the adb tree; "
+                  "shared adb files must come through the `adb` attrset")
+
+
 def rename_experiments(package_nix: Path, old: str, new: str) -> list[tuple[str, str]]:
     """Rename `old`(-suffixed) declarations in package.nix to `new`(-suffixed).
 
@@ -578,6 +595,7 @@ def cmd_fork(args: argparse.Namespace) -> int:
         print(f"adb-dev: pyproject.toml adb sources path → git @ {rev[:12]} ({', '.join(touched)})")
     else:
         print("adb-dev: no in-tree adb path sources in pyproject.toml — nothing to repoint")
+    warn_relative_escapes(dest)
 
     web_url = os.environ.get("ADB_REPO_URL") or url
     subst = {"@NAME@": primary, "@SRC@": old, "@URL@": url, "@REV@": rev,

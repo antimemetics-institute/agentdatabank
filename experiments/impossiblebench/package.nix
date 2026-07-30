@@ -67,8 +67,10 @@ let
     generate_args = param object {
       description = "Generation config overrides; leave a field unset to keep the provider's default.";
       initial = { };
-      # typed sub-form generated from the pinned inspect_ai's GenerateConfig
-      fields = (builtins.fromJSON (builtins.readFile ../../lib/adb-inspect/generate_fields.json)).fields;
+      # typed sub-form generated from the pinned inspect_ai's GenerateConfig —
+      # through `adb`, never a ../../ path: this directory must evaluate outside
+      # the tree (that is what `adb-dev fork` produces)
+      fields = adb.inspectGenerateFields;
       order = 1020;
       group = "generation";
     };

@@ -12,8 +12,10 @@ let
 
   catalog = builtins.fromJSON (builtins.readFile ./task_catalog.json);
   # the typed sub-form schema for generate_args, generated from the pinned
-  # inspect_ai's GenerateConfig (shared infra, like the model catalog)
-  genFields = (builtins.fromJSON (builtins.readFile ../../lib/adb-inspect/generate_fields.json)).fields;
+  # inspect_ai's GenerateConfig (shared infra, like the model catalog) —
+  # through `adb`, never a ../../ path: this directory must evaluate outside
+  # the tree (that is what `adb-dev fork` produces)
+  genFields = adb.inspectGenerateFields;
 
   # task = the wrapper's task spec: `inspect_evals/<id>` resolves through inspect's
   # registry (the upstream package registers its tasks); `pkg:<module>:<attr>`
