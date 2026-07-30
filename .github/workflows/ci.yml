@@ -42,10 +42,15 @@ jobs:
             experimental-features = nix-command flakes
             keep-outputs = true
             keep-env-derivations = true
+      # keyspace `nix-1`: bumped 2026-07-29 — the previous workflow saved a store
+      # pruned mid-closure (referrer drvs kept, input drvs gone), and a restored
+      # partial store fails ALL evals with "store path …drv does not exist"; keys
+      # are immutable, so only a new keyspace escapes it. The gcroots step below
+      # keeps future saves closure-coherent.
       - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', '**/uv.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
+          primary-key: nix-1-${{ runner.os }}-${{ hashFiles('flake.lock', '**/uv.lock') }}
+          restore-prefixes-first-match: nix-1-${{ runner.os }}-
           gc-max-store-size-linux: 5G
       # the nix store cache covers the built environments; these cover what the
       # devshell's own uv/pnpm download at `uv run` / `pnpm install` time
@@ -62,3 +67,16 @@ jobs:
 
       - name: task ci — the full check surface, same command as local
         run: nix-shell --run 'task ci'
+
+      # GC roots for the cache action's pre-save GC: with keep-outputs /
+      # keep-env-derivations these pin the devshell toolchain and the built
+      # experiment surface as coherent closures, so the size cap prunes whole
+      # unused closures (e.g. the per-commit scaffold env) instead of slicing
+      # random paths out of live ones. Instantiate-only — builds nothing, so it
+      # is cheap even when task ci failed early (hence always()).
+      - name: pin cacheable closures
+        if: always()
+        run: |
+          roots="$RUNNER_TEMP/gcroots"; mkdir -p "$roots"
+          nix-instantiate shell.nix --add-root "$roots/shell" >/dev/null
+          nix-instantiate -A manifests -A exec.inspect-hello --add-root "$roots/adb" >/dev/null
