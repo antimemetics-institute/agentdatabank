@@ -207,3 +207,54 @@ test("every shipped manifest composes placeholder-free", (t) => {
     assert.ok(!PLACEHOLDER.test(full.cmd), `${m.name}: placeholder in full-form cmd:\n${full.cmd}`);
   }
 });
+
+/* -- manifest key census (the TS half of the conformance sweep; the python half is
+   runner/tests/test_manifest_conformance.py — both check every real manifest, so
+   producer/consumer key drift fails one suite or the other). TS types aren't
+   introspectable at runtime, so the declared keys are restated here as literals:
+   this list and shared/types.ts must move together, and THIS test is what makes
+   forgetting that loud. */
+
+const MANIFEST_KEYS = new Set(["name", "params", "schema_version", "summary",
+  "origin", "results", "env", "links"]);
+const DECL_KEYS = new Set(["type", "initial", "description", "nullable", "order",
+  "group", "suggestions", "minLen", "maxLen", "fields", "depends_on", "variants"]);
+const TYPE_KEYS = new Set(["kind", "values", "of", "fields"]);
+const KINDS = new Set(["llm", "str", "int", "float", "bool", "enum", "list",
+  "struct", "object", "run", "harness"]);
+
+function checkSubset(obj: object, declared: Set<string>, path: string): void {
+  for (const k of Object.keys(obj))
+    assert.ok(declared.has(k), `${path}: key '${k}' not declared in shared/types.ts`);
+}
+
+function checkType(td: Record<string, unknown>, path: string): void {
+  checkSubset(td, TYPE_KEYS, path);
+  assert.ok(KINDS.has(String(td.kind)), `${path}: unknown kind '${String(td.kind)}'`);
+  if (td.of) checkType(td.of as Record<string, unknown>, `${path}.of`);
+  for (const [f, fd] of Object.entries((td.fields as Record<string, Record<string, unknown>>) ?? {})) {
+    if ("kind" in fd) checkType(fd, `${path}.fields.${f}`);
+    else {
+      checkSubset(fd, new Set(["type", "suggestions", "description"]), `${path}.fields.${f}`);
+      checkType(fd.type as Record<string, unknown>, `${path}.fields.${f}.type`);
+    }
+  }
+}
+
+function checkDecl(decl: Record<string, unknown>, path: string): void {
+  checkSubset(decl, DECL_KEYS, path);
+  checkType(decl.type as Record<string, unknown>, `${path}.type`);
+  for (const [f, sub] of Object.entries((decl.fields as Record<string, Record<string, unknown>>) ?? {}))
+    checkDecl(sub, `${path}.fields.${f}`);
+}
+
+test("every shipped manifest uses only declared keys", (t) => {
+  const dir = process.env.ADB_WEB_MANIFESTS;
+  if (!dir) return t.skip("ADB_WEB_MANIFESTS unset (run via `task web:test`)");
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
+    const doc = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>;
+    checkSubset(doc, MANIFEST_KEYS, f);
+    for (const [name, decl] of Object.entries(doc.params as Record<string, Record<string, unknown>>))
+      checkDecl(decl, `${f}:params.${name}`);
+  }
+});

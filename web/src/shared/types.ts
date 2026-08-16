@@ -72,6 +72,10 @@ export interface ParamDecl {
   order?: number;
   group?: string;
   suggestions?: Suggestion[]; /* free-text-with-datalist (e.g. inspect's task catalog) */
+  /* list instantiation bounds, runner-enforced on realized params; the list editors
+     gate their remove buttons on minLen */
+  minLen?: number;
+  maxLen?: number;
   /* variant object: this param's sub-fields depend on another param's value. The GUI
      renders typed sub-boxes from variants[<value of depends_on>]. Wire stays object. */
   depends_on?: string;
@@ -80,11 +84,6 @@ export interface ParamDecl {
      schema directly (e.g. generate_args from inspect's GenerateConfig). Wire stays object. */
   fields?: Record<string, ParamDecl>;
   [k: string]: unknown;
-}
-export interface TemplateDecl {
-  description?: string;
-  params?: Record<string, unknown>;
-  replicates?: number;
 }
 /* one external reference (paper, upstream source, dataset) — presentation only,
    declared by the experiment (mkExperiment `links`) or generated from a wrapped
@@ -103,6 +102,5 @@ export interface Manifest {
   origin?: string;
   params: Record<string, ParamDecl>;
   results?: Record<string, unknown>;
-  templates?: Record<string, TemplateDecl>;
   env?: Record<string, unknown>;
 }

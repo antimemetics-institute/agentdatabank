@@ -29,7 +29,6 @@ import stat
 import sys
 import tomllib
 from collections.abc import Collection, Iterator
-from typing import Any
 from pathlib import Path
 
 # Built-in names come from the canonical provider registry (the adb-providers
@@ -37,7 +36,7 @@ from pathlib import Path
 from adb_events import Json
 from adb_providers import MOCK_PREFIXES, PROVIDERS
 
-from .schema import Manifest, Params, TypeDesc
+from .schema import Manifest, ParamType, Params
 
 _PROFILE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
 _RESERVED_PROFILES = {"new"}  # picker keyword
@@ -167,25 +166,24 @@ def _save_prefs(prefs: dict[str, dict[str, str]]) -> Path:
 
 # -- resolution (used by the runner before launching an experiment) --------------------
 
-def _iter_model_ids(value: Json, tdesc: TypeDesc) -> Iterator[str]:
+def _iter_model_ids(value: Json, tdesc: ParamType) -> Iterator[str]:
     """Yield every model-id string sitting at an `llm`-typed position in a realized value
     (handles bare llm, listOf llm, and structs/lists nesting llm — e.g. werewolf's
     players = listOf (struct { model = llm; }))."""
-    kind = (tdesc or {}).get("kind")
+    kind = tdesc.get("kind")
     if kind == "llm":
         if isinstance(value, str):
             yield value
     elif kind == "list" and isinstance(value, list):
-        of_desc: TypeDesc = tdesc.get("of") or {}
-        for item in value:
-            yield from _iter_model_ids(item, of_desc)
+        of_desc = tdesc.get("of")
+        if of_desc is not None:
+            for item in value:
+                yield from _iter_model_ids(item, of_desc)
     elif kind == "struct" and isinstance(value, dict):
         from .schema import field_type  # param-wrapped struct fields carry hints
-        fields: dict[str, Any] = tdesc.get("fields") or {}
-        for fname, ftype in fields.items():
+        for fname, ftype in (tdesc.get("fields") or {}).items():
             if fname in value:
                 yield from _iter_model_ids(value[fname], field_type(ftype))
-
 
 def section_for(model_id: str) -> str | None:
     """The credential set a model id routes to. Normally the provider prefix before
@@ -204,18 +202,15 @@ def section_for(model_id: str) -> str | None:
 
 def sets_used(manifest: Manifest, realized_params: Params) -> set[str]:
     """The credential sets referenced by this run's `llm` params (mocks excluded)."""
-    schema: dict[str, Any] = manifest.get("params") or {}
     used: set[str] = set()
-    for name, pschema in schema.items():
+    for name, pschema in manifest["params"].items():
         if name not in realized_params:
             continue
-        tdesc = pschema.get("type") or {"kind": pschema.get("kind", "str")}
-        for model_id in _iter_model_ids(realized_params[name], tdesc):
+        for model_id in _iter_model_ids(realized_params[name], pschema["type"]):
             section = section_for(model_id)
             if section:
                 used.add(section)
     return used
-
 
 def env_for_run(manifest: Manifest, realized_params: Params,
                 selections: dict[str, str] | None = None) -> dict[str, str]:

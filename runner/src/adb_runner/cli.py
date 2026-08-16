@@ -17,7 +17,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from typing import Any
+from typing import Any, TypedDict
 
 from adb_events import Json
 
@@ -149,18 +149,19 @@ def suggested_oneliner(manifest: Manifest) -> str:
     sets: list[str] = []
     # presentation order: params may carry an `order` hint (task-level params first —
     # they're what a researcher cares about); ties break by name
-    schema: dict[str, Any] = manifest["params"]
-    ordered = sorted(schema.items(), key=lambda kv: (kv[1].get("order", 100), kv[0]))
+    ordered = sorted(manifest["params"].items(),
+                     key=lambda kv: (kv[1].get("order", 100), kv[0]))
     for name, pschema in ordered:
-        suggestions: list[Any] = pschema.get("suggestions") or []
-        tdesc: dict[str, Any] = pschema.get("type") or {}
+        suggestions = pschema.get("suggestions") or []
+        enum_values = pschema["type"].get("values")
+        value: Json
         if "initial" in pschema:
             value = pschema["initial"]
         elif suggestions:
-            first: Json = suggestions[0]
-            value = first.get("value") if isinstance(first, dict) else first
-        elif tdesc.get("kind") == "enum" and tdesc.get("values"):
-            value = tdesc["values"][0]
+            first = suggestions[0]
+            value = first["value"] if isinstance(first, dict) else first
+        elif pschema["type"].get("kind") == "enum" and enum_values:
+            value = enum_values[0]
         else:
             sets.append(f"--set {shlex.quote(f'{name}=<{name}>')}")
             continue
@@ -170,8 +171,13 @@ def suggested_oneliner(manifest: Manifest) -> str:
     return f"nix run .#{manifest['name']} -- " + " ".join(sets)
 
 
+class ResolvedCondition(TypedDict):
+    params: Params
+    cid: str
+
+
 def resolve_condition(args: argparse.Namespace, manifest: Manifest,
-                      source: str) -> dict[str, Any]:
+                      source: str) -> ResolvedCondition:
     """Returns {params, cid} — the one condition this invocation runs."""
     overrides: Params = {}
     for entry in args.set:

@@ -8,23 +8,89 @@ surfaces differ — spec errors are usage errors (exit 2), realized errors fail 
 run. Types describe shape; everything pydantic-ish happens here at instantiation.
 """
 
-from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 from adb_events import Json
 
-# The runner's open documents, named so each signature says WHICH one it takes.
-# Param VALUES are `Json` (the real recursive union from adb_events), so an
-# isinstance narrows to an honest type (list[Json], dict[str, Json]) instead of
-# pyright's Unknown — no casts at the narrowing sites. The manifest and its type
-# descriptors stay dict[str, Any]: author-shaped documents this module validates
-# values AGAINST, read loosely by design.
-type Manifest = dict[str, Any]
+# ---------------------------------------------------------------------------------
+# The manifest vocabulary, in ONE place — python's counterpart of web/src/shared/
+# types.ts (keep the two in step; the conformance sweeps in both test suites check
+# each side against every real nix-built manifest, so drift fails tests).
+# TypedDicts, not loose dicts: the manifest is a GENERATED document (mkExperiment),
+# so the win worth buying is key-correctness — a typo'd key is a type error, not a
+# silent None. Param VALUES stay `Json` (the recursive union from adb_events):
+# they are author/user data, validated at runtime by this module.
+# ---------------------------------------------------------------------------------
+
+
+class ParamType(TypedDict):
+    """A type descriptor: llm|str|int|float|bool|enum|list|struct|object."""
+    kind: str
+    values: NotRequired[list[str]]                 # enum
+    of: NotRequired["ParamType"]                   # list
+    fields: NotRequired[dict[str, "StructField"]]  # struct
+
+
+class WrappedField(TypedDict):
+    """A struct field with presentation hints attached (concordia's per-agent
+    model with suggestions); the bare alternative is a ParamType directly."""
+    type: ParamType
+    suggestions: NotRequired[list["Suggestion"]]
+    description: NotRequired[str]
+
+
+type StructField = ParamType | WrappedField
+
+
+class SuggestionEntry(TypedDict):
+    value: str
+    description: NotRequired[str]
+
+
+type Suggestion = str | SuggestionEntry
+
+
+class ParamDecl(TypedDict):
+    type: ParamType
+    initial: NotRequired[Json]
+    description: NotRequired[str]
+    nullable: NotRequired[bool]
+    # presentation order (lower first, default 100) and section label
+    order: NotRequired[int]
+    group: NotRequired[str]
+    suggestions: NotRequired[list[Suggestion]]
+    # list instantiation bounds, enforced on realized params (validate_realized)
+    minLen: NotRequired[int]
+    maxLen: NotRequired[int]
+    # fixed typed sub-form (inspect's generate_args), or a variant sub-form keyed
+    # by another param's value — currently produced by no in-tree manifest
+    # (dormant; the GUI renders both)
+    fields: NotRequired[dict[str, "ParamDecl"]]
+    depends_on: NotRequired[str]
+    variants: NotRequired[dict[str, dict[str, "ParamDecl"]]]
+
+
+class ExtLink(TypedDict):
+    label: str
+    url: str
+
+
+class Manifest(TypedDict):
+    name: str
+    params: dict[str, ParamDecl]
+    schema_version: NotRequired[int]
+    summary: NotRequired[str]
+    origin: NotRequired[str]
+    results: NotRequired[dict[str, Json]]
+    env: NotRequired[dict[str, Json]]
+    links: NotRequired[list[ExtLink]]
+
+
+# realized/spec params: user data, runtime-validated against the declarations
 type Params = dict[str, Json]
-type TypeDesc = dict[str, Any]
 
 
 class SchemaError(ValueError):
@@ -61,25 +127,25 @@ def bind_params(manifest: Manifest, overrides: Params) -> Params:
     return {name: overrides[name] for name in params_schema}
 
 
-def _type_error(path: str, tdesc: TypeDesc, value: Any) -> SchemaError:
+def _type_error(path: str, tdesc: ParamType, value: Json) -> SchemaError:
     return SchemaError(f"{path}: expected {tdesc.get('kind')}, got {value!r}")
 
 
-def field_type(fdesc: Json) -> TypeDesc:
+def field_type(fdesc: StructField) -> ParamType:
     """A struct field is a bare type descriptor ({"kind": ...}), or a param-wrapped one
     ({"type": {...}, "suggestions": [...], ...}) when the author attached presentation
     hints. Validation only cares about the type. A non-mapping descriptor is a
-    malformed manifest — raised here, where the malformation is known, not deferred."""
-    if not isinstance(fdesc, dict):
+    malformed manifest — raised here, where the malformation is known, not deferred
+    (the TypedDict is a static claim about a loaded document; this is its runtime
+    check, hence the allowlisted always-true-to-the-checker isinstance)."""
+    if not isinstance(fdesc, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise SchemaError(f"field descriptor must be a mapping, got {fdesc!r}")
-    if "kind" not in fdesc:
-        inner = fdesc.get("type")
-        if isinstance(inner, dict):
-            return inner
-    return fdesc
+    if "kind" in fdesc:
+        return fdesc
+    return fdesc["type"]
 
 
-def validate_value(value: Json, tdesc: TypeDesc, path: str) -> None:
+def validate_value(value: Json, tdesc: ParamType, path: str) -> None:
     """Strict validation of a fully-concrete value against a type descriptor."""
     kind = tdesc["kind"]
     if kind in ("llm", "str"):
@@ -95,17 +161,25 @@ def validate_value(value: Json, tdesc: TypeDesc, path: str) -> None:
         if not isinstance(value, bool):
             raise _type_error(path, tdesc, value)
     elif kind == "enum":
-        if value not in tdesc["values"]:
-            raise SchemaError(f"{path}: {value!r} not in enum {tdesc['values']}")
+        values = tdesc.get("values")
+        if values is None:
+            raise SchemaError(f"{path}: enum descriptor missing 'values'")
+        if value not in values:
+            raise SchemaError(f"{path}: {value!r} not in enum {values}")
     elif kind == "list":
         if not isinstance(value, list):
             raise _type_error(path, tdesc, value)
+        of = tdesc.get("of")
+        if of is None:
+            raise SchemaError(f"{path}: list descriptor missing 'of'")
         for i, item in enumerate(value):
-            validate_value(item, tdesc["of"], f"{path}[{i}]")
+            validate_value(item, of, f"{path}[{i}]")
     elif kind == "struct":
         if not isinstance(value, dict):
             raise _type_error(path, tdesc, value)
-        fields = tdesc["fields"]
+        fields = tdesc.get("fields")
+        if fields is None:
+            raise SchemaError(f"{path}: struct descriptor missing 'fields'")
         if set(value) != set(fields):
             raise SchemaError(
                 f"{path}: struct fields {sorted(value)} != schema fields {sorted(fields)}"
