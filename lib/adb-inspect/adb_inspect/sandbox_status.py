@@ -20,7 +20,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import shlex
-from collections.abc import Iterator
+from collections.abc import Generator
 
 from adb_events.emit import status
 
@@ -70,7 +70,7 @@ class _ProvisioningHandler(logging.Handler):
 
 
 @contextlib.contextmanager
-def sandbox_provisioning_status() -> Iterator[None]:
+def sandbox_provisioning_status() -> Generator[None]:
     """Attach for the duration of an eval; harmless for sandbox-less tasks."""
     handler = _ProvisioningHandler(level=1)  # TRACE sits below DEBUG
     logger = logging.getLogger("inspect_ai")

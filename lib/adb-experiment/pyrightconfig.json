@@ -1,0 +1,6 @@
+{
+  "typeCheckingMode": "strict",
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["adb_experiment"]
+}

@@ -9,6 +9,7 @@ resulting EvalLog into ADB events (docs/plan/experiments/inspect.md).
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,12 +55,12 @@ class Params(BaseModel):
     # where a model is served is environment, not part of the experimental condition.
     model: str = "mockllm/model"
     # `-T` task args (types.object → a real dict), e.g. {"cot": true}.
-    task_args: dict = Field(default_factory=dict)
+    task_args: dict[str, Any] = Field(default_factory=dict)
     # `-M` model args (provider client kwargs).
-    model_args: dict = Field(default_factory=dict)
+    model_args: dict[str, Any] = Field(default_factory=dict)
     # generation config overrides, passed to Inspect's generate config,
     # e.g. {"temperature": 0.7, "max_tokens": 1024}.
-    generate_args: dict = Field(default_factory=dict)
+    generate_args: dict[str, Any] = Field(default_factory=dict)
     # sample cap (0 = all).
     limit: int = Field(default=0, ge=0)
     # repeats of the dataset (1 = one pass).

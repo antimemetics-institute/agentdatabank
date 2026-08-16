@@ -5,7 +5,7 @@
     adb-emit llm-call --agent a --model mock/x < call.json
     adb-emit schema [TYPE]
 
-Validates against the same models the runner lints with (events_schema.py) and prints
+Validates against the same models the runner lints with (the adb_events package) and prints
 one conformant payload line to stdout — which IS the event channel (the runner wraps
 each line in the transport envelope), so a shell adapter just calls it inline. Wrong shape = loud error on stderr, exit 2. This is the
 no-library help story: language-neutral emission with the schema enforced at the point
@@ -18,10 +18,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 import msgspec
 
-from .events_schema import EVENT_MODELS, json_schemas
+from adb_events import EVENT_MODELS, Json, json_schemas
 
 # CLI surface per type: (flag-name, field-name, kind) where kind ∈
 # str | json (value parsed as JSON) | jsonish (JSON if it parses, else raw string)
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     wire_type = WIRE_TYPE[args.command]
-    body: dict = {}
+    body: dict[str, Any] = {}
     for flag, field, kind in FIELDS[args.command]:
         raw = getattr(args, flag.lstrip("-").replace("-", "_"))
         if raw is not None:
@@ -100,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "llm-call" and not sys.stdin.isatty():
         stdin_raw = sys.stdin.read().strip()
         if stdin_raw:
-            stdin_body = _parse("json", stdin_raw, "stdin")
+            stdin_body: Json = _parse("json", stdin_raw, "stdin")
             if not isinstance(stdin_body, dict):
                 raise SystemExit("adb-emit: llm-call stdin must be a JSON object")
             body = {**stdin_body, **body}

@@ -22,4 +22,4 @@ packages = ["adb_events"]
 # consumer's venv running (and typechecking) a stale copy until the next relock.
 # Keying the built wheel on the sources makes `uv sync`/`uv run` pick edits up.
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }, { file = "adb_events/py.typed" }]

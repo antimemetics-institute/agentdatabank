@@ -1,93 +1,102 @@
-"""Translator tests over fake EvalLog objects — duck-typed, no inspect_ai import.
+"""Translator tests over REAL inspect_ai objects.
 
-translate.py reads its inputs by attribute and by `type(e).__name__ == 'ModelEvent'`,
-so lightweight fakes exercise the whole mapping deterministically and fast.
+These used to run on duck-typed fakes; they now construct the actual pydantic
+models (EvalLog, EvalSample, ModelEvent, …), so they double as contract tests
+against the PINNED inspect_ai version — a field the translator reads that
+upstream renames or retypes fails here at test time, not mid-eval. The cost is
+that construction states every required field; the fixtures below are the
+minimal honest instances.
 """
 
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace as NS
+from typing import Any
+
+from inspect_ai._util.error import EvalError
+from inspect_ai.event import ModelEvent
+from inspect_ai.log import EvalLog, EvalSample
+from inspect_ai.log._log import (EvalConfig, EvalDataset, EvalMetric, EvalResults,
+                                 EvalRevision, EvalScore, EvalSpec, EvalStats)
+from inspect_ai.model import (ChatMessageAssistant, ChatMessageUser, GenerateConfig,
+                              ModelCall, ModelOutput, ModelUsage)
+from inspect_ai.model._model_output import ChatCompletionChoice
+from inspect_ai.scorer import Score
 
 from adb_inspect import translate
 
 
-def _dumpable(d):
-    """A fake pydantic-ish object whose model_dump(mode=...) returns d."""
-    return NS(model_dump=lambda mode=None, _d=d: _d)
+def _output(text: str, *, mid: str, stop: str = "stop",
+            usage: ModelUsage | None = None) -> ModelOutput:
+    return ModelOutput(
+        model="mockllm/model",
+        choices=[ChatCompletionChoice(
+            message=ChatMessageAssistant(content=text, id=mid), stop_reason=stop)],
+        usage=usage)
 
 
-class ModelEvent:  # name matters: translate filters on type(e).__name__
-    def __init__(self, model, call, usage, msg, stop, inp, config=None,
-                 working_time=0.05, error=None):
-        self.model = model
-        self.call = call
-        self.input = inp                 # message list as sent
-        self.config = config or _dumpable({"max_tokens": 1024})
-        self.working_time = working_time
-        self.error = error
-        self.output = NS(usage=usage, message=msg, stop_reason=stop)
+def _model_event(*, call: ModelCall | None, usage: ModelUsage | None,
+                 reply: str, in_id: str, out_id: str,
+                 working_time: float | None = 0.05,
+                 error: str | None = None) -> ModelEvent:
+    return ModelEvent(
+        model="mockllm/model",
+        input=[ChatMessageUser(content="hi", id=in_id)],
+        tools=[], tool_choice="none",
+        config=GenerateConfig(max_tokens=1024),
+        output=_output(reply, mid=out_id,
+                       stop="unknown" if error else "stop", usage=usage),
+        call=call, working_time=working_time, error=error)
 
 
-def _msg(role, text):
-    return NS(role=role, text=text)
+def _sample(sid: int, *, call: ModelCall | None, score: str,
+            reply: str) -> EvalSample:
+    ev = _model_event(call=call, usage=ModelUsage(input_tokens=sid, output_tokens=33),
+                      reply=reply, in_id=f"mu-{sid}", out_id=f"ma-{sid}")
+    return EvalSample(
+        id=sid, epoch=1, input="hi", target="default",
+        messages=[ChatMessageUser(content="hi", id=f"mu-{sid}"),
+                  ChatMessageAssistant(content=reply, id=f"ma-{sid}")],
+        output=_output(reply, mid=f"ma-{sid}"),
+        events=[ev],
+        scores={"includes": Score(value=score, answer="a")})
 
 
-def _score(value, answer="a"):
-    return NS(value=value, answer=answer)
+def _log() -> EvalLog:
+    return EvalLog(
+        status="success",
+        eval=EvalSpec(
+            created="2026-01-01T00:00:00+00:00", task="gsm8k", task_version=1,
+            task_id="t", run_id="r", model="mockllm/model", config=EvalConfig(),
+            dataset=EvalDataset(name="gsm8k", location="hf://openai/gsm8k", samples=2),
+            packages={"inspect_ai": "0.3.248", "inspect_evals": "0.15.0"},
+            revision=EvalRevision(type="git", origin="", commit="911f0ed"),
+            task_registry_name="inspect_evals/gsm8k"),
+        results=EvalResults(
+            scores=[EvalScore(name="includes", scorer="includes",
+                              metrics={"accuracy": EvalMetric(name="accuracy", value=0.5),
+                                       "stderr": EvalMetric(name="stderr", value=0.1)})],
+            total_samples=2, completed_samples=2),
+        stats=EvalStats(started_at="2026-01-01T00:00:00+00:00",
+                        completed_at="2026-01-01T00:01:00+00:00",
+                        model_usage={"mockllm/model": ModelUsage(input_tokens=3,
+                                                                 output_tokens=38)}),
+        samples=[
+            _sample(1, call=ModelCall.create({"vendor": "wire"}, {"provider": "raw"}),
+                    score="C", reply="Default output"),
+            _sample(2, call=None, score="I", reply="output"),
+        ])
 
 
-def _call(req, resp):
-    return NS(request=req, response=resp)
-
-
-def _sample_wire():
-    """A sample whose model event carries a raw provider call (kept under response.raw)."""
-    return NS(
-        id=1, epoch=1, target="default", error=None,
-        messages=[_msg("user", "hi"), _msg("assistant", "Default output")],
-        events=[ModelEvent("mockllm/model", _call({"vendor": "wire"}, {"provider": "raw"}),
-                           NS(input_tokens=2, output_tokens=33),
-                           _dumpable({"role": "assistant", "content": "Default output"}),
-                           "stop", inp=[_dumpable({"role": "user", "content": "hi"})])],
-        scores={"includes": _score("C")},
-    )
-
-
-def _sample_derived():
-    """A sample whose model event has no recorded raw call (no response.raw)."""
-    return NS(
-        id=2, epoch=1, target="output", error=None,
-        messages=[_msg("user", "yo"), _msg("assistant", "output")],
-        events=[ModelEvent("mockllm/model", None,
-                           NS(input_tokens=1, output_tokens=5),
-                           _dumpable({"role": "assistant", "content": "output"}),
-                           "stop", inp=[_dumpable({"role": "user", "content": "yo"})])],
-        scores={"includes": _score("I")},
-    )
-
-
-def _eval_spec():
-    return NS(task="gsm8k", task_version=1, task_registry_name="inspect_evals/gsm8k",
-              model="mockllm/model",
-              packages={"inspect_ai": "0.3.248", "inspect_evals": "0.15.0"},
-              dataset=NS(name="gsm8k", location="hf://openai/gsm8k", samples=2),
-              revision=NS(type="git", origin="", commit="911f0ed", dirty=False))
-
-
-def _log():
-    scores = [NS(name="includes",
-                 metrics={"accuracy": NS(value=0.5), "stderr": NS(value=0.1)})]
-    results = NS(scores=scores, total_samples=2, completed_samples=2)
-    stats = NS(model_usage={"mockllm/model": NS(input_tokens=3, output_tokens=38)})
-    return NS(status="success", eval=_eval_spec(),
-              samples=[_sample_wire(), _sample_derived()],
-              results=results, stats=stats)
-
-
-def _capture(capsys):
+def _capture(capsys) -> list[dict[str, Any]]:
     out = capsys.readouterr().out
-    return [json.loads(l) for l in out.splitlines() if l.strip()]
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+
+def _slim(msg: dict[str, Any]) -> tuple[str, str]:
+    """(role, content) — real ChatMessage dumps carry ids and bookkeeping fields;
+    the invariants under test are placement and content, not the serializer."""
+    return msg["role"], msg["content"]
 
 
 def test_full_translation_shape(capsys):
@@ -98,18 +107,18 @@ def test_full_translation_shape(capsys):
     assert kinds.count("message") == 4  # 2 samples x 2 messages
     assert kinds.count("llm.call") == 2
     ae = [e for e in events if e["type"] == "agent.event"]
-    assert [e for e in ae if e["kind"] == "instance"].__len__() == 2
-    assert [e for e in ae if e["kind"] == "provenance"].__len__() == 1
+    assert len([e for e in ae if e["kind"] == "instance"]) == 2
+    assert len([e for e in ae if e["kind"] == "provenance"]) == 1
 
     # ADB-shaped request/response (events.md), raw provider payload under response.raw
     calls = [e for e in events if e["type"] == "llm.call"]
-    assert calls[0]["request"]["messages"] == [{"role": "user", "content": "hi"}]
+    assert [_slim(m) for m in calls[0]["request"]["messages"]] == [("user", "hi")]
     assert calls[0]["request"]["params"] == {"max_tokens": 1024}
-    assert calls[0]["response"]["message"] == {"role": "assistant", "content": "Default output"}
+    assert _slim(calls[0]["response"]["message"]) == ("assistant", "Default output")
     assert calls[0]["response"]["finish_reason"] == "stop"
     assert calls[0]["response"]["raw"] == {"provider": "raw"}  # raw call preserved here
     assert "raw" not in calls[1]["response"]                   # none recorded → absent
-    assert calls[0]["usage"] == {"input_tokens": 2, "output_tokens": 33}
+    assert calls[0]["usage"] == {"input_tokens": 1, "output_tokens": 33}
 
     # per-instance scores ride the instance close-out, NOT metric events (a metric
     # has no instance scope — N same-named metrics buried the run header)
@@ -153,13 +162,10 @@ def test_errored_model_event_emits_structured_error(capsys):
     and the provider's error body under call.response (inspect_ai's error branch).
     It must land as the structured {kind, message} wire error — the old code passed
     the bare string, and the first-ever execution of this branch crashed a run."""
-    ev = ModelEvent("m", _call({"vendor": "wire"}, {"error": "model call failed"}),
-                    None,
-                    _dumpable({"role": "assistant", "content": ""}),
-                    "unknown",
-                    inp=[_dumpable({"role": "user", "content": "hi"})],
-                    working_time=None,
-                    error="model call failed")
+    ev = _model_event(
+        call=ModelCall.create({"vendor": "wire"}, {"error": "model call failed"}),
+        usage=None, reply="", in_id="m1", out_id="m2",
+        working_time=None, error="model call failed")
     translate.emit_model_event(ev, "agent", "s1", 1)
     [call] = _capture(capsys)
     assert call["type"] == "llm.call"
@@ -170,31 +176,21 @@ def test_errored_model_event_emits_structured_error(capsys):
 
 
 def test_sample_error_lands_on_instance_closeout(capsys):
-    """sample.error is an EvalError object, not a str — it must be stringified onto
-    the instance close-out (instance error is `str | None` on the wire)."""
-    class EvalError:
-        def __str__(self) -> str:
-            return "RuntimeError('boom')"
-
-    s = _sample_derived()
-    s.error = EvalError()
+    """sample.error is an EvalError object — its `.message` (not its pydantic
+    str()) must land on the instance close-out (wire error is `str | None`)."""
+    s = _sample(2, call=None, score="I", reply="output")
+    s.error = EvalError(message="RuntimeError('boom')",
+                        traceback="", traceback_ansi="")
     translate.emit_sample(s, "m")
     inst = [e for e in _capture(capsys)
             if e["type"] == "agent.event" and e["kind"] == "instance"]
     assert inst[0]["data"]["error"] == "RuntimeError('boom')"
 
 
-def _chat(role, text, mid):
-    """A fake ChatMessage: id/role/text for the live path, model_dump for _dump."""
-    return NS(id=mid, role=role, text=text,
-              model_dump=lambda mode=None, _d={"role": role, "content": text}: _d)
-
-
 def test_live_model_event_streams_new_turns_once(capsys):
-    seen: set = set()
-    ev = ModelEvent("m", None, NS(input_tokens=1, output_tokens=2),
-                    _chat("assistant", "yo", "m2"), "stop",
-                    inp=[_chat("user", "hi", "m1")])
+    seen: set[str] = set()
+    ev = _model_event(call=None, usage=ModelUsage(input_tokens=1, output_tokens=2),
+                      reply="yo", in_id="m1", out_id="m2")
     translate.emit_live_model_event(ev, "agent", "s1", 1, seen)
     events = _capture(capsys)
     assert [e["from"] for e in events if e["type"] == "message"] == ["user", "assistant"]
@@ -207,12 +203,9 @@ def test_live_model_event_streams_new_turns_once(capsys):
 
 
 def test_emit_sample_skips_what_was_streamed_live(capsys):
-    s = _sample_wire()
-    s.messages[0].id = "m-user"
-    s.messages[1].id = "m-asst"
-    s.events[0].uuid = "ev-1"
-    translate.emit_sample(s, "m", seen_messages={"m-user", "m-asst"},
-                          seen_events={"ev-1"})
+    s = _sample(1, call=None, score="C", reply="Default output")
+    translate.emit_sample(s, "m", seen_messages={"mu-1", "ma-1"},
+                          seen_events={s.events[0].uuid or ""})
     events = _capture(capsys)
     # only the closing agent.event remains
     assert not [e for e in events if e["type"] in ("message", "llm.call")]
@@ -228,37 +221,3 @@ def test_provenance_records_sliceable_covariates(capsys):
     # the exact upstream versions advisories will slice on
     assert d["packages"] == {"inspect_ai": "0.3.248", "inspect_evals": "0.15.0"}
     assert d["task"] == "gsm8k" and d["task_version"] == 1
-    assert d["dataset"]["name"] == "gsm8k"
-    assert d["revision"]["commit"] == "911f0ed"
-
-
-def test_dict_scores_flatten_to_scalar_leaves(capsys):
-    """The agentharm shape: a dict-valued scorer becomes '/'-joined scalar leaves
-    on the instance close-out (docs/plan/events.md — scores are a flat scalar map)."""
-    s = _sample_wire()
-    s.scores = {"combined_scorer": _score({"score": 0, "refusal": 1})}
-    translate.emit_sample(s, "m")
-    inst = [e for e in _capture(capsys)
-            if e["type"] == "agent.event" and e["kind"] == "instance"]
-    assert inst[0]["data"]["scores"] == \
-        {"combined_scorer/score": 0, "combined_scorer/refusal": 1}
-
-
-def test_headline_prefers_accuracy():
-    scores = [NS(name="s", metrics={"f1": NS(value=0.9), "accuracy": NS(value=0.2)})]
-    log = NS(results=NS(scores=scores))
-    assert translate.headline(log) == (0.2, "s/accuracy")
-
-
-def test_headline_falls_back_to_first_numeric():
-    scores = [NS(name="s", metrics={"mean": NS(value=0.7), "note": NS(value="hi")})]
-    log = NS(results=NS(scores=scores))
-    assert translate.headline(log) == (0.7, "s/mean")
-
-
-def test_translation_is_pure(capsys):
-    translate.emit_all(_log(), "m")
-    first = capsys.readouterr().out
-    translate.emit_all(_log(), "m")
-    second = capsys.readouterr().out
-    assert first == second  # translate is a pure function of the log

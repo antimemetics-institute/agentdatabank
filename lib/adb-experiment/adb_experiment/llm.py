@@ -31,7 +31,7 @@ import threading
 import time
 import types
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from adb_events.emit import llm_call
 
@@ -79,7 +79,7 @@ class ChatClient:
         temperature: float | None = None,
         seed: int | None = None,
         max_tokens: int | None = None,
-        mock_responder: Callable[[list[dict]], str] | None = None,
+        mock_responder: Callable[[list[dict[str, Any]]], str] | None = None,
     ) -> None:
         self.model_id = model_id
         self.agent = agent
@@ -90,6 +90,8 @@ class ChatClient:
         self._max_tokens = max_tokens
         self.is_mock = model_id.startswith("mock/")
         self._mock_responder = mock_responder or self._default_mock_responder
+        # one declared shape for both backends, so the lambda's param infers from it
+        self._request: Callable[[dict[str, Any]], Any]
         if self.is_mock:
             self.served_model = model_id.split("/", 1)[1]
             self.base_url = ""
@@ -108,8 +110,16 @@ class ChatClient:
             self._disable_thinking = "qwen" in self.served_model.lower()
             sdk = openai.OpenAI(api_key=endpoint.api_key,
                                 base_url=endpoint.base_url)
-            # closed over, so _create never handles an Optional client
-            self._request = lambda kw: sdk.chat.completions.create(**kw)
+
+            # closed over, so _create never handles an Optional client; a def (not a
+            # lambda) so the Any return is declared rather than inferred-unknown
+            def request(kw: dict[str, Any]) -> Any:
+                # cast, not an ignore: the SDK's stream/non-stream overloads can't
+                # resolve through a dynamic **kw, so the result is declared Any at
+                # this boundary (the one place the raw SDK response enters)
+                return cast(Any, sdk.chat.completions.create(**kw))
+
+            self._request = request
         # the one surface frameworks use; duck-typed so no SDK subclassing is needed
         self.chat = types.SimpleNamespace(
             completions=types.SimpleNamespace(create=self._create)
@@ -165,12 +175,12 @@ class ChatClient:
 
     # -- the mock backend -----------------------------------------------------
 
-    def _default_mock_responder(self, messages: list[dict]) -> str:
+    def _default_mock_responder(self, messages: list[dict[str, Any]]) -> str:
         prompt = str((messages[-1] or {}).get("content", "")) if messages else ""
         return _MOCK_LINES[deterministic_pick(self._seed or 0, prompt,
                                               len(_MOCK_LINES))]
 
-    def _mock_create(self, kw: dict) -> Any:
+    def _mock_create(self, kw: dict[str, Any]) -> Any:
         text = self._mock_responder(kw.get("messages") or [])
         self._emit(kw.get("messages") or [], text, {"backend": "mock"},
                    finish_reason="stop")
@@ -188,7 +198,7 @@ class ChatClient:
 
     def _emit(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         text: str,
         params: dict[str, Any],
         *,

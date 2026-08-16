@@ -8,14 +8,15 @@ conformance ladder and skipped.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import msgspec
 
 from .models import EVENT_MODELS
 
 
-def assert_conformant(events: Iterable[dict]) -> int:
+def assert_conformant(events: Iterable[Mapping[str, Any]]) -> int:
     """Raise if any known-typed event fails to decode as its struct. Returns the
     number of events actually validated (0 means the assertion was vacuous)."""
     checked = 0

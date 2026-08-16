@@ -20,6 +20,7 @@ import sys
 import threading
 import traceback
 from pathlib import Path
+from typing import Any
 
 from adb_events.emit import artifact, emit_raw, log, metric, set_output, status
 from .models import Params, inspect_model
@@ -45,8 +46,8 @@ def resolve_task(spec: str):
     return spec
 
 
-def eval_kwargs(params: Params, log_dir: Path) -> dict:
-    kw: dict = {
+def eval_kwargs(params: Params, log_dir: Path) -> dict[str, Any]:
+    kw: dict[str, Any] = {
         "model": inspect_model(params.model),
         "task_args": params.task_args,
         "model_args": params.model_args,
@@ -71,7 +72,7 @@ def eval_kwargs(params: Params, log_dir: Path) -> dict:
     return kw
 
 
-def deposit_log(log_obj, run_dir: Path) -> None:
+def deposit_log(log_obj: Any, run_dir: Path) -> None:  # Any: EvalLog, whose import is deliberately lazy
     """Copy the run's `.eval` log into the deposit as an artifact (the irreducible
     Inspect record; the translated events are its secondary rendering)."""
     src = getattr(log_obj, "location", None)
@@ -133,14 +134,17 @@ def run(params: Params) -> None:
 
     # imported lazily so a config/param error reports cleanly before the heavy
     # numpy/inspect_ai import chain runs
-    from inspect_ai import eval as run_eval
+    # upstream's `eval` signature carries an untyped Scanner param, which strict
+    # counts against anyone importing it — their gap, scoped suppression here
+    from inspect_ai import eval as run_eval  # pyright: ignore[reportUnknownVariableType]
     from inspect_ai.hooks import Hooks, hooks
+    from inspect_ai.event import ModelEvent
 
     agent = params.model
-    streamed: set = set()
+    streamed: set[str] = set()
     # per-sample live-stream state, keyed by inspect's sample execution uuid:
     # the problem identity (id/epoch) plus the message/event ids already emitted
-    live: dict = {}
+    live: dict[str, dict[str, Any]] = {}
 
     # STREAM: run_eval blocks through the whole eval, so emit as it goes — a status
     # when each sample starts, its chat turns + llm.call after every completed model
@@ -148,19 +152,24 @@ def run(params: Params) -> None:
     # the live path didn't cover (scores, non-model turns). Every streamed event is
     # tagged sample_id/epoch: one eval works through many problems, sequentially or
     # in parallel, and untagged events are unattributable under interleaving.
-    @hooks(name="adb-stream", description="stream ADB events as the eval runs")
-    class _Stream(Hooks):  # noqa: N801
-        async def on_sample_start(self, data) -> None:  # type: ignore[no-untyped-def]
+    # hook `data` params are Any on purpose: their classes ride the pinned inspect
+    # version and this bridge duck-types them (getattr-guarded) rather than binding
+    # to one release's names. The decorator itself is untyped upstream.
+    @hooks(name="adb-stream", description="stream ADB events as the eval runs")  # pyright: ignore[reportUntypedClassDecorator]
+    class AdbStream(Hooks):
+        async def on_sample_start(self, data: Any) -> None:
             s = data.summary
             live[data.sample_id] = {"id": s.id, "epoch": s.epoch,
                                     "msgs": set(), "evs": set()}
             status(f"instance {s.id} repeat {s.epoch}: running")
 
-        async def on_sample_event(self, data) -> None:  # type: ignore[no-untyped-def]
+        async def on_sample_event(self, data: Any) -> None:
             st = live.get(data.sample_id)
             ev = data.event
-            if (st is None or type(ev).__name__ != "ModelEvent"
-                    or getattr(ev, "pending", None) or ev.output is None):
+            # `output` is a required field — "no reply yet" is pending, or an
+            # output with no choices (the same gate translate.py applies)
+            if (st is None or not isinstance(ev, ModelEvent)
+                    or ev.pending or not ev.output.choices):
                 return
             uid = getattr(ev, "uuid", None)
             if uid is None or uid in st["evs"]:
@@ -171,7 +180,7 @@ def run(params: Params) -> None:
             except Exception as exc:  # a bad event must not kill the eval
                 log(f"stream: live emit failed: {exc}", level="warn")
 
-        async def on_sample_end(self, data) -> None:  # type: ignore[no-untyped-def]
+        async def on_sample_end(self, data: Any) -> None:
             if data.sample is None:
                 return
             st = live.pop(data.sample_id, None) or {"msgs": set(), "evs": set()}
@@ -181,6 +190,8 @@ def run(params: Params) -> None:
                 streamed.add(data.sample.uuid)
             except Exception as exc:  # a bad sample must not kill the eval
                 log(f"stream: sample emit failed: {exc}", level="warn")
+
+    _ = AdbStream  # registered by the decorator's side effect, never referenced
 
     task = resolve_task(params.task)
     status(f"running inspect eval: task={params.task} model={params.model}")
@@ -228,8 +239,11 @@ def main() -> int:
     # the task's own prints (solver progress etc.) must not sit in a block buffer
     # until the next event flush pushes them out — the runner reads this pipe live
     try:
-        if isinstance(sys.stdout, io.TextIOWrapper):
-            sys.stdout.reconfigure(line_buffering=True)
+        # duck-typed: reconfigure exists on TextIOWrapper stdouts (a real console
+        # or pipe), not on every TextIO stand-in (pytest's capture, StringIO)
+        reconfigure = getattr(sys.stdout, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(line_buffering=True)
     except Exception:
         pass
     parser = argparse.ArgumentParser(prog="adb-inspect-eval", description=__doc__)

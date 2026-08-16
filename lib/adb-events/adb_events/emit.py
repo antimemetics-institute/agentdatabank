@@ -129,10 +129,13 @@ def instance(*, agent: str, id: str | int, scores: Mapping[str, Scalar] | None =
     ({"combined_scorer/refusal": 1}). `repeat` is the 1-based within-run repeat of
     this instance (distinct from the run-level replicate). Extra kwargs ride along
     in data untyped (target, domain fields)."""
-    if isinstance(id, bool) or not isinstance(id, (str, int)):
+    # runtime guards on top of the annotations: emit is the producer-validation
+    # boundary and callers are frequently untyped — statically "unnecessary",
+    # deliberately kept (docs/plan/events.md, emit-side validation)
+    if isinstance(id, bool) or not isinstance(id, (str, int)):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise TypeError(f"instance id must be str or int, got {type(id).__name__}")
     for k, v in (scores or {}).items():
-        if not isinstance(v, _SCALAR):
+        if not isinstance(v, _SCALAR):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(
                 f"instance score {k!r} must be a scalar (int/float/str/bool), got "
                 f"{type(v).__name__} — flatten structured scorers with '/'-joined names")

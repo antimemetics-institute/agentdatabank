@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 CHUNK_BYTES = 1_000_000
 
@@ -23,7 +24,7 @@ def default_home() -> Path:
     return Path(xdg) / "adb"
 
 
-def write_json_atomic(path: Path, obj) -> None:
+def write_json_atomic(path: Path, obj: Any) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n")
     tmp.replace(path)
@@ -36,7 +37,7 @@ def find_run(home: Path, run_id: str) -> Path | None:
     return matches[0] if matches else None
 
 
-def ensure_condition(home: Path, condition_id: str, spec: dict) -> None:
+def ensure_condition(home: Path, condition_id: str, spec: dict[str, Any]) -> None:
     cdir = home / "conditions"
     cdir.mkdir(parents=True, exist_ok=True)
     cpath = cdir / f"{condition_id}.json"
@@ -66,7 +67,7 @@ class RunStore:
         self._fh = path.open("a")
         return self._fh
 
-    def write_event(self, event: dict) -> str:
+    def write_event(self, event: dict[str, Any]) -> str:
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
         fh = self._fh
         if fh is None:
@@ -81,7 +82,7 @@ class RunStore:
         self._chunk_bytes += len(line) + 1
         return line
 
-    def write_run_json(self, obj: dict) -> None:
+    def write_run_json(self, obj: dict[str, Any]) -> None:
         write_json_atomic(self.dir / "run.json", obj)
 
     def close(self) -> None:

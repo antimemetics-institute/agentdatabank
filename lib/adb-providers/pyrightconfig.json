@@ -1,0 +1,4 @@
+{
+  "typeCheckingMode": "strict",
+  "include": ["adb_providers"]
+}

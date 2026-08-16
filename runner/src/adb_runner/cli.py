@@ -13,17 +13,21 @@ import hashlib
 import json
 import os
 import random
-import socket
 import sys
-import urllib.error
 import urllib.request
 from pathlib import Path
+
+from typing import Any
+
+from adb_events import Json
 
 from . import credentials
 from .canonical import abbrev, condition_id
 from .protocol import execute_run
 from .schema import (
+    Manifest,
     MissingParamsError,
+    Params,
     SchemaError,
     bind_params,
     load_manifest,
@@ -56,7 +60,7 @@ def _sgr(text: str, *codes: str) -> str:
     return f"\033[{';'.join(codes)}m{text}\033[0m"
 
 
-def _viewer_ping(port: int, timeout: float = 0.3) -> dict | None:
+def _viewer_ping(port: int, timeout: float = 0.3) -> dict[str, Json] | None:
     """adb-web's identity endpoint: {"adb": "web", "home": <store it serves>}. Whatever
     else might hold the port answers wrong, or not at all, and is skipped. Proxies are
     bypassed explicitly — an http_proxy in the environment must not swallow a probe of
@@ -64,7 +68,7 @@ def _viewer_ping(port: int, timeout: float = 0.3) -> dict | None:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(f"http://{VIEWER_HOST}:{port}/api/ping", timeout=timeout) as r:
-            body = json.loads(r.read(4096))
+            body: Json = json.loads(r.read(4096))
     except (OSError, ValueError):
         return None
     return body if isinstance(body, dict) and body.get("adb") == "web" else None
@@ -133,7 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def suggested_oneliner(manifest: dict) -> str:
+def suggested_oneliner(manifest: Manifest) -> str:
     """The fully-explicit invocation, every param bound to a real declared value:
     its `initial`, else its first suggestion, else an enum's first member — so the
     printed command runs as-is. This is what the composer would hand you; printing
@@ -142,17 +146,18 @@ def suggested_oneliner(manifest: dict) -> str:
     param the manifest names no value for anywhere gets a `<name>` placeholder."""
     import shlex
 
-    sets = []
+    sets: list[str] = []
     # presentation order: params may carry an `order` hint (task-level params first —
     # they're what a researcher cares about); ties break by name
-    ordered = sorted(manifest["params"].items(), key=lambda kv: (kv[1].get("order", 100), kv[0]))
+    schema: dict[str, Any] = manifest["params"]
+    ordered = sorted(schema.items(), key=lambda kv: (kv[1].get("order", 100), kv[0]))
     for name, pschema in ordered:
-        suggestions = pschema.get("suggestions") or []
-        tdesc = pschema.get("type") or {}
+        suggestions: list[Any] = pschema.get("suggestions") or []
+        tdesc: dict[str, Any] = pschema.get("type") or {}
         if "initial" in pschema:
             value = pschema["initial"]
         elif suggestions:
-            first = suggestions[0]
+            first: Json = suggestions[0]
             value = first.get("value") if isinstance(first, dict) else first
         elif tdesc.get("kind") == "enum" and tdesc.get("values"):
             value = tdesc["values"][0]
@@ -165,9 +170,10 @@ def suggested_oneliner(manifest: dict) -> str:
     return f"nix run .#{manifest['name']} -- " + " ".join(sets)
 
 
-def resolve_condition(args, manifest: dict, source: str) -> dict:
+def resolve_condition(args: argparse.Namespace, manifest: Manifest,
+                      source: str) -> dict[str, Any]:
     """Returns {params, cid} — the one condition this invocation runs."""
-    overrides: dict = {}
+    overrides: Params = {}
     for entry in args.set:
         key, value = _parse_kv(entry, "--set")
         overrides[key] = parse_value(value)
@@ -228,7 +234,10 @@ def main() -> int:
     _log(f"{manifest['name']}: {replicates} replicate(s) of condition "
          f"{abbrev(cond['cid'])}, base seed {base_seed}")
 
-    json_out = (lambda e: print(json.dumps(e, separators=(",", ":")), flush=True)) if args.json else None
+    def _json_out(envelope: dict[str, Any]) -> None:
+        print(json.dumps(envelope, separators=(",", ":")), flush=True)
+
+    json_out = _json_out if args.json else None
 
     # Credentials resolve ONCE per invocation (they are constant across replicates —
     # a picker that re-asked every replicate would be noise). Interactively this may
@@ -275,10 +284,10 @@ def main() -> int:
             _log(f"  {_sgr('▸ watch', '2')}  {_sgr(f'{viewer}/#/runs/{run_id}', '1;4;36')}")
             _log(f"  {_sgr('▸ store', '2')}  {_sgr(str(store.dir), '2')}")
 
-            def on_event(envelope, _label=label):
+            def on_event(envelope: dict[str, Any], _label: str = label) -> None:
                 # an experiment's error-level log is the "why it failed" — say it on
                 # the terminal as it happens, not only in the stored stream
-                ev = envelope.get("event") or {}
+                ev: dict[str, Any] = envelope.get("event") or {}
                 if ev.get("type") == "log" and ev.get("level") == "error":
                     _log(f"{_label} error: {ev.get('message')}")
                 if json_out:

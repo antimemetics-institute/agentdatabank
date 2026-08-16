@@ -36,7 +36,7 @@ adb-providers = { path = "../adb-providers" }
 # Non-editable path-dep consumers rebuild only when the cache key changes, and uv's
 # default key is pyproject.toml alone — key on the sources so edits propagate.
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "adb_experiment/**/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_experiment/**/*.py" }, { file = "adb_experiment/py.typed" }]
 
 [build-system]
 requires = ["hatchling"]

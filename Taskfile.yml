@@ -36,14 +36,14 @@ tasks:
       - cd experiments/concordia && uv run -q pytest -q
 
   typecheck:
-    desc: ty over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first
+    desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first
     cmds:
-      - cd lib/adb-events && uv run -q ty check adb_events
-      # dependency-free and lockless — bare ty, no venv involved
-      - cd lib/adb-providers && ty check adb_providers
-      - cd lib/adb-experiment && uv run -q ty check adb_experiment
-      - cd lib/adb-inspect && uv run -q ty check adb_inspect
-      - cd runner && uv run -q ty check src
+      - cd lib/adb-events && uv run -q pyright
+      # dependency-free and lockless — bare pyright, no venv involved
+      - cd lib/adb-providers && pyright
+      - cd lib/adb-experiment && uv run -q pyright
+      - cd lib/adb-inspect && uv run -q pyright
+      - cd runner && uv run -q pyright
 
   web:test:
     desc: web unit tests + render guard, with the nix-built manifests so the oneliner sweep runs against every real experiment

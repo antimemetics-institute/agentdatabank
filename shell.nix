@@ -21,11 +21,13 @@ pkgs.mkShell {
     pkgs.go-task
     pkgs.jq
 
-    # python typechecker (task typecheck); from nixpkgs, NOT a per-project dev dep —
-    # the PyPI wheel's prebuilt binary doesn't run on NixOS, and one pinned copy
+    # python typechecker (task typecheck): pyright at STRICT (per-package
+    # pyrightconfig.json) — chosen over ty for its annotation-completeness rules
+    # (no implicit Unknown, no bare generics); from nixpkgs, NOT a per-project dev dep —
+    # per-project npm copies would drift, and one pinned copy
     # beats five. CI runs task typecheck through this same shell (ci.yml, nix job),
     # so the flake pin is the single source of the version.
-    pkgs.ty
+    pkgs.pyright
 
     pkgs.mdbook
 

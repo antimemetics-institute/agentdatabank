@@ -25,13 +25,22 @@ import json
 import os
 import sys
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from adb_events.emit import artifact, metric, set_output
 
 
-def experiment_main(params_model, run, *, prog: str,
+class SupportsModelValidate(Protocol):
+    """The one method the scaffold needs from a params model CLASS — pydantic's
+    ``model_validate`` shape, without depending on (or requiring) pydantic."""
+
+    def model_validate(self, raw: Any, /) -> Any: ...
+
+
+def experiment_main(params_model: SupportsModelValidate,
+                    run: Callable[[Any], object], *, prog: str,
                     description: str | None = None,
                     fallback_summary: dict[str, Any] | None = None,
                     argv: list[str] | None = None) -> int:

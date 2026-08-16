@@ -18,7 +18,7 @@ the raw line is what gets stored, and extension emission goes through `emit.emit
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Literal, Union
+from typing import Any, Literal, Union
 
 import msgspec
 
@@ -67,23 +67,26 @@ class Message(msgspec.Struct, rename={"from_": "from"}, omit_defaults=True):
     channel: str
     to: Union[str, None] = None
     visible_to: Union[list[str], None] = None
-    meta: Union[dict, None] = None
+    # dict[str, Any], not the recursive Json alias (msgspec can't validate that) and
+    # not bare dict (a typed consumer deserves better than Unknown): JSON objects
+    # have str keys; values stay deliberately open — the payload contract
+    meta: Union[dict[str, Any], None] = None
 
 
 class LlmRequest(msgspec.Struct, omit_defaults=True):
-    messages: list[dict]
-    params: dict = msgspec.field(default_factory=dict)
+    messages: list[dict[str, Any]]
+    params: dict[str, Any] = msgspec.field(default_factory=dict[str, Any])
 
 
 class LlmResponse(msgspec.Struct, omit_defaults=True):
-    message: dict
+    message: dict[str, Any]
     finish_reason: Union[str, None] = None
     # the provider-echoed RESOLVED model id, when the wrapper can see it — distinct
     # from LlmCall.model (the REQUESTED id): a run naming a moving alias records
     # here what the alias resolved to at the moment of use (a comparability
     # covariate that cannot be backfilled)
     model: Union[str, None] = None
-    raw: Union[dict, None] = None
+    raw: Union[dict[str, Any], None] = None
 
 
 class LlmUsage(msgspec.Struct, omit_defaults=True):
@@ -106,13 +109,13 @@ class LlmCall(msgspec.Struct, omit_defaults=True):
     error: Union[LlmError, None] = None
     # what the call served (like Message.meta) — e.g. sample_id/epoch when one run
     # works through many problems, so calls stay attributable under interleaving
-    meta: Union[dict, None] = None
+    meta: Union[dict[str, Any], None] = None
 
 
 class AgentEvent(msgspec.Struct, omit_defaults=True):
     agent: str
     kind: str
-    data: dict = msgspec.field(default_factory=dict)
+    data: dict[str, Any] = msgspec.field(default_factory=dict[str, Any])
 
 
 class Artifact(msgspec.Struct, omit_defaults=True):
@@ -136,7 +139,7 @@ EVENT_MODELS: dict[str, type[msgspec.Struct]] = {
 }
 
 
-def validate_event(payload: dict) -> list[str]:
+def validate_event(payload: Mapping[str, Any]) -> list[str]:
     """Errors for a known-type payload dict; empty list = valid or unknown/absent type
     (both legal by spec — the conformance ladder). Unknown *fields* are allowed."""
     model = EVENT_MODELS.get(payload.get("type") or "")

@@ -19,10 +19,14 @@ import signal
 import subprocess
 import threading
 import time
+from collections.abc import Callable
+from typing import Any
 
 from . import __version__
 from . import credentials
-from .events_schema import validate_event
+
+from adb_events import Json, validate_event
+from .schema import Manifest, Params
 from .store import RunStore
 from .ulid import ulid
 
@@ -49,7 +53,8 @@ def _now() -> str:
     )
 
 
-def child_env(run_id: str, run_dir: str, seed: int, credential_env: dict | None = None) -> dict:
+def child_env(run_id: str, run_dir: str, seed: int,
+              credential_env: dict[str, str] | None = None) -> dict[str, str]:
     # constructed from scratch: system basics from the allowlist, then the stored
     # credentials/endpoints (credentials.py) — the store always wins over the
     # host — then ADB_* run vars. This is how a real model reaches its key without
@@ -65,7 +70,8 @@ def child_env(run_id: str, run_dir: str, seed: int, credential_env: dict | None 
 
 
 class RunResult:
-    def __init__(self, run_id: str, phase: str, summary: dict, usage: dict, duration_s: float):
+    def __init__(self, run_id: str, phase: str, summary: dict[str, Any],
+                 usage: dict[str, int], duration_s: float):
         self.run_id = run_id
         self.phase = phase
         self.summary = summary
@@ -76,9 +82,9 @@ class RunResult:
 def execute_run(
     *,
     program: str,
-    manifest: dict,
-    spec_params: dict,
-    realized_params: dict,
+    manifest: Manifest,
+    spec_params: Params,
+    realized_params: Params,
     condition_id: str,
     source: str,
     fetch_ref: str | None = None,
@@ -86,8 +92,8 @@ def execute_run(
     replicate: int,
     store: RunStore,
     run_id: str | None = None,
-    on_event=None,
-    credential_env: dict | None = None,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
+    credential_env: dict[str, str] | None = None,
 ) -> RunResult:
     run_id = run_id or ulid()
     # `source` is the per-experiment content identity (feeds condition_id); `fetch_ref` is
@@ -98,11 +104,11 @@ def execute_run(
     dirty = fetch_ref.startswith("dirty:")
     start = time.monotonic()
     seq = 0
-    metrics: dict[str, object] = {}
+    metrics: dict[str, Any] = {}
     usage = {"input_tokens": 0, "output_tokens": 0, "llm_calls": 0}
-    events_q: queue.Queue = queue.Queue()
+    events_q: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
-    def emit(payload: dict) -> None:
+    def emit(payload: dict[str, Any]) -> None:
         # transport envelope (runner-owned); the payload is stored verbatim, so
         # payload keys can never collide with envelope keys. Envelope ts is capture
         # time — an experiment's own timestamps ride inside the payload.
@@ -114,14 +120,14 @@ def execute_run(
         if ptype == "metric" and "name" in payload:
             metrics[payload["name"]] = payload.get("value")
         elif ptype == "llm.call":
-            u = payload.get("usage") or {}
+            u: dict[str, Any] = payload.get("usage") or {}
             usage["input_tokens"] += u.get("input_tokens") or 0
             usage["output_tokens"] += u.get("output_tokens") or 0
             usage["llm_calls"] += 1
         if on_event:
             on_event(envelope)
 
-    run_meta = {
+    run_meta: dict[str, Any] = {
         "run": run_id,
         "condition": condition_id,
         "experiment": manifest["name"],
@@ -174,13 +180,13 @@ def execute_run(
     store.write_run_json(run_meta)
     emit({"type": "run.status", "phase": "running"})
 
-    def read_stdout():
+    def read_stdout() -> None:
         for line in stdout:
             line = line.rstrip("\n")
             if not line.strip():
                 continue
             try:
-                payload = json.loads(line)
+                payload: Json = json.loads(line)
             except json.JSONDecodeError:
                 payload = None
             if isinstance(payload, dict):
@@ -191,7 +197,7 @@ def execute_run(
                 events_q.put({"type": "stdout", "line": line})
         events_q.put(None)
 
-    def read_stderr():
+    def read_stderr() -> None:
         for line in stderr:
             line = line.rstrip("\n")
             if line:
@@ -240,7 +246,7 @@ def execute_run(
         # Ingestion lint (degraded-but-correct, docs/plan/events.md conformance ladder):
         # the payload is ALWAYS stored verbatim — a claimed lifecycle type (`run.*`
         # is runner-synthesized) or a known type with the wrong shape earns a
-        # companion warning, never mutation or drop. Schema: events_schema.py.
+        # companion warning, never mutation or drop. Schema: the adb_events models.
         ptype = item.get("type")
         if isinstance(ptype, str) and ptype.startswith("run."):
             emit({"type": "log", "level": "warn",
@@ -267,9 +273,8 @@ def execute_run(
     # rendered from the stream on demand (deposit irreducibles, never derivables;
     # docs/plan/events.md "Standard conversation views")
 
-    summary = {
-        name: metrics[name] for name in (manifest.get("results") or {}) if name in metrics
-    }
+    results: dict[str, Any] = manifest.get("results") or {}
+    summary = {name: metrics[name] for name in results if name in metrics}
     emit({
         "type": "run.end",
         "phase": phase,

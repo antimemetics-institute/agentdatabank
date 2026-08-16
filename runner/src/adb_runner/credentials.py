@@ -28,12 +28,16 @@ import re
 import stat
 import sys
 import tomllib
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
+from typing import Any
 from pathlib import Path
 
 # Built-in names come from the canonical provider registry (the adb-providers
 # package). Here they are prompt templates only — no routing semantics.
+from adb_events import Json
 from adb_providers import MOCK_PREFIXES, PROVIDERS
+
+from .schema import Manifest, Params, TypeDesc
 
 _PROFILE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
 _RESERVED_PROFILES = {"new"}  # picker keyword
@@ -76,7 +80,7 @@ def load() -> dict[str, dict[str, dict[str, str]]]:
             f"{path} is readable by group/others (mode {oct(mode & 0o777)}) — "
             f"refusing to use it; fix with: chmod 600 {path}")
     with open(path, "rb") as f:
-        data = tomllib.load(f)
+        data: dict[str, Json] = tomllib.load(f)
     store: dict[str, dict[str, dict[str, str]]] = {}
     for name, section in data.items():
         if not isinstance(section, dict):
@@ -134,7 +138,7 @@ def _load_prefs() -> dict[str, dict[str, str]]:
     if not path.exists():
         return {}
     with open(path, "rb") as f:
-        data = tomllib.load(f)
+        data: dict[str, Json] = tomllib.load(f)
     return {
         exp: {s: str(p) for s, p in choices.items() if not isinstance(p, dict)}
         for exp, choices in data.items()
@@ -163,7 +167,7 @@ def _save_prefs(prefs: dict[str, dict[str, str]]) -> Path:
 
 # -- resolution (used by the runner before launching an experiment) --------------------
 
-def _iter_model_ids(value, tdesc: dict):
+def _iter_model_ids(value: Json, tdesc: TypeDesc) -> Iterator[str]:
     """Yield every model-id string sitting at an `llm`-typed position in a realized value
     (handles bare llm, listOf llm, and structs/lists nesting llm — e.g. werewolf's
     players = listOf (struct { model = llm; }))."""
@@ -172,11 +176,13 @@ def _iter_model_ids(value, tdesc: dict):
         if isinstance(value, str):
             yield value
     elif kind == "list" and isinstance(value, list):
+        of_desc: TypeDesc = tdesc.get("of") or {}
         for item in value:
-            yield from _iter_model_ids(item, tdesc.get("of") or {})
+            yield from _iter_model_ids(item, of_desc)
     elif kind == "struct" and isinstance(value, dict):
         from .schema import field_type  # param-wrapped struct fields carry hints
-        for fname, ftype in (tdesc.get("fields") or {}).items():
+        fields: dict[str, Any] = tdesc.get("fields") or {}
+        for fname, ftype in fields.items():
             if fname in value:
                 yield from _iter_model_ids(value[fname], field_type(ftype))
 
@@ -196,9 +202,9 @@ def section_for(model_id: str) -> str | None:
     return head
 
 
-def sets_used(manifest: dict, realized_params: dict) -> set[str]:
+def sets_used(manifest: Manifest, realized_params: Params) -> set[str]:
     """The credential sets referenced by this run's `llm` params (mocks excluded)."""
-    schema = manifest.get("params") or {}
+    schema: dict[str, Any] = manifest.get("params") or {}
     used: set[str] = set()
     for name, pschema in schema.items():
         if name not in realized_params:
@@ -211,7 +217,7 @@ def sets_used(manifest: dict, realized_params: dict) -> set[str]:
     return used
 
 
-def env_for_run(manifest: dict, realized_params: dict,
+def env_for_run(manifest: Manifest, realized_params: Params,
                 selections: dict[str, str] | None = None) -> dict[str, str]:
     """Stored env vars to inject for the credential sets this run's models route to.
     `selections` maps set -> profile (from the interactive ladder); an unselected set
@@ -224,7 +230,7 @@ def env_for_run(manifest: dict, realized_params: dict,
     return env
 
 
-def missing_sets(manifest: dict, realized_params: dict) -> list[str]:
+def missing_sets(manifest: Manifest, realized_params: Params) -> list[str]:
     """Credential sets this run's model ids route to with no section in the store. The
     store is the ONLY source of credentials — a key exported in the shell neither
     reaches a run nor suppresses this gate (it would silently skip the setup prompt
@@ -243,7 +249,7 @@ def missing_sets(manifest: dict, realized_params: dict) -> list[str]:
 
 # -- the interactive ladder (used by the runner CLI once per invocation) ---------------
 
-def resolve_run_credentials(manifest: dict, realized_params: dict, *,
+def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
                             experiment: str, interactive: bool) -> dict[str, str]:
     """The env to inject for this run, resolving a profile for every credential set
     the run routes to. Interactively this may prompt: first-use setup (with the

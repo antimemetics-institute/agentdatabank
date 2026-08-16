@@ -15,4 +15,4 @@ packages = ["adb_providers"]
 # Non-editable path-dep consumers rebuild only when the cache key changes, and uv's
 # default key is pyproject.toml alone — key on the sources so edits propagate.
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "adb_providers/**/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_providers/**/*.py" }, { file = "adb_providers/py.typed" }]

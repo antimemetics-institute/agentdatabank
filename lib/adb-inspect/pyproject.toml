@@ -47,7 +47,7 @@ adb-events = { path = "../adb-events" }
 # when the cache key changes, and uv's default key is pyproject.toml alone — key
 # on the sources so edits propagate.
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "adb_inspect/**/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_inspect/**/*.py" }, { file = "adb_inspect/py.typed" }]
 [project.scripts]
 adb-inspect-eval = "adb_inspect.main:main"
 

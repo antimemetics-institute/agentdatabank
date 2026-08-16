@@ -7,7 +7,7 @@ import json
 import pytest
 
 from adb_runner.emit import main
-from adb_runner.events_schema import validate_event
+from adb_events import validate_event
 
 
 def emit(capsys, *argv, stdin: str | None = None, monkeypatch=None):
