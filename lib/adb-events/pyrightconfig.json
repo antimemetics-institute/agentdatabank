@@ -1,5 +1,7 @@
 {
   "typeCheckingMode": "strict",
+  "enableTypeIgnoreComments": false,
+  "reportUnnecessaryTypeIgnoreComment": "warning",
   "venvPath": ".",
   "venv": ".venv",
   "include": ["adb_events"]

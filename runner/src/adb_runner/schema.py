@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from adb_events import Json
 
@@ -68,15 +68,15 @@ def _type_error(path: str, tdesc: TypeDesc, value: Any) -> SchemaError:
 def field_type(fdesc: Json) -> TypeDesc:
     """A struct field is a bare type descriptor ({"kind": ...}), or a param-wrapped one
     ({"type": {...}, "suggestions": [...], ...}) when the author attached presentation
-    hints. Validation only cares about the type."""
-    if isinstance(fdesc, dict):
-        if "kind" not in fdesc:
-            inner = fdesc.get("type")
-            if isinstance(inner, dict):
-                return inner
-        return fdesc
-    # not a mapping at all — malformed; hand it back for validate_value to raise on
-    return cast("TypeDesc", fdesc)
+    hints. Validation only cares about the type. A non-mapping descriptor is a
+    malformed manifest — raised here, where the malformation is known, not deferred."""
+    if not isinstance(fdesc, dict):
+        raise SchemaError(f"field descriptor must be a mapping, got {fdesc!r}")
+    if "kind" not in fdesc:
+        inner = fdesc.get("type")
+        if isinstance(inner, dict):
+            return inner
+    return fdesc
 
 
 def validate_value(value: Json, tdesc: TypeDesc, path: str) -> None:

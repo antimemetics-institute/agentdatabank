@@ -20,7 +20,8 @@ required fields, so the empty-response case is `not output.choices`, never None.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from adb_events.emit import agent_event, instance, llm_call, message, metric, status
 
@@ -28,12 +29,14 @@ if TYPE_CHECKING:
     from inspect_ai.event import ModelEvent
     from inspect_ai.log import EvalLog, EvalSample
     from inspect_ai.model import ChatMessage
+    from inspect_ai.scorer import Value
+    from pydantic import BaseModel
 
 # Inspect Score.value uses these letter grades; map to 0/1 for numeric metrics.
 _GRADE = {"C": 1.0, "I": 0.0, "P": 0.5, "N": 0.0}
 
 
-def _num(value: Any) -> float | None:
+def _num(value: Value) -> float | None:
     if isinstance(value, bool):
         return float(value)
     if isinstance(value, (int, float)):
@@ -50,14 +53,11 @@ def _model_events(sample: EvalSample) -> list[ModelEvent]:
     return [e for e in (sample.events or []) if isinstance(e, ModelEvent)]
 
 
-def _dump(obj: Any) -> Any:
-    """Best-effort JSON-able form for a pydantic model (ChatMessage, GenerateConfig),
-    nulls omitted — a GenerateConfig is ~40 fields of None around the two that were
-    set, and the wire wants the two."""
-    if obj is None:
-        return None
-    md = getattr(obj, "model_dump", None)
-    return md(mode="json", exclude_none=True) if callable(md) else obj
+def _dump(obj: BaseModel | None) -> dict[str, Any] | None:
+    """JSON-able form of a pydantic model (ChatMessage, GenerateConfig), nulls
+    omitted — a GenerateConfig is ~40 fields of None around the two that were set,
+    and the wire wants the two."""
+    return None if obj is None else obj.model_dump(mode="json", exclude_none=True)
 
 
 def emit_provenance(log: EvalLog, agent: str) -> None:
@@ -150,17 +150,15 @@ def emit_live_model_event(ev: ModelEvent, agent: str, sample_id: str | int,
 _SCALAR = (int, float, str, bool)
 
 
-def _flat_scores(scores: dict[str, Any]) -> dict[str, int | float | str | bool]:
+def _flat_scores(scores: Mapping[str, Value]) -> dict[str, int | float | str | bool]:
     """Inspect Score.value per scorer → the spec's flat scalar map: dict-valued
     scorers (agentharm's combined_scorer) flatten with '/'-joined names; a
     non-scalar leaf stringifies (degraded-but-correct — the raw .eval artifact
     keeps the original)."""
     out: dict[str, int | float | str | bool] = {}
     for scorer, v in scores.items():
-        if isinstance(v, dict):
-            # isinstance narrows the JsonValue to dict[Unknown, Unknown]; cast to
-            # what a JSON object is
-            for k, leaf in cast("dict[str, Any]", v).items():
+        if isinstance(v, Mapping):
+            for k, leaf in v.items():
                 out[f"{scorer}/{k}"] = leaf if isinstance(leaf, _SCALAR) else str(leaf)
         else:
             out[scorer] = v if isinstance(v, _SCALAR) else str(v)

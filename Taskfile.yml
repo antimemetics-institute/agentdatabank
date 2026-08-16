@@ -36,8 +36,9 @@ tasks:
       - cd experiments/concordia && uv run -q pytest -q
 
   typecheck:
-    desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first
+    desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first. The policy script gates the escapes pyright can't police (ignore-rule + cast allowlists).
     cmds:
+      - bash scripts/check-typing-policy.sh
       - cd lib/adb-events && uv run -q pyright
       # dependency-free and lockless — bare pyright, no venv involved
       - cd lib/adb-providers && pyright
