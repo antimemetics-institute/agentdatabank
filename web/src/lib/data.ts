@@ -21,6 +21,21 @@ export async function api<T>(path: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+/* POST with the server's {error} body surfaced — the launch/credential endpoints
+   answer 4xx with a human sentence (loopback-only, validation, runner refusals)
+   that the UI shows verbatim rather than a bare status code */
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(withBase(path), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data: unknown = await r.json().catch(() => ({}));
+  if (!r.ok)
+    throw new Error((data as { error?: string }).error ?? `${r.status} ${path}`);
+  return data as T;
+}
+
 /* experiment manifests (schema for the run-config builder). Per-build-immutable, so
    fetched once per session. null before the first response; [] if the server has no
    manifests dir (bare dev.sh). */

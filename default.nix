@@ -39,8 +39,8 @@ let
   };
 
   runnables =
-    { inherit (adbPkgs) adb-runner adb-dev; }
-    // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web; }
+    { inherit (adbPkgs) adb-runner adb-dev adb-worker; }
+    // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web adb-local; }
     // lib.mapAttrs' (name: exp: lib.nameValuePair "experiment-${name}" exp.app)
       adbPkgs.experiments;
 in
@@ -52,6 +52,10 @@ runnables
       (name: exp: { name = "${name}.json"; path = exp.manifest; })
       adbPkgs.experiments);
 
+  # NixOS module for the queue worker (self-hosted runners): import this path and
+  # set services.adb-worker.* — see pkgs/adb-worker/module.nix for the options.
+  nixosModules.adb-worker = ./pkgs/adb-worker/module.nix;
+
   # `exec.<name>`: the classic mirror of the flake's APP namespace — bare names for
   # experiments, adb- prefix for tools, exactly like `nix run .#<name>`. The output
   # IS the executable (a symlink resolved via lib.getExe, i.e. meta.mainProgram), so
@@ -59,7 +63,7 @@ runnables
   #   $(nix-build --no-out-link -A exec.inspect-hello) --set …
   exec = lib.mapAttrs
     (name: drv: pkgs.runCommand "exec-${name}" { } "ln -s ${lib.getExe drv} $out")
-    ({ inherit (adbPkgs) adb-runner adb-dev; }
-      // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web; }
+    ({ inherit (adbPkgs) adb-runner adb-dev adb-worker; }
+      // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web adb-local; }
       // lib.mapAttrs (_: exp: exp.app) adbPkgs.experiments);
 }

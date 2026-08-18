@@ -27,7 +27,12 @@ import { spawn } from "node:child_process";
 import { join, extname, normalize, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { parseArgs } from "node:util";
-import type { Ev, RunMeta } from "./shared/types";
+import type { Ev, Manifest, RunMeta } from "./shared/types";
+import {
+  claim, done, getJob, initJobs, listJobs, listWorkers, registerWorker, report,
+  stopJob, submit,
+} from "./server/queue";
+import { credsList, credsRemember, credsSet } from "./server/runner-cli";
 
 /* Config policy: USER INTENT is flags (--host/--port/--home/--no-open — explicit,
    discoverable); env is kept for two things only: deployment wiring the nix wrapper
@@ -45,11 +50,13 @@ const { values: args } = parseArgs({
 });
 if (args.help) {
   console.log(
-    "adb-web [--host ADDR] [--port N] [--home DIR] [--no-open]\n\n" +
+    "adb-web [--host ADDR] [--port N] [--home DIR] [--repo DIR] [--no-open]\n\n" +
     "  --host ADDR   bind address (default 127.0.0.1; 0.0.0.0 exposes to the network)\n" +
     "  --port N      listen port (default 8340; walks up if taken)\n" +
     "  --home DIR    run store to serve (default $ADB_HOME, else ~/.local/share/adb)\n" +
-    "  --no-open     don't open the browser (also: ADB_NO_OPEN=1)",
+    "  --no-open     don't open the browser (also: ADB_NO_OPEN=1)\n\n" +
+    "  ADB_WEB_TOKEN a bearer token that lets non-loopback workers and launchers in\n" +
+    "                (without it, the launch surface answers loopback only)",
   );
   process.exit(0);
 }
@@ -68,6 +75,14 @@ const PORT = Number(args.port ?? process.env.ADB_PORT ?? "8340");
    interfaces explicitly (`--host 0.0.0.0`, e.g. behind a code-server/reverse proxy). */
 const HOST = args.host ?? process.env.ADB_HOST ?? "127.0.0.1";
 const NO_OPEN = Boolean(args["no-open"] || process.env.ADB_NO_OPEN);
+/* the one optional capability (baked by the nix adb-web wrapper): the adb-runner
+   binary whose `credentials … --json` faces the credential picker proxies. Absent →
+   that picker degrades to nothing. Execution needs NOTHING here: adb-web serves
+   and queues, workers execute — starting one is the user's explicit act. */
+const RUNNER = process.env.ADB_RUNNER ?? null;
+/* shared bearer token: the ticket that lets a worker (or launcher) on ANOTHER
+   machine use the launch surface. Absent → that surface is loopback-only. */
+const TOKEN = process.env.ADB_WEB_TOKEN || null;
 
 const PARAM_REF_LIMIT = 2048; /* param values above this become descriptors */
 const ELIDE_LIMIT = 4096;     /* event string fields above this become markers */
@@ -287,7 +302,16 @@ async function runPhase(cid: string, rid: string): Promise<string | null> {
 }
 
 /* the experiment manifests (schema for the run-config builder) — one JSON per
-   experiment in the ADB_WEB_MANIFESTS dir; [] when the dir is unset/unreadable */
+   experiment in the ADB_WEB_MANIFESTS dir; [] when the dir is unset/unreadable.
+
+   TODO: this catalog is frozen at the wrapper's build while workers build fresh
+   per job — map the EXACT discrepancies when the served repo moves under a
+   running adb-web (main advances, or a live checkout is edited): stale form
+   schema vs the new runner's validation, parseJobBody's unknown-experiment
+   check against the old catalog (new experiments unlaunchable, deleted ones
+   still offered), and the composed oneliner inheriting the frozen view.
+   Enumerate first; the fix is the sources-first design (manifests keyed by
+   source, worker = executor + trust set), not a reload hack here. */
 async function readManifests(): Promise<unknown[]> {
   if (!MANIFESTS) return [];
   let files: string[] = [];
@@ -320,6 +344,99 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, urlPath: s
   } catch { return false; }
 }
 
+/* ---------------- the launch/credential surface (guarded writes) ----------------
+   The read API serves your run data to whoever can reach the port (you opted into
+   that with --host). The LAUNCH surface is different in kind — it executes code and
+   writes a secret store — so it is gated on the requester being the machine's own
+   user: same-origin (a browser tab on another site can't drive it) AND a loopback
+   peer (a network client can't, even when the bind is 0.0.0.0 for remote VIEWING).
+   Remote launching is a real feature with a real design (runner registration +
+   tokens), not a default we back into by serving spawn(2) on all interfaces. */
+
+const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+const bearerOk = (req: IncomingMessage): boolean => {
+  const auth = (req.headers.authorization ?? "").toString();
+  return TOKEN !== null && auth === `Bearer ${TOKEN}`;
+};
+
+function writeBlocked(req: IncomingMessage): string | null {
+  const origin = req.headers.origin;
+  if (origin) {
+    try { if (new URL(origin).host !== req.headers.host) return "cross-origin request refused"; }
+    catch { return "malformed Origin"; }
+  }
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? "") && !bearerOk(req))
+    return TOKEN
+      ? "launch/credential/worker endpoints need the bearer token off-loopback"
+      : "launch/credential/worker endpoints answer loopback only — use the machine's " +
+        "own browser, tunnel the port (ssh -L 8340:127.0.0.1:8340), or set " +
+        "ADB_WEB_TOKEN and hand workers the token";
+  return null;
+}
+
+const BODY_CAP = 256 * 1024;
+
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolvePromise, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > BODY_CAP) { reject(new Error("body too large")); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      try { resolvePromise(JSON.parse(Buffer.concat(chunks).toString("utf8") || "null")); }
+      catch { reject(new Error("body is not JSON")); }
+    });
+    req.on("error", reject);
+  });
+}
+
+/* the same shape rules the runner enforces — checked here so a bad request dies
+   before any spawn, and so nothing surprising ever lands in argv (values that ARE
+   free text, the --set payloads, travel as single argv entries; never a shell) */
+const EXPERIMENT_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const SET_NAME_RE = /^[a-z0-9][a-z0-9_.-]*$/;
+const PROFILE_RE = /^[a-z0-9][a-z0-9_-]*$/;
+const SET_ARG_RE = /^[A-Za-z_][A-Za-z0-9_]*=[\s\S]*$/;
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+interface JobBody {
+  experiment: string; sets: string[]; profiles: Record<string, string>; replicates: number;
+}
+
+async function parseJobBody(body: unknown): Promise<JobBody | string> {
+  if (!body || typeof body !== "object") return "expected a JSON object";
+  const b = body as Record<string, unknown>;
+  const experiment = b.experiment;
+  if (typeof experiment !== "string" || !EXPERIMENT_RE.test(experiment))
+    return "bad experiment name";
+  const manifests = (await readManifests()) as Manifest[];
+  const manifest = manifests.find((m) => m.name === experiment);
+  if (!manifest) return `unknown experiment "${experiment}"`;
+  /* external experiments included: they run when a worker is registered for the
+     fork repo (its --repo); a worker that isn't fails the build with
+     attribute-missing, honestly, into the job log */
+  const sets = Array.isArray(b.sets) ? b.sets : null;
+  if (!sets || sets.length > 128 ||
+      !sets.every((s) => typeof s === "string" && SET_ARG_RE.test(s)))
+    return "sets must be key=value strings";
+  const profilesIn = b.profiles && typeof b.profiles === "object" ? b.profiles as Record<string, unknown> : {};
+  const profiles: Record<string, string> = {};
+  for (const [set, profile] of Object.entries(profilesIn)) {
+    if (!SET_NAME_RE.test(set) || typeof profile !== "string" || !PROFILE_RE.test(profile))
+      return "bad profile selection";
+    profiles[set] = profile;
+  }
+  const replicates = b.replicates ?? 1;
+  if (typeof replicates !== "number" || !Number.isInteger(replicates) ||
+      replicates < 1 || replicates > 100)
+    return "replicates must be an integer 1..100";
+  return { experiment, sets: sets as string[], profiles, replicates };
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -344,6 +461,120 @@ const server = createServer(async (req, res) => {
       if (parts[1] === "experiments" && parts.length === 2) {
         /* manifests are per-build-immutable; no-cache is fine (tiny, rarely fetched) */
         return json(req, res, 200, await readManifests(), { "cache-control": "no-cache" });
+      }
+      if (parts[1] === "credentials") {
+        /* the whole credential surface — reads too — is the machine-owner's: even a
+           masked store (which profiles exist, what's remembered) is that user's
+           metadata, not run data */
+        const blocked = writeBlocked(req);
+        if (blocked) return json(req, res, 403, { error: blocked });
+        if (req.method === "GET" && parts.length === 2) {
+          const base = { runner: Boolean(RUNNER) };
+          if (!RUNNER)
+            return json(req, res, 200,
+              { ...base, store: {}, prefs: {}, providers: {}, mock_prefixes: [] },
+              { "cache-control": "no-store" });
+          const doc = await credsList(RUNNER);
+          if (doc === null) return json(req, res, 502, { error: "adb-runner credentials list failed" });
+          return json(req, res, 200, { ...base, ...(doc as object) }, { "cache-control": "no-store" });
+        }
+        if (req.method !== "POST") return json(req, res, 405, { error: "POST only" });
+        if (!RUNNER) return json(req, res, 409, { error: "server has no ADB_RUNNER — credential editing is off" });
+        const body = await readJsonBody(req) as Record<string, unknown> | null;
+        if (parts.length === 3 && parts[2] === "remember") {
+          const { experiment, set, profile } = (body ?? {}) as Record<string, string>;
+          if (typeof experiment !== "string" || !EXPERIMENT_RE.test(experiment) ||
+              typeof set !== "string" || !SET_NAME_RE.test(set) ||
+              typeof profile !== "string" || !PROFILE_RE.test(profile))
+            return json(req, res, 400, { error: "bad remember request" });
+          const r = await credsRemember(RUNNER, experiment, set, profile);
+          return json(req, res, "error" in r ? 400 : 200, r);
+        }
+        if (parts.length === 2) {
+          const { set, profile, values } = (body ?? {}) as
+            { set?: unknown; profile?: unknown; values?: unknown };
+          if (typeof set !== "string" || !SET_NAME_RE.test(set) ||
+              typeof profile !== "string" || !PROFILE_RE.test(profile) ||
+              !values || typeof values !== "object" ||
+              !Object.entries(values).every(([k, v]) =>
+                ENV_KEY_RE.test(k) && (v === null || typeof v === "string")))
+            return json(req, res, 400, { error: "bad credentials request" });
+          const r = await credsSet(RUNNER, set, profile, values as Record<string, string | null>);
+          return json(req, res, "error" in r ? 400 : 200, r);
+        }
+        return json(req, res, 404, { error: "unknown endpoint" });
+      }
+      if (parts[1] === "workers") {
+        /* the worker protocol: register → claim (long-poll) → report/done (under
+           /api/jobs). Same gate as the launch surface: loopback, or the bearer
+           token — which is exactly what makes a LAN/remote worker a one-flag
+           story instead of a new auth system. */
+        const blocked = writeBlocked(req);
+        if (blocked) return json(req, res, 403, { error: blocked });
+        if (req.method === "GET" && parts.length === 2)
+          return json(req, res, 200, listWorkers(), { "cache-control": "no-store" });
+        if (req.method === "POST" && parts.length === 3 && parts[2] === "register") {
+          const body = await readJsonBody(req) as { name?: unknown; creds?: unknown } | null;
+          const name = typeof body?.name === "string" && body.name.trim()
+            ? body.name.trim().slice(0, 64) : "worker";
+          const worker = registerWorker(name, body?.creds);
+          return json(req, res, 200, { worker: worker.id }, { "cache-control": "no-store" });
+        }
+        if (req.method === "POST" && parts.length === 4 && parts[3] === "claim") {
+          const r = claim(HOME, parts[2]!);
+          if ("gone" in r) return json(req, res, 410, { error: "unknown worker — re-register" });
+          const spec = await r.job;
+          if (!spec) { res.writeHead(204); res.end(); return; }
+          return json(req, res, 200, spec, { "cache-control": "no-store" });
+        }
+        return json(req, res, 404, { error: "unknown endpoint" });
+      }
+      if (parts[1] === "jobs") {
+        if (req.method === "GET" && parts.length === 2)
+          return json(req, res, 200, listJobs(), { "cache-control": "no-store" });
+        if (req.method === "GET" && parts.length === 3) {
+          const job = getJob(parts[2]!);
+          return job ? json(req, res, 200, job, { "cache-control": "no-store" })
+                     : json(req, res, 404, { error: "no such job" });
+        }
+        const blocked = writeBlocked(req);
+        if (blocked) return json(req, res, 403, { error: blocked });
+        if (req.method === "POST" && parts.length === 4 && parts[3] === "stop") {
+          return stopJob(HOME, parts[2]!)
+            ? json(req, res, 200, { ok: true })
+            : json(req, res, 404, { error: "no such active job" });
+        }
+        if (req.method === "POST" && parts.length === 4 && parts[3] === "report") {
+          const body = await readJsonBody(req) as Record<string, unknown> | null;
+          const r = report(HOME, parts[2]!, {
+            phase: typeof body?.phase === "string" ? body.phase : undefined,
+            runs: Array.isArray(body?.runs)
+              ? (body.runs as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
+            log: Array.isArray(body?.log)
+              ? (body.log as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
+          });
+          return r ? json(req, res, 200, r) : json(req, res, 404, { error: "no such job" });
+        }
+        if (req.method === "POST" && parts.length === 4 && parts[3] === "done") {
+          const body = await readJsonBody(req) as Record<string, unknown> | null;
+          return done(HOME, parts[2]!, {
+            phase: typeof body?.phase === "string" ? body.phase : undefined,
+            exit_code: typeof body?.exit_code === "number" ? body.exit_code : undefined,
+          })
+            ? json(req, res, 200, { ok: true })
+            : json(req, res, 404, { error: "no such job" });
+        }
+        if (req.method === "POST" && parts.length === 2) {
+          /* enqueue only — execution belongs to whichever worker claims it (the
+             locally-supervised one, or any `adb-worker --server <here>`) */
+          const spec = await parseJobBody(await readJsonBody(req));
+          if (typeof spec === "string") return json(req, res, 400, { error: spec });
+          const queued = submit(HOME, spec);
+          return "error" in queued
+            ? json(req, res, 429, queued)
+            : json(req, res, 201, queued.job);
+        }
+        return json(req, res, 404, { error: "unknown endpoint" });
       }
       if (parts[1] === "runs" && parts.length === 5 && parts[4] === "events") {
         const [, , cid, rid] = parts as [string, string, string, string];
@@ -437,4 +668,5 @@ function listenFrom(port: number, attemptsLeft: number): void {
   });
   server.listen(port, HOST);
 }
-listenFrom(PORT, 20);
+/* prior jobs reload as records (non-terminal ones as `orphaned`) before we serve */
+void initJobs(HOME).then(() => listenFrom(PORT, 20));

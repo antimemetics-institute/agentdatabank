@@ -66,10 +66,17 @@ tasks:
     deps: [web:build]
     cmds:
       # serve the frontend + the experiment manifests (nix builds the manifests dir)
-      # so the run-config builder works here too. --host 0.0.0.0 so a
-      # code-server/reverse proxy on another host can reach it (same stance as the
-      # docs task; the nix adb-web wrapper stays loopback-only by default).
-      - ADB_WEB_STATIC=web/dist ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" node web/dist/server.cjs --host 0.0.0.0 --no-open
+      # so the run-config builder works here too. ADB_RUNNER makes the credential
+      # picker work. adb-web serves and queues ONLY — `task worker` (or nix run
+      # .#adb-worker) executes jobs. --host 0.0.0.0 so a code-server/reverse proxy
+      # on another host can reach it (same stance as the docs task; the nix adb-web
+      # wrapper stays loopback-only by default).
+      - ADB_WEB_STATIC=web/dist ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" ADB_RUNNER="$(nix build .#adb-runner --no-link --print-out-paths)/bin/adb-runner" node web/dist/server.cjs --host 0.0.0.0 --no-open
+
+  worker:
+    desc: start a queue worker against the local adb-web (probes ports 8340+)
+    cmds:
+      - nix run .#adb-worker
 
   web:dev:
     desc: vite dev server (HMR, /api proxied) + auto-restarting API server — same as `pnpm dev` in web/

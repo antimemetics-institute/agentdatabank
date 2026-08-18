@@ -92,6 +92,65 @@ export interface ExtLink {
   label: string;
   url: string;
 }
+/* one provider prompt-template row, from the runner's registry via the wire —
+   the browser never duplicates the registry */
+export interface ProviderRow {
+  key: string;      /* env var name */
+  secret: boolean;
+  default: string;  /* prompt default (base URLs); "" for secrets */
+}
+
+/* GET /api/credentials: `adb-runner credentials list --json` passed through
+   verbatim, plus the server's capability flags. Secret values are literal `true`
+   (masked runner-side; the type change makes round-tripping impossible) — plaintext
+   secrets NEVER travel this direction. */
+export interface CredsInfo {
+  /* capability flag: the server can proxy the credential store (same-machine
+     `adb-runner credentials … --json`). Execution capability is NOT a server
+     property — see /api/workers for who can run jobs. */
+  runner: boolean;
+  problem?: string;     /* e.g. a group/other-readable store file, with the chmod fix */
+  path?: string;        /* server-side store path (shown as provenance, nothing more) */
+  prefs_path?: string;
+  /* set -> profile -> env var -> value; `true` = a secret exists here */
+  store: Record<string, Record<string, Record<string, string | true>>>;
+  /* experiment -> set -> remembered profile name (names only, never values) */
+  prefs: Record<string, Record<string, string>>;
+  providers: Record<string, ProviderRow[]>;
+  mock_prefixes: string[];
+}
+
+/* one queued launch: POST /api/jobs enqueues it, a WORKER claims and executes it
+   and reports back (run ids come from the runner's own run.start envelopes, never
+   scraped from log text). $ADB_HOME/jobs/<id>.json makes it durable — a job
+   outlives both the server and the worker that ran it. */
+export interface JobInfo {
+  id: string;
+  experiment: string;
+  phase: "queued" | "claimed" | "building" | "running"
+       | "completed" | "failed" | "stopped" | "orphaned" | "error";
+  sets: string[];                     /* the exact --set k=v args (no secrets ever) */
+  profiles: Record<string, string>;   /* credential set -> profile NAME */
+  replicates: number;
+  created_at: string;
+  finished_at?: string;
+  worker?: { id: string; name: string }; /* who claimed it */
+  runs: string[];                     /* run ids reported by run.start, in order */
+  log: string[];                      /* human tail: worker-reported stderr (capped) */
+  exit_code?: number;
+  error?: string;
+}
+
+/* one registered worker (GET /api/workers). The registry is ephemeral — workers
+   re-register after either side restarts; presence = recent claim polling. */
+export interface WorkerInfo {
+  id: string;
+  name: string;
+  registered_at: string;
+  last_seen: string;
+  busy: string | null; /* job id it is executing, if any */
+}
+
 export interface Manifest {
   name: string;
   summary?: string;

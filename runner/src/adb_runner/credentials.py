@@ -23,6 +23,7 @@ NEVER argv (argv is visible in ``ps`` and shell history, so there deliberately i
 from __future__ import annotations
 
 import getpass
+import json
 import os
 import re
 import stat
@@ -185,6 +186,7 @@ def _iter_model_ids(value: Json, tdesc: ParamType) -> Iterator[str]:
             if fname in value:
                 yield from _iter_model_ids(value[fname], field_type(ftype))
 
+
 def section_for(model_id: str) -> str | None:
     """The credential set a model id routes to. Normally the provider prefix before
     the first `/`; for inspect's OpenAI-compatible services — `openai-api/<service>/
@@ -211,6 +213,7 @@ def sets_used(manifest: Manifest, realized_params: Params) -> set[str]:
             if section:
                 used.add(section)
     return used
+
 
 def env_for_run(manifest: Manifest, realized_params: Params,
                 selections: dict[str, str] | None = None) -> dict[str, str]:
@@ -245,15 +248,29 @@ def missing_sets(manifest: Manifest, realized_params: Params) -> list[str]:
 # -- the interactive ladder (used by the runner CLI once per invocation) ---------------
 
 def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
-                            experiment: str, interactive: bool) -> dict[str, str]:
+                            experiment: str, interactive: bool,
+                            selections: dict[str, str] | None = None) -> dict[str, str]:
     """The env to inject for this run, resolving a profile for every credential set
-    the run routes to. Interactively this may prompt: first-use setup (with the
-    save/[Y/n] and profile-name questions) for unconfigured built-ins, and the
-    profile picker (with the remember question) for sets with named profiles.
-    Headless it never prompts: remembered choice, else default profile, else raises
-    ValueError with the fix. Values never touch argv anywhere on these paths —
-    scripted input pipes one line per prompt on stdin."""
-    missing = missing_sets(manifest, realized_params)
+    the run routes to. An explicit selection (`--profile SET=PROFILE`) is the top of
+    the ladder: it must name an existing profile of a set this run routes to (a typo
+    guard on both halves), beats a remembered choice, and skips the picker AND the
+    remember question — an explicit flag is a statement, not a conversation opener.
+    Below that, interactively this may prompt: first-use setup (with the save/[Y/n]
+    and profile-name questions) for unconfigured built-ins, and the profile picker
+    (with the remember question) for sets with named profiles. Headless it never
+    prompts: remembered choice, else default profile, else raises ValueError with
+    the fix. Values never touch argv anywhere on these paths — scripted input pipes
+    one line per prompt on stdin. Profile NAMES are argv-safe; values never are."""
+    selections = dict(selections or {})
+    used = sets_used(manifest, realized_params)
+    for sel_set in sorted(selections):
+        if sel_set not in used:
+            raise ValueError(
+                f"--profile names credential set {sel_set!r}, but this run's model "
+                f"ids route to {sorted(used) or 'no credential sets'} — a typo, or "
+                f"a leftover flag from another experiment")
+    missing = [s for s in missing_sets(manifest, realized_params)
+               if s not in selections]  # a selected set is checked against the store below
     if missing and not interactive:
         raise ValueError(
             f"this run needs credential set(s) {missing} but none are "
@@ -263,8 +280,19 @@ def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
     store = load()
     prefs = _load_prefs()
     env: dict[str, str] = {}
-    for name in sorted(sets_used(manifest, realized_params)):
+    for name in sorted(used):
         profiles = store.get(name)
+        selected = selections.get(name)
+        if selected is not None:
+            if not profiles or selected not in profiles:
+                have = sorted(profiles) if profiles else "nothing"
+                raise ValueError(
+                    f"--profile {name}={selected}: no such profile (store has {have} "
+                    f"for {name!r}) — create it with `nix run .#adb-runner -- "
+                    f"credentials set {name}.{selected}`")
+            print(f"adb: using {name}.{selected} (--profile)", file=sys.stderr)
+            env.update(profiles[selected])
+            continue
         if not profiles:
             if name not in PROVIDERS:
                 continue  # unknown prefix (a local server) may legitimately need nothing
@@ -501,6 +529,130 @@ def _cmd_list() -> int:
             print(f"{name}.{profile}: {shown}")
     return 0
 
+# -- machine faces (the web GUI's wire; secrets stay one-way) --------------------------
+
+def masked_store(
+    store: dict[str, dict[str, dict[str, str]]],
+) -> dict[str, dict[str, dict[str, str | bool]]]:
+    """The store with every secret value replaced by literal True — the type change
+    (str -> bool) makes accidental round-tripping impossible: a consumer that tried
+    to write the masked value back would fail loudly, not save the string "true"."""
+    return {
+        name: {
+            profile: {
+                k: (True if _is_secret(name, k) else v)
+                for k, v in vals.items()
+            }
+            for profile, vals in profiles.items()
+        }
+        for name, profiles in store.items()
+    }
+
+def inventory() -> dict[str, Json]:
+    """One self-describing document: what exists (masked), what's remembered, and the
+    prompt templates — so a GUI renders the same picker and forms the CLI prompts,
+    without duplicating the provider registry. This is also what a queue worker
+    ADVERTISES at registration: profile names travel, values never — the inventory
+    is a property of the execution target, secrets stay where execution happens.
+    A leaky store file is reported as `problem` (with the chmod fix) instead of an
+    exception: the consumer's job is to SHOW the problem."""
+    out: dict[str, Json] = {
+        "path": str(config_path()),
+        "prefs_path": str(prefs_path()),
+        "store": {},
+        "prefs": _load_prefs(),
+        "providers": {
+            name: [
+                {"key": p.api_key.name, "secret": True, "default": ""},
+                {"key": p.base_url.name, "secret": False, "default": p.base_url.default},
+            ]
+            for name, p in sorted(PROVIDERS.items())
+        },
+        "mock_prefixes": sorted(MOCK_PREFIXES),
+    }
+    try:
+        out["store"] = masked_store(load())
+    except ValueError as exc:
+        out["problem"] = str(exc)
+    return out
+
+def _cmd_list_json() -> int:
+    print(json.dumps(inventory()))
+    return 0
+
+def _set_json(arg: str) -> int:
+    """`credentials set <name>[.<profile>] --json`: one JSON object (env var -> value)
+    on stdin, applied with the SAME semantics as the prompts — start from the current
+    profile, non-empty values overwrite, empty/absent keep, explicit null deletes.
+    That merge is what lets a GUI edit a base URL without ever having held the key
+    (list --json masks secrets, so it can't send them back). Output is one JSON line;
+    validation (profile name rules, URL shape) matches the interactive face."""
+    name, dot, profile = arg.partition(".")
+    profile = profile if dot else "default"
+    if profile in _RESERVED_PROFILES or not _PROFILE_RE.match(profile):
+        print(f"profile names are [a-z0-9_-], lowercase, not "
+              f"{sorted(_RESERVED_PROFILES)} — got {profile!r}", file=sys.stderr)
+        return 2
+    try:
+        body: Json = json.loads(sys.stdin.read() or "{}")
+    except json.JSONDecodeError as exc:
+        print(f"stdin is not valid JSON: {exc}", file=sys.stderr)
+        return 2
+    # parse-don't-validate: the typed document is BUILT by the shape check, so the
+    # rest of the function works on dict[str, str | None], not raw JSON
+    if not isinstance(body, dict):
+        print("expected one JSON object of env var -> string (null deletes a key)",
+              file=sys.stderr)
+        return 2
+    incoming: dict[str, str | None] = {}
+    for key, value in body.items():
+        if value is not None and not isinstance(value, str):
+            print("expected one JSON object of env var -> string (null deletes a key)",
+                  file=sys.stderr)
+            return 2
+        incoming[key] = value
+    for key, value in incoming.items():
+        problem = _url_problem(key, value or "")
+        if problem is not None:
+            print(problem, file=sys.stderr)
+            return 2
+    store = load()
+    vals = dict(store.get(name, {}).get(profile, {}))
+    for key, value in incoming.items():
+        if value is None:
+            vals.pop(key, None)
+        elif value != "":
+            vals[key] = value
+    if not vals:
+        print(f"nothing to save for '{name}.{profile}' — every value is empty",
+              file=sys.stderr)
+        return 2
+    store.setdefault(name, {})[profile] = vals
+    path = save(store)
+    print(json.dumps({"saved": f"{name}.{profile}", "path": str(path)}))
+    return 0
+
+def _cmd_remember(argv: list[str]) -> int:
+    """`credentials remember <experiment> <set> <profile>` — the picker's `always
+    use …?` answer as a command, so a GUI's remember button and the CLI write the
+    SAME preference file the same way. Names only, never values; the profile must
+    exist (a remembered typo would silently re-ask forever)."""
+    if len(argv) != 3:
+        print("usage: adb-runner credentials remember <experiment> <set> <profile>",
+              file=sys.stderr)
+        return 2
+    experiment, name, profile = argv
+    store = load()
+    if profile not in store.get(name, {}):
+        have = sorted(store.get(name, {})) or "nothing"
+        print(f"no profile '{name}.{profile}' (store has {have}) — create it first "
+              f"with `adb-runner credentials set {name}.{profile}`", file=sys.stderr)
+        return 1
+    prefs = _load_prefs()
+    prefs.setdefault(experiment, {})[name] = profile
+    path = _save_prefs(prefs)
+    print(f"remembered: {experiment!r} uses {name}.{profile} ({path})")
+    return 0
 
 def prompt_set(arg: str) -> int:
     """`credentials set <name>` prompts values then a profile name ([default]);
@@ -530,15 +682,19 @@ def prompt_set(arg: str) -> int:
 
 
 def _cmd_set(argv: list[str]) -> int:
-    # values are ONLY ever prompted (or piped line-per-prompt on stdin): a KEY=VALUE
-    # argv form would put secrets in `ps` output and shell history, so it doesn't exist
+    # values are ONLY ever prompted (or piped line-per-prompt on stdin; or, --json,
+    # one JSON object on stdin): a KEY=VALUE argv form would put secrets in `ps`
+    # output and shell history, so it doesn't exist
+    as_json = "--json" in argv
+    argv = [a for a in argv if a != "--json"]
     if len(argv) != 1:
-        print("usage: adb-runner credentials set <name>[.<profile>]\n"
+        print("usage: adb-runner credentials set <name>[.<profile>] [--json]\n"
               "values are prompted (secrets hidden), never taken on the command line —\n"
               "argv is visible in `ps` and shell history. Scripts pipe one line per "
-              "prompt on stdin.", file=sys.stderr)
+              "prompt on stdin; --json takes one JSON object (env var -> value) on "
+              "stdin instead.", file=sys.stderr)
         return 2
-    return prompt_set(argv[0])
+    return _set_json(argv[0]) if as_json else prompt_set(argv[0])
 
 
 def _cmd_remove(argv: list[str]) -> int:
@@ -566,22 +722,29 @@ def credentials_cli(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print(
             "adb-runner credentials — local model credentials & endpoints\n\n"
-            "  list                      show configured credential sets\n"
-            "  set <name>[.<profile>]    add/update a credential set — every value is\n"
+            "  list [--json]             show configured credential sets (--json:\n"
+            "                            machine-readable, secrets masked to true)\n"
+            "  set <name>[.<profile>] [--json]\n"
+            "                            add/update a credential set — every value is\n"
             "                            prompted (secrets hidden; never on the\n"
-            "                            command line)\n"
+            "                            command line); --json reads one JSON object\n"
+            "                            (env var -> value) from stdin instead\n"
             "  remove <name>[.<profile>] delete a credential set or one profile\n"
+            "  remember <experiment> <set> <profile>\n"
+            "                            always use that profile for that experiment\n"
             "  path                      print the store file path\n"
         )
         return 0 if argv else 2
     cmd, rest = argv[0], argv[1:]
     try:
         if cmd == "list":
-            return _cmd_list()
+            return _cmd_list_json() if rest == ["--json"] else _cmd_list()
         if cmd == "set":
             return _cmd_set(rest)
         if cmd == "remove":
             return _cmd_remove(rest)
+        if cmd == "remember":
+            return _cmd_remember(rest)
     except ValueError as exc:  # e.g. a group/other-readable store file
         print(str(exc), file=sys.stderr)
         return 2

@@ -9,6 +9,7 @@
 - [Running experiments](running/cli.md)
 - [Credentials](running/secrets.md)
 - [The web GUI](running/web.md)
+- [Running from the GUI](running/workers.md)
 - [Working with Nix](running/nix.md)
 
 # Experiment catalog

@@ -40,7 +40,7 @@ Run pages poll for new events every 2 seconds, so you watch `provisioning` → `
 
 The experiment page hosts a form generated from the experiment's schema, prefilled from its `initial` values. It regenerates the exact `nix run .#<experiment> -- --set …` one-liner as you edit — every param becomes a `--set`, because [experiments have no defaults](cli.md#every-param-is-on-the-command-line), so the copied one-liner is the complete condition spec. The model field suggests concrete models, each noting which credentials it needs (see [Credentials](secrets.md)).
 
-It builds the command; it never runs anything. You copy the one-liner into a terminal.
+The builder itself only composes the command — you copy the one-liner into a terminal. The **run it here** panel below it can launch the same condition through a worker; see [Running from the GUI](workers.md).
 
 The **settings** menu in the bottom-left adapts the composed command to your Nix setup — the same choices as this guide's [⚙ command settings](nix.md), stored in the same place, so setting one sets both.
 

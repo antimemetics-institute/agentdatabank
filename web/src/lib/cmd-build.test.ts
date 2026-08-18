@@ -208,6 +208,43 @@ test("every shipped manifest composes placeholder-free", (t) => {
   }
 });
 
+/* -- the one-encoder (parity) rule ---------------------------------------------------
+   The oneliner and the run button's POST go through the same setParts encoder; these
+   guards pin the parity: for ANY value, the shell face is exactly the argv face in
+   shell clothing, so the two ways of launching bind the same condition. */
+
+import { buildArgs, encodeSet, setArg, setParts, shQuote } from "./cmd-build.ts";
+
+const CASES: [string, string][] = [
+  ["3", "int"], ["1e", "int"], ["-", "float"], ["2.5", "float"],
+  ["true", "bool"], ["maybe", "bool"],
+  ["[1,2]", "list"], ["{\n  \"a\": 1\n}", "struct"], ["not json", "object"],
+  ["anthropic/claude-sonnet-5", "llm"], ["hello world", "str"],
+  ["it's quoted", "str"], ["@file.json", "str"], ["null", "str"], ["", "str"],
+];
+
+test("shell face == argv face in shell clothing, for every value shape", () => {
+  for (const [raw, kind] of CASES) {
+    const { value, bare } = setParts(raw, kind);
+    const arg = setArg("k", raw, kind);
+    assert.equal(arg, `k=${value}`);
+    assert.equal(encodeSet("k", raw, kind), bare ? `--set ${arg}` : `--set ${shQuote(arg)}`);
+  }
+});
+
+test("buildCmd and buildArgs materialize identically", () => {
+  const vals = { model: "openai/gpt", agent_type: "", limit: "" };
+  const { cmd, missing: m1 } = buildCmd("impossiblebench", IMPOSSIBLEBENCH, vals);
+  const { sets, missing: m2 } = buildArgs(IMPOSSIBLEBENCH, vals);
+  assert.deepEqual(m1, m2);
+  /* same params in the same order with the same values: each POST arg appears as a
+     --set in the command text (modulo shell quoting) */
+  assert.equal(sets.length, (cmd.match(/--set /g) ?? []).length);
+  assert.ok(sets.includes("model=openai/gpt"));
+  assert.ok(sets.includes("agent_type=minimal")); /* defaults materialized in BOTH faces */
+  assert.ok(sets.includes("reasoning_tokens=null")); /* empty nullable binds null */
+});
+
 /* -- manifest key census (the TS half of the conformance sweep; the python half is
    runner/tests/test_manifest_conformance.py — both check every real manifest, so
    producer/consumer key drift fails one suite or the other). TS types aren't

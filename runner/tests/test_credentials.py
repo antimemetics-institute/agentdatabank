@@ -525,3 +525,124 @@ def test_custom_set_with_profiles_goes_through_picker(cfg, monkeypatch, capsys):
     _stdin(monkeypatch, "work\nn\n")
     env = _resolve(_manifest({"kind": "llm"}), {"model": "openai-api/llama/qwen"})
     assert env == {"LLAMA_API_KEY": "w"}
+
+
+# -- machine faces (list --json / set --json / remember) -------------------------------
+
+def _list_json(capsys):
+    import json
+    assert credentials.credentials_cli(["list", "--json"]) == 0
+    return json.loads(capsys.readouterr().out)
+
+
+def test_list_json_masks_secrets_by_type(cfg, capsys):
+    credentials.save({"openai": {"default": {"OPENAI_API_KEY": "sk-secret",
+                                             "OPENAI_BASE_URL": "http://h/v1"}}})
+    doc = _list_json(capsys)
+    # literal True, not a string: a consumer can't accidentally round-trip the mask
+    assert doc["store"]["openai"]["default"]["OPENAI_API_KEY"] is True
+    assert doc["store"]["openai"]["default"]["OPENAI_BASE_URL"] == "http://h/v1"
+    assert "sk-secret" not in capsys.readouterr().out
+    assert doc["path"] == str(cfg)
+    # provider templates ride along so a GUI renders the CLI's prompts
+    rows = doc["providers"]["openai"]
+    assert rows[0]["secret"] is True and rows[0]["key"] == "OPENAI_API_KEY"
+    assert "mock" in doc["mock_prefixes"] or doc["mock_prefixes"]
+
+
+def test_list_json_reports_leaky_store_as_problem(cfg, capsys):
+    credentials.save({"openai": {"default": {"OPENAI_API_KEY": "k"}}})
+    os.chmod(cfg, 0o644)
+    doc = _list_json(capsys)
+    assert "chmod 600" in doc["problem"]
+    assert doc["store"] == {}  # nothing served from a leaky file
+
+
+def test_set_json_merges_like_the_prompts(cfg, monkeypatch, capsys):
+    import json as _json
+    credentials.save({"openai": {"work": {"OPENAI_API_KEY": "sk-old",
+                                          "OPENAI_BASE_URL": "http://old/v1"}}})
+    # non-empty overwrites, absent keeps — a GUI can fix a URL without holding the key
+    _stdin(monkeypatch, _json.dumps({"OPENAI_BASE_URL": "http://new/v1"}))
+    assert credentials.credentials_cli(["set", "openai.work", "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["saved"] == "openai.work"
+    assert credentials.load()["openai"]["work"] == {
+        "OPENAI_API_KEY": "sk-old", "OPENAI_BASE_URL": "http://new/v1"}
+    # explicit null deletes
+    _stdin(monkeypatch, _json.dumps({"OPENAI_BASE_URL": None}))
+    assert credentials.credentials_cli(["set", "openai.work", "--json"]) == 0
+    assert credentials.load()["openai"]["work"] == {"OPENAI_API_KEY": "sk-old"}
+
+
+def test_set_json_validates_like_the_prompts(cfg, monkeypatch, capsys):
+    import json as _json
+    # URL shape enforced
+    _stdin(monkeypatch, _json.dumps({"OPENAI_BASE_URL": "llama.forest.local"}))
+    assert credentials.credentials_cli(["set", "openai.work", "--json"]) == 2
+    # reserved/invalid profile names refused
+    _stdin(monkeypatch, _json.dumps({"OPENAI_API_KEY": "k"}))
+    assert credentials.credentials_cli(["set", "openai.new", "--json"]) == 2
+    # garbage stdin refused, store untouched
+    _stdin(monkeypatch, "not json")
+    assert credentials.credentials_cli(["set", "openai.work", "--json"]) == 2
+    assert credentials.load() == {}
+
+
+def test_set_json_undotted_targets_default(cfg, monkeypatch, capsys):
+    import json as _json
+    _stdin(monkeypatch, _json.dumps({"OPENAI_API_KEY": "sk-k"}))
+    assert credentials.credentials_cli(["set", "openai", "--json"]) == 0
+    assert credentials.load()["openai"]["default"] == {"OPENAI_API_KEY": "sk-k"}
+
+
+def test_remember_command_writes_prefs_and_guards_typos(cfg, capsys):
+    credentials.save({"openai": {"work": {"OPENAI_API_KEY": "w"}}})
+    # profile must exist — a remembered typo would silently re-ask forever
+    assert credentials.credentials_cli(["remember", "exp", "openai", "wrok"]) == 1
+    assert credentials.credentials_cli(["remember", "exp", "openai", "work"]) == 0
+    assert credentials._load_prefs() == {"exp": {"openai": "work"}}
+    # the CLI ladder honors it: no prompts at all
+    env = credentials.resolve_run_credentials(
+        _manifest({"kind": "llm"}), {"model": "openai/q"},
+        experiment="exp", interactive=False)
+    assert env == {"OPENAI_API_KEY": "w"}
+
+
+# -- explicit selection (--profile SET=PROFILE) ----------------------------------------
+
+def test_selection_beats_remembered_and_skips_prompts(cfg, monkeypatch, capsys):
+    credentials.save({"openai": {"default": {"OPENAI_API_KEY": "d"},
+                                 "work": {"OPENAI_API_KEY": "w"}}})
+    credentials.credentials_cli(["remember", "exp", "openai", "default"])
+    _stdin(monkeypatch, "")  # any prompt would fail on empty stdin
+    env = credentials.resolve_run_credentials(
+        _manifest({"kind": "llm"}), {"model": "openai/q"},
+        experiment="exp", interactive=True, selections={"openai": "work"})
+    assert env == {"OPENAI_API_KEY": "w"}
+    # no remember question was asked; the stored pref is untouched
+    assert credentials._load_prefs() == {"exp": {"openai": "default"}}
+
+
+def test_selection_typo_guards_both_halves(cfg, capsys):
+    credentials.save({"openai": {"default": {"OPENAI_API_KEY": "d"}}})
+    manifest = _manifest({"kind": "llm"})
+    # a set the run doesn't route to
+    with pytest.raises(ValueError, match="route to"):
+        credentials.resolve_run_credentials(
+            manifest, {"model": "openai/q"}, experiment="e", interactive=False,
+            selections={"anthropic": "default"})
+    # a profile that doesn't exist
+    with pytest.raises(ValueError, match="no such profile"):
+        credentials.resolve_run_credentials(
+            manifest, {"model": "openai/q"}, experiment="e", interactive=False,
+            selections={"openai": "wrok"})
+
+
+def test_selection_satisfies_headless_missing_gate(cfg, capsys):
+    # headless + unconfigured built-in normally refuses; an explicit selection of a
+    # profile that DOES exist must not be blocked by that gate
+    credentials.save({"openai": {"work": {"OPENAI_API_KEY": "w"}}})
+    env = credentials.resolve_run_credentials(
+        _manifest({"kind": "llm"}), {"model": "openai/q"},
+        experiment="e", interactive=False, selections={"openai": "work"})
+    assert env == {"OPENAI_API_KEY": "w"}

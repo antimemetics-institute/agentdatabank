@@ -43,27 +43,40 @@
             type = "app";
             program = "${adbPkgs.adb-dev}/bin/adb-dev";
           };
+          # queue worker: `nix run adb#adb-worker -- --server <adb-web url>`
+          adb-worker = {
+            type = "app";
+            program = "${adbPkgs.adb-worker}/bin/adb-worker";
+          };
         }
         // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
           adb-web = {
             type = "app";
             program = "${adbPkgs.adb-web}/bin/adb-web";
           };
+          # the whole local ADB: adb-web + one worker, torn down together
+          adb-local = {
+            type = "app";
+            program = "${adbPkgs.adb-local}/bin/adb-local";
+          };
         });
+
+      # self-hosted queue workers: imports = [ adb.nixosModules.adb-worker ];
+      nixosModules.adb-worker = ./pkgs/adb-worker/module.nix;
 
       packages = forAllSystems (pkgs:
         let
           adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
-          inherit (adbPkgs) adb-runner adb-dev;
+          inherit (adbPkgs) adb-runner adb-dev adb-worker;
           manifests = pkgs.linkFarm "adb-manifests"
             (nixpkgs.lib.mapAttrsToList
               (name: exp: { name = "${name}.json"; path = exp.manifest; })
               adbPkgs.experiments);
         }
         // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
-          inherit (adbPkgs) adb-web;
+          inherit (adbPkgs) adb-web adb-local;
           # the bare dist (frontend + server.cjs) — used by scripts/docs-screenshots.sh
           inherit (adbPkgs) adb-web-dist;
         }

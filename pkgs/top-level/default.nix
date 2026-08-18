@@ -50,6 +50,42 @@ let
 
       # the authoring CLI (init/bump/pin) — built knowing which adb it came from
       adb-dev = final.callPackage ../adb-dev { inherit origin rev; };
+
+      # the queue worker (package + its NixOS module live in pkgs/adb-worker)
+      adb-worker = final.callPackage ../adb-worker { };
+
+      # the whole local ADB on this machine: adb-web + one worker (which waits for
+      # the web's port, then serves it), torn down together on Ctrl-C/TERM. Flags
+      # pass to adb-web (--port, --home, …); the parts stay separately runnable as
+      # adb-web / adb-worker. Shell signal fine print, learned the hard way: the
+      # children must be BACKGROUND jobs with an interruptible `wait` (a foreground
+      # child defers the trap forever), and the relay must be SIGTERM — `&`-started
+      # children ignore SIGINT by POSIX rule, so a Ctrl-C reaches them only through
+      # this trap (the worker maps TERM onto its graceful interrupt path).
+      adb-local = pkgs.writeShellApplication {
+        name = "adb-local";
+        runtimeInputs = [ pkgs.git ];
+        text = ''
+          # started inside an adb repo checkout (this repo or a fork)? then the
+          # worker builds from THAT — nix-build re-evaluates the checkout per
+          # job, so edits are picked up live, no restart needed. The fallback is
+          # the pinned source baked into adb-worker.
+          worker_args=( --name this-machine )
+          if top=$(git rev-parse --show-toplevel 2>/dev/null) \
+             && [ -f "$top/default.nix" ]; then
+            echo "adb-local: worker builds from the live checkout at $top" >&2
+            worker_args+=( --repo "$top" )
+          fi
+          ${lib.getExe final.adb-web} "$@" &
+          web=$!
+          ${lib.getExe final.adb-worker} "''${worker_args[@]}" &
+          worker=$!
+          trap 'kill -TERM "$worker" "$web" 2>/dev/null || true' INT TERM
+          wait "$worker" || true
+          kill -TERM "$web" 2>/dev/null || true
+          wait "$web" || true
+        '';
+      };
     }
     # web tooling appears once web/ lands (see the adb-web block below)
     // lib.optionalAttrs (builtins.pathExists ../../web) {
@@ -83,13 +119,16 @@ let
           registry);
 
       # the user-facing entrypoint: node runs the bundled server, which serves the
-      # bundled frontend from the same dist
+      # bundled frontend from the same dist. adb-web serves and queues ONLY —
+      # execution belongs to adb-worker, started by the user. ADB_RUNNER lets the
+      # server proxy `credentials … --json` so the credential picker works.
       adb-web = pkgs.writeShellApplication {
         name = "adb-web";
         runtimeInputs = [ pkgs.nodejs ];
         text = ''
           export ADB_WEB_STATIC=''${ADB_WEB_STATIC:-${final.adb-web-dist}}
           export ADB_WEB_MANIFESTS=''${ADB_WEB_MANIFESTS:-${final.adb-web-manifests}}
+          export ADB_RUNNER=''${ADB_RUNNER:-${final.adb-runner}/bin/adb-runner}
           exec node ${final.adb-web-dist}/server.cjs "$@"
         '';
       };
@@ -127,8 +166,8 @@ let
 in
 {
   experiments = registry;
-  inherit (scope) adb-runner adb-dev;
+  inherit (scope) adb-runner adb-dev adb-worker;
 }
 // lib.optionalAttrs (builtins.pathExists ../../web) {
-  inherit (scope) adb-web adb-web-dist;
+  inherit (scope) adb-web adb-web-dist adb-local;
 }

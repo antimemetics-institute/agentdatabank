@@ -15,6 +15,7 @@ import { clearDraft, getLastLlm, loadDraft, saveDraft, setLastLlm } from "@/lib/
 import { REPO_LOCAL_PREFS, rewriteCmd } from "@/lib/cmd-rewrite";
 import { useManifests } from "@/lib/data";
 import { Card } from "@/components/ui/card";
+import { Launcher } from "@/components/launcher";
 import type { ParamDecl, ParamType, StructField, Suggestion } from "@/shared/types";
 
 const INPUT =
@@ -623,6 +624,12 @@ function BuilderForm({ name }: { name: string }) {
               )}
             </div>
           </div>
+
+          {/* the same condition, submitted instead of copied. External experiments
+              run too — when a worker registered for their fork repo is connected
+              (the job forces source "local"); otherwise the build fails into the
+              job log with attribute-missing, and the oneliner remains the path */}
+          <Launcher name={name} params={params} vals={seeded} missing={missing} />
         </div>
       )}
     </Card>

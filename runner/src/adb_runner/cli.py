@@ -127,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="set a param (JSON, @file, or bare string); repeatable")
     p.add_argument("--replicates", type=int, default=1, metavar="N",
                    help="runs to draw from this condition (default 1)")
+    # profile NAMES are argv-safe (values never are — they live in the 0600 store);
+    # an explicit selection skips the picker and the remember question entirely
+    p.add_argument("--profile", action="append", default=[], metavar="SET=PROFILE",
+                   help="use that credential profile for that set (repeatable; "
+                        "skips the interactive picker)")
     p.add_argument("--seed", type=int, default=None, help="base seed (random if omitted)")
     p.add_argument("--out", default=None, metavar="DIR", help="override $ADB_HOME")
     p.add_argument("--json", action="store_true", help="stream events to stdout (headless)")
@@ -195,6 +200,12 @@ def main() -> int:
     if sys.argv[1:2] == ["credentials"]:
         from .credentials import credentials_cli
         return credentials_cli(sys.argv[2:])
+    # `adb-runner worker` is the queue worker — a long-lived headless process that
+    # claims jobs from an adb-web (or, later, hosted) queue. Standalone like
+    # `credentials`: it needs no manifest env; each claimed job builds its own.
+    if sys.argv[1:2] == ["worker"]:
+        from .worker import worker_cli
+        return worker_cli(sys.argv[2:])
 
     args = build_parser().parse_args()
 
@@ -253,9 +264,11 @@ def main() -> int:
     # prompts — remembered choice, else default profile, else exit 2 with the fix.
     realized = cond["params"]  # no distributions in the MVP: realized ARE the spec params
     interactive = sys.stdin.isatty() and not args.json
+    selections = dict(_parse_kv(entry, "--profile") for entry in args.profile)
     try:
         credential_env = credentials.resolve_run_credentials(
-            manifest, realized, experiment=manifest["name"], interactive=interactive)
+            manifest, realized, experiment=manifest["name"], interactive=interactive,
+            selections=selections)
     except ValueError as exc:
         _log(f"provisioning failed: {exc}")
         return 2
