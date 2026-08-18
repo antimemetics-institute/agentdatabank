@@ -13,6 +13,7 @@
    null when the server lacks the capability (or refuses non-loopback callers): the
    oneliner path is always there. */
 
+import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { buildArgs } from "@/lib/cmd-build";
 import { initialProfile, needsSetup, setsUsed, templateRows } from "@/lib/creds";
@@ -124,6 +125,47 @@ function ProfileForm({ set, creds, onSaved }: {
   );
 }
 
+/* the job's narration tail: pinned to the bottom while new lines land (the same
+   follow-the-tail contract as the event stream's pane); scrolling up pauses the
+   follow, and the arrow resumes it */
+function JobLog({ lines }: { lines: string[] }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const followRef = useRef(true);
+  const [following, setFollowing] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && followRef.current) el.scrollTop = el.scrollHeight;
+  }, [lines]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    followRef.current = atBottom;
+    setFollowing(atBottom);
+  };
+  const jump = () => {
+    const el = ref.current;
+    if (!el) return;
+    followRef.current = true;
+    setFollowing(true);
+    el.scrollTop = el.scrollHeight;
+  };
+  return (
+    <div className="relative">
+      <pre ref={ref} onScroll={onScroll}
+        className="max-h-40 overflow-auto rounded bg-muted/40 p-1.5 text-[10px] leading-snug">
+        {lines.join("\n")}
+      </pre>
+      {!following && (
+        <button type="button" onClick={jump} title="follow the log again"
+          className="absolute bottom-1.5 right-1.5 rounded-full border bg-background p-1 shadow-sm hover:bg-accent">
+          <ArrowDown className="size-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function JobPanel({ job, onStop }: { job: JobInfo; onStop: () => void }) {
   const live = !TERMINAL.has(job.phase);
   const chip =
@@ -153,11 +195,7 @@ function JobPanel({ job, onStop }: { job: JobInfo; onStop: () => void }) {
         )}
       </div>
       {job.error && <p className="text-[10px] text-red-600 dark:text-red-400">{job.error}</p>}
-      {job.log.length > 0 && (
-        <pre className="max-h-40 overflow-auto rounded bg-muted/40 p-1.5 text-[10px] leading-snug">
-          {job.log.slice(-40).join("\n")}
-        </pre>
-      )}
+      {job.log.length > 0 && <JobLog lines={job.log.slice(-40)} />}
     </div>
   );
 }
