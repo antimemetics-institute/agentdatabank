@@ -62,12 +62,12 @@ Headless queue worker: registers with an adb-web queue (no `--server` → probes
 | `ADB_HOME` | runner, web | Run store root (default `~/.local/share/adb`). |
 | `ADB_CREDENTIALS_FILE` | runner | Override the credential store path (CI materializes this file). |
 | `ADB_PREFERENCES_FILE` | runner | Override the per-experiment profile-choice file (names only, not secret). |
-| `ADB_HOST` / `ADB_PORT` / `ADB_NO_OPEN` | web | Fallbacks for `--host` / `--port` / `--no-open` (flags win). |
+| `ADB_HOST` / `ADB_PORT` / `ADB_NO_OPEN` | web | Env-var forms of `--host` / `--port` / `--no-open`; the flags take precedence. |
 | `ADB_WEB_STATIC` | web | Built-frontend dir (unset → API-only). |
 | `ADB_WEB_MANIFESTS` | web | Manifests dir for the run-config builder. |
 | `ADB_WEB_TOKEN` | web | Bearer token that admits non-loopback workers and job submitters. |
-| `ADB_WORKER_REPO` | worker | Fallback for `--repo` (the `nix run .#adb-worker` wrapper bakes the pinned source). |
-| `ADB_WORKER_TOKEN` | worker | Bearer token (fallback for `--token-file`). |
+| `ADB_WORKER_REPO` | worker | Env-var form of `--repo`; the flag takes precedence (the `nix run .#adb-worker` wrapper bakes the pinned source). |
+| `ADB_WORKER_TOKEN` | worker | Bearer token; `--token-file` takes precedence. |
 | `ADB_RUN_ID` / `ADB_RUN_DIR` / `ADB_SEED` | experiment | Set by the runner in the child env. |
 
 There is **no env passthrough** into experiments: a run's environment is constructed — system basics (`PATH`, `HOME`, locale), [deliberately injected credentials](../running/secrets.md#how-credentials-reach-the-experiment), and the `ADB_*` run vars — and recorded per run with credential values ablated.

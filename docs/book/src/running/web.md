@@ -46,4 +46,4 @@ The **settings** menu in the bottom-left adapts the composed command to your Nix
 
 ## Env vars
 
-Flags are how you configure the GUI; env vars exist as deployment fallbacks and for context shared with the runner, and the `nix run .#adb-web` wrapper sets the deployment ones for you. The full table is in the [CLI reference](../reference/cli.md#environment-variables).
+Flags are how you configure the GUI; env vars exist as deployment-friendly forms of the same settings (flags take precedence) and for context shared with the runner, and the `nix run .#adb-web` wrapper sets the deployment ones for you. The full table is in the [CLI reference](../reference/cli.md#environment-variables).
