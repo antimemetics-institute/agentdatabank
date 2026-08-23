@@ -4,7 +4,7 @@
    (filters, agent pick). */
 
 import { useEffect, useState } from "react";
-import type { Condition, Ev, Manifest, RunMeta } from "@/shared/types";
+import type { Condition, Ev, JobInfo, Manifest, RunMeta, WorkerInfo } from "@/shared/types";
 
 /* Resolve "/api/..." against the directory the app is served from, not the origin
    root: behind a path-stripping proxy (code-server's /proxy/8340/) the browser must
@@ -77,6 +77,46 @@ export function useRunsPoll(): RunMeta[] | null {
   }, []);
   return runs;
 }
+
+/* ------------- jobs + workers (the launch queue) ------------- */
+
+/* mirror of the server's terminal set (server/queue.ts) — a job in one of these
+   phases will never change again */
+export const JOB_TERMINAL = new Set<JobInfo["phase"]>(
+  ["completed", "failed", "stopped", "orphaned", "error"]);
+
+/* both polls share the creds surface's tri-state: undefined = first fetch still
+   out, null = surface gated for this caller (403/404 — non-loopback without the
+   bearer token, or an older server), array = data. Transient errors keep the
+   last-known list rather than flapping to "unavailable". */
+function useGatedPoll<T>(path: string): T | null | undefined {
+  const [data, setData] = useState<T | null | undefined>(undefined);
+  useEffect(() => {
+    let stopped = false;
+    const load = () =>
+      api<T>(path)
+        .then((d) => { notePollOk(); if (!stopped) setData(d); })
+        .catch((e: Error) => {
+          if (!stopped && /^40[34] /.test(e.message)) setData(null);
+        });
+    void load();
+    const t = setInterval(() => void load(), 2000);
+    return () => { stopped = true; clearInterval(t); };
+  }, [path]);
+  return data;
+}
+
+export const useJobsPoll = (): JobInfo[] | null | undefined =>
+  useGatedPoll<JobInfo[]>("/api/jobs");
+export const useWorkersPoll = (): WorkerInfo[] | null | undefined =>
+  useGatedPoll<WorkerInfo[]>("/api/workers");
+
+export const fmtAgo = (iso: string): string => {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  return s < 60 ? `${s}s ago`
+    : s < 3600 ? `${Math.floor(s / 60)}m ago`
+    : `${Math.floor(s / 3600)}h ago`;
+};
 
 /* ------------- poll health (the sidebar's connected dot) ------------- */
 

@@ -105,6 +105,14 @@ const phaseClasses: Record<string, string> = {
   "interrupted?": "border-dashed border-amber-500/60 bg-amber-500/5 text-amber-700 dark:text-amber-400",
   running: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
   provisioning: "border-transparent bg-muted text-muted-foreground",
+  /* job phases (shared/types JobInfo) — the Workers page and job panels reuse
+     this badge; run phases above stay authoritative where names collide */
+  queued: "border-transparent bg-muted text-muted-foreground",
+  claimed: "border-transparent bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  building: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  stopped: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  orphaned: "border-dashed border-amber-500/60 bg-amber-500/5 text-amber-700 dark:text-amber-400",
+  error: "border-transparent bg-red-500/15 text-red-700 dark:text-red-400",
 };
 
 const STALE_TIP =
@@ -135,7 +143,7 @@ export function PhaseBadge({ phase, className }: { phase: string; className?: st
       title={phase === "interrupted?" ? STALE_TIP : undefined}
       className={cn(phaseClasses[phase] ?? "bg-muted text-muted-foreground border-transparent", className)}
     >
-      {phase === "running" && (
+      {(phase === "running" || phase === "building") && (
         <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />
       )}
       {phase}

@@ -4,8 +4,8 @@
    command-settings menu, and the theme toggle. Sections map onto the hash routes;
    the run page highlights Runs, experiment pages highlight Experiments. */
 
-import { FlaskConical, List, Moon, Sun } from "lucide-react";
-import { usePollHealth } from "@/lib/data";
+import { FlaskConical, List, Moon, Server, Sun } from "lucide-react";
+import { JOB_TERMINAL, useJobsPoll, usePollHealth } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { CmdSettings } from "@/components/cmd-settings";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { section: "experiments", href: "#/", label: "Experiments", Icon: FlaskConical },
   { section: "runs", href: "#/runs", label: "Runs", Icon: List },
+  { section: "workers", href: "#/workers", label: "Workers", Icon: Server },
 ] as const;
 
 export function Sidebar({
@@ -24,6 +25,10 @@ export function Sidebar({
   dark: boolean;
   onToggleTheme: () => void;
 }) {
+  /* queued+running job count on the Workers entry — the queue is the one thing
+     that changes while you're elsewhere. Gated callers (null) just get no badge. */
+  const jobs = useJobsPoll();
+  const active = jobs?.filter((j) => !JOB_TERMINAL.has(j.phase)).length ?? 0;
   return (
     <aside className="flex w-44 shrink-0 flex-col border-r bg-card/50">
       <a href="#/" className="px-4 py-3.5 font-mono text-lg font-bold tracking-widest no-underline">
@@ -41,6 +46,11 @@ export function Sidebar({
           >
             <Icon className="size-4" />
             {label}
+            {s === "workers" && active > 0 && (
+              <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-[10px] font-medium tabular-nums text-primary">
+                {active}
+              </span>
+            )}
           </a>
         ))}
       </nav>

@@ -1,5 +1,6 @@
 /* App shell: left sidebar navigation + hash router (hand-rolled hook, no router
-   dependency). Routes: #/ overview, #/experiments/<name>, #/runs, #/runs/<rid>
+   dependency). Routes: #/ overview, #/experiments/<name>, #/runs, #/workers
+   (the launch queue + worker registry), #/runs/<rid>
    (the canonical run link — bare run id → resolver), and #/run/<cid>/<rid> (the
    resolved detail route). The shell is h-screen; list pages scroll in <main>, the
    run page manages its own inner scrolling (fixed head/tabs, scrollable panes). */
@@ -10,6 +11,7 @@ import { OverviewPage } from "@/pages/overview";
 import { ExperimentPage } from "@/pages/experiment";
 import { RunResolver, RunsPage } from "@/pages/runs";
 import { RunPage } from "@/pages/run";
+import { WorkersPage } from "@/pages/workers";
 import { DevDiagramsPage } from "@/pages/dev-diagrams";
 import { widgets } from "@/widget";
 
@@ -56,6 +58,9 @@ export function App() {
   } else if (parts[0] === "runs") {
     section = "runs";
     page = <RunsPage />;
+  } else if (parts[0] === "workers") {
+    section = "workers";
+    page = <WorkersPage />;
   } else if (import.meta.env.DEV && parts[0] === "dev" && parts[1] === "diagrams") {
     /* prototype gallery — dev builds only, not linked from the sidebar */
     page = <DevDiagramsPage />;

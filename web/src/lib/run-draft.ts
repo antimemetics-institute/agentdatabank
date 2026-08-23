@@ -47,6 +47,19 @@ export function clearDraft(name: string): void {
   saveDraft(name, {});
 }
 
+/* the composer's bottom tab (run | oneliner) — one global choice, not
+   per-experiment: it's a "how do I launch things" preference. null = never
+   chosen; the form then defaults from worker presence. */
+const COMPOSER_TAB_KEY = "adb-composer-tab";
+
+export function getComposerTab(): string | null {
+  return store.get(COMPOSER_TAB_KEY);
+}
+
+export function setComposerTab(v: string): void {
+  store.set(COMPOSER_TAB_KEY, v);
+}
+
 export function getLastLlm(): string {
   return store.get(LAST_LLM_KEY) ?? "";
 }

@@ -1,4 +1,4 @@
-/* "run it here" — the run button under the builder's oneliner.
+/* "run it here" — the builder's run tab (the sibling of the oneliner tab).
 
    The oneliner stays the first-class artifact; this panel is the SAME condition
    submitted to a runner instead of copied — today the one runner is "this machine"
@@ -9,16 +9,17 @@
    Credentials: profile NAMES travel (the select, the POST, preferences.toml via the
    remember button); values are write-only (the new-profile form POSTs them once,
    straight through to the runner's 0600 store) and never come back — the store this
-   panel renders is masked (secrets are literal `true`). The whole panel degrades to
-   null when the server lacks the capability (or refuses non-loopback callers): the
-   oneliner path is always there. */
+   panel renders is masked (secrets are literal `true`). Capability sensing lives in
+   useLaunchSurface (the builder gates the whole run tab on it): when the server
+   lacks the surface or refuses this caller, the tab never exists and the oneliner
+   path is always there. */
 
 import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { buildArgs } from "@/lib/cmd-build";
 import { initialProfile, needsSetup, setsUsed, templateRows } from "@/lib/creds";
-import { api, apiPost } from "@/lib/data";
-import type { CredsInfo, JobInfo, ParamDecl, WorkerInfo } from "@/shared/types";
+import { api, apiPost, JOB_TERMINAL, useWorkersPoll } from "@/lib/data";
+import type { CredsInfo, JobInfo, ParamDecl } from "@/shared/types";
 
 const INPUT =
   "min-w-0 rounded border bg-background px-2 py-1 font-mono text-xs " +
@@ -26,7 +27,24 @@ const INPUT =
 const BTN = "rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-40";
 
 const NEW_PROFILE = "__new__"; /* select sentinel, not a legal profile name */
-const TERMINAL = new Set(["completed", "failed", "stopped", "orphaned", "error"]);
+
+/* the launch surface probe, lifted out of the panel so the builder can decide
+   whether a run tab exists at all: undefined = probing, null = unavailable
+   (older server, non-loopback caller without the token) — oneliner only */
+export function useLaunchSurface(): {
+  creds: CredsInfo | null | undefined; refresh: () => void;
+} {
+  const [creds, setCreds] = useState<CredsInfo | null | undefined>(undefined);
+  const refresh = () => {
+    /* a successful fetch (even with runner:false) means this server has the
+       launch surface at all; a 403/404 hides the run tab entirely */
+    api<CredsInfo>("/api/credentials")
+      .then(setCreds)
+      .catch(() => setCreds(null));
+  };
+  useEffect(refresh, []);
+  return { creds, refresh };
+}
 
 /* one credential set's row: profile select + remember + (when needed) the new-profile
    form — the CLI picker's dialogue as widgets */
@@ -166,8 +184,13 @@ function JobLog({ lines }: { lines: string[] }) {
   );
 }
 
-function JobPanel({ job, onStop }: { job: JobInfo; onStop: () => void }) {
-  const live = !TERMINAL.has(job.phase);
+/* one job's live card: phase chip, run links, stop, log tail. Shared between the
+   builder's run tab (queueLink on — a pointer to the Workers page) and the Workers
+   page's expanded rows (queueLink off — you're already there). */
+export function JobPanel({ job, onStop, queueLink }: {
+  job: JobInfo; onStop: () => void; queueLink?: boolean;
+}) {
+  const live = !JOB_TERMINAL.has(job.phase);
   const chip =
     job.phase === "queued" ? "queued — waiting for a worker…"
     : job.phase === "claimed" ? `claimed by ${job.worker?.name ?? "a worker"}…`
@@ -187,8 +210,14 @@ function JobPanel({ job, onStop }: { job: JobInfo; onStop: () => void }) {
             {rid.slice(-6)}
           </a>
         ))}
+        {queueLink && (
+          <a href="#/workers"
+            className="ml-auto text-[10px] text-muted-foreground underline decoration-dotted hover:text-foreground">
+            view in Workers
+          </a>
+        )}
         {live && (
-          <button type="button" className={`${BTN} ml-auto`} onClick={onStop}
+          <button type="button" className={`${BTN} ${queueLink ? "" : "ml-auto"}`} onClick={onStop}
             title="SIGINT, exactly Ctrl-C on the oneliner — partial runs are kept">
             stop
           </button>
@@ -200,44 +229,26 @@ function JobPanel({ job, onStop }: { job: JobInfo; onStop: () => void }) {
   );
 }
 
-export function Launcher({ name, params, vals, missing }: {
+export function Launcher({ name, params, vals, missing, creds, refresh, onLive }: {
   name: string;
   params: Record<string, ParamDecl>;
   vals: Record<string, string>; /* the builder's seeded values — buildCmd's input */
   missing: string[];
+  creds: CredsInfo;        /* non-null by contract — the builder gates on useLaunchSurface */
+  refresh: () => void;
+  onLive?: (live: boolean) => void; /* a job is in flight — the run tab's pulse dot */
 }) {
-  /* undefined = loading; null = surface unavailable (older server, non-loopback
-     caller, capability off) → render nothing, the oneliner is the path */
-  const [creds, setCreds] = useState<CredsInfo | null | undefined>(undefined);
-  const [workers, setWorkers] = useState<WorkerInfo[]>([]);
+  /* worker presence: the run button is only live while someone can claim the job */
+  const workers = useWorkersPoll() ?? [];
   const [choices, setChoices] = useState<Record<string, string | null>>({});
   const [job, setJob] = useState<JobInfo | null>(null);
   const [launchErr, setLaunchErr] = useState<string | null>(null);
   const [replicates, setReplicates] = useState("1");
   const jobId = useRef<string | null>(null);
 
-  const refresh = () => {
-    /* a successful fetch (even with runner:false) means this server has the
-       launch surface at all; a 403/404 (older server, non-loopback without the
-       token) hides the panel — the oneliner is always the path */
-    api<CredsInfo>("/api/credentials")
-      .then(setCreds)
-      .catch(() => setCreds(null));
-  };
-  useEffect(refresh, []);
-
-  /* worker presence: the run button is only live while someone can claim the job */
-  useEffect(() => {
-    const load = () =>
-      api<WorkerInfo[]>("/api/workers").then(setWorkers).catch(() => setWorkers([]));
-    void load();
-    const t = setInterval(() => void load(), 5000);
-    return () => clearInterval(t);
-  }, []);
-
   /* the 1s job poll, while one is live */
   useEffect(() => {
-    if (!job || TERMINAL.has(job.phase)) return;
+    if (!job || JOB_TERMINAL.has(job.phase)) return;
     jobId.current = job.id;
     const t = setInterval(() => {
       api<JobInfo>(`/api/jobs/${job.id}`)
@@ -247,7 +258,8 @@ export function Launcher({ name, params, vals, missing }: {
     return () => clearInterval(t);
   }, [job]);
 
-  if (!creds) return null;
+  const jobActive = job !== null && !JOB_TERMINAL.has(job.phase);
+  useEffect(() => { onLive?.(jobActive); }, [jobActive, onLive]);
 
   const sets = setsUsed({ name, params }, vals, creds.mock_prefixes);
   const resolved: Record<string, string> = {};
@@ -259,7 +271,6 @@ export function Launcher({ name, params, vals, missing }: {
       unresolved.push(set); /* needs a pick or a first profile; unknown-prefix sets may need nothing */
   }
 
-  const jobActive = job !== null && !TERMINAL.has(job.phase);
   const gate =
     workers.length === 0
       ? "no worker connected — start one: nix run -f . adb-worker"
@@ -285,13 +296,11 @@ export function Launcher({ name, params, vals, missing }: {
   };
 
   return (
-    <div className="space-y-2 border-t pt-3">
-      <span className="text-xs text-muted-foreground">
-        run it here
-        <span className="text-muted-foreground/60">
-          {" "}— {workers.length === 0 ? "no workers connected"
-            : `worker${workers.length > 1 ? "s" : ""}: ${workers.map((w) => w.name).join(", ")}`}
-        </span>
+    <div className="space-y-2">
+      <span className="text-xs text-muted-foreground/60">
+        {workers.length === 0 ? "no workers connected"
+          : `worker${workers.length > 1 ? "s" : ""}: ${workers.map((w) => w.name).join(", ")}`}
+        {" "}— <a href="#/workers" className="underline decoration-dotted hover:text-foreground">Workers</a>
       </span>
       {creds.problem && (
         <p className="text-[10px] text-amber-600 dark:text-amber-400">{creds.problem}</p>
@@ -317,7 +326,7 @@ export function Launcher({ name, params, vals, missing }: {
         {gate && <span className="text-[10px] text-muted-foreground">{gate}</span>}
       </div>
       {launchErr && <p className="text-[10px] text-red-600 dark:text-red-400">{launchErr}</p>}
-      {job && <JobPanel job={job}
+      {job && <JobPanel job={job} queueLink
         onStop={() => void apiPost(`/api/jobs/${job.id}/stop`, {}).catch(() => {})} />}
     </div>
   );
