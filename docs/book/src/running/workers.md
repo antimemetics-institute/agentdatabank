@@ -1,6 +1,6 @@
 # Running from the GUI
 
-The [run-config builder](web.md#the-run-config-builder-composer) composes a one-liner; pasting it into a terminal is always the canonical way to run an experiment. But the experiment page also has a **run it here** panel that launches the same condition without leaving the browser — pick credential profiles, set replicates, press run, watch the job report in place. Each run it starts appears in the runs table like any other, with a link to its page.
+The [run-config builder](web.md#the-run-config-builder-composer) composes a one-liner; pasting it into a terminal is always the canonical way to run an experiment. But the composer also has a **run** tab that launches the same condition without leaving the browser — pick credential profiles, set replicates, press run, watch the job report in place. Each run it starts appears in the runs table like any other, with a link to its page.
 
 The web server itself never executes anything. Running is a **worker**'s job: a separate process, usually on the same machine, that claims queued jobs and runs them. The panel stays greyed out until a worker is connected — the GUI tells you what to start.
 

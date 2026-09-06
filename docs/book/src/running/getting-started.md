@@ -14,13 +14,15 @@ nix --version
 
 The commands in this guide work on a stock install by default. If you're running from a local checkout, or you've configured a [custom nix setup](nix.md), check the [⚙ command settings](#adb-cmd-settings) in the toolbar.
 
-## 2. Start the WebUI
+## 2. Start the local ADB
 
 ```bash
-nix run .#adb-web
+nix run .#adb-local
 ```
 
-Your browser should open <http://127.0.0.1:8340>. 
+This starts the WebUI together with a worker for this machine — compose *and* run experiments without leaving the browser. Your browser should open <http://127.0.0.1:8340>.
+
+> Want just the viewer/composer, with runs happening elsewhere? `nix run .#adb-web` starts the WebUI alone; see [Running from the GUI](workers.md) for connecting workers.
 
 <details>
 <summary><b>WebUI doesn't open?</b> (e.g., running on a remote machine)</summary>
@@ -38,7 +40,7 @@ Your browser should open <http://127.0.0.1:8340>.
 > **Bind all interfaces**:
 >
 > ```bash
-> nix run .#adb-web -- \
+> nix run .#adb-local -- \
 >   --host 0.0.0.0
 > ```
 >
@@ -54,12 +56,25 @@ Your browser should open <http://127.0.0.1:8340>.
 
 ## 3. Run your first experiment
 
-In the WebUI, click into [inspect-hello](http://127.0.0.1:8340/#/experiments/inspect-hello): the run-config builder is prefilled — pick your model (e.g. `anthropic/claude-sonnet-4-5-20250929`) and copy the command it composes:
+In the WebUI, click into [inspect-hello](http://127.0.0.1:8340/#/experiments/inspect-hello): the run-config builder is prefilled — pick your model (e.g. `anthropic/claude-sonnet-4-5-20250929`) and press **▶ run**:
 
 <video class="only-light" autoplay loop muted playsinline src="../images/builder-form-light.webm"></video>
 <video class="only-dark" autoplay loop muted playsinline src="../images/builder-form-dark.webm"></video>
 
-For example:
+The first run against a real model asks for that provider's credentials right in the run tab — a key entered once, saved to the same store the CLI uses (see [Credentials](secrets.md)).
+
+> **No key at hand?** `model=mockllm/model` runs the same task against a mock response and needs no credentials.
+
+The job reports in place — queued, building (the first build takes a little longer than thereafter), running — and links the run as soon as it starts. Click through to follow the transcript live:
+
+<video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm"></video>
+<video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm"></video>
+
+That's the loop: **compose → run → look**. Try **inspect-gsm8k** with `limit=10` next.
+
+### Prefer the terminal?
+
+The builder's **oneliner** tab composes the exact same condition as a copy-paste command:
 
 ```bash
 nix run .#inspect-hello -- \
@@ -69,34 +84,7 @@ nix run .#inspect-hello -- \
   --set 'generate_args={}'
 ```
 
-> **No key at hand?** `--set model=mockllm/model` runs the same task against a mock response and does not ask for credentials in the following step.
-
-Paste it into a terminal, and run! It'll take a little bit longer to run the first time than thereafter.
-
-When it runs, it will ask you for the credentials needed to run the model you chose:
-
-```text
-adb: this run needs credential set 'anthropic' — setting it up now
-ANTHROPIC_API_KEY [unset]: ****
-ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
-save 'anthropic' for future runs? [Y/n]:
-```
-
-See [Credentials](secrets.md) for more details.
-
-After typing in your credentials the run starts, and prints the link to watch it — click that (or [the runs page](http://127.0.0.1:8340/#/runs)) to follow the progress live and read the transcript:
-
-```text
-adb: [258b80e5323e r1] run 01KYS…H3 started
-adb:   ▸ watch  http://127.0.0.1:8340/#/runs/01KYS…H3
-adb:   ▸ store  ~/.local/share/adb/runs/258b80e5323e…/01KYS…H3
-```
-
-
-<video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm"></video>
-<video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm"></video>
-
-That's the loop: **compose → run → look**. Try **inspect-gsm8k** with `--set limit=10` next.
+Pasted anywhere, it reproduces the same condition — that command *is* the run's complete spec. On first use it prompts for credentials in the terminal, then prints the link to watch the run in the WebUI. See [Running experiments](cli.md) for the full CLI story.
 
 ## Where to go next
 

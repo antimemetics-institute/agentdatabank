@@ -14,9 +14,16 @@ The ADB curates a registry of well-specified experiments, makes it easy to run t
 
 The current platform is an **MVP**, and is only meant to be run locally.
 
+Done so far:
+- [x] the local loop: a catalog of pinned experiments, one-command runs, every run in a browsable store
+- [x] the web GUI: live transcripts, run comparison, and [running from the browser](running/workers.md) via queued jobs and workers
+- [x] [credential profiles](running/secrets.md) — ask-once setup, multiple endpoints per provider
+- [x] [bring-your-own experiment repos](writing/external.md) — `adb-dev init`/`fork`, with the same identity guarantees
+
 Planned features (in somewhat priority order):
-- [ ] automatically depositing runs to HuggingFace
-- [ ] website running publically, indexing runs on HuggingFace
+- [ ] publishing our runs as a public HuggingFace dataset (the run store layout verbatim, CC-BY-4.0)
+- [ ] website running publically, indexing the published runs
+- [ ] third-party deposits — submitters identified by ORCID, agents vouched for by their operators
 - [ ] claude skill for implementing an experiment
 
 ## How this guide is organized
