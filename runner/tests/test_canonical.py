@@ -1,6 +1,7 @@
-"""Condition identity — THE frozen surface. The golden vector below is the regression
-guard for specs/condition-hash.md: if it ever changes, deposits stop aggregating.
-Do not update the expected hash without a spec-version decision."""
+"""Golden condition-identity vector; see docs/book/src/running/model.md.
+
+Changing it requires an explicit identity-format decision.
+"""
 
 from adb_runner.canonical import abbrev, condition_id
 

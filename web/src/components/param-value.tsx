@@ -5,15 +5,8 @@
    that open a scrollable modal (rendered markdown or highlighted monospace, with
    copy).
 
-   pickWidget() is the seam for docs/plan/v1.md §4's declarative presentation hints:
-   today the widget is inferred from the value's shape; when hints land, a hint simply
-   short-circuits the inference via the `hint` parameter.
-
-   TODO(schema-driven): the REAL fix for registry types is driving from the
-   experiment manifest's param schema (v0.md §4 plans the web server shipping the
-   manifests derivation); the manifests haven't reached the server yet, so the
-   llm/run/harness detection below is value-shape heuristics feeding the same hint
-   seam. Replace the detection — not the rendering — when schemas arrive. */
+   pickWidget() accepts an explicit hint; without one it infers rendering from
+   the value shape. Registry-type detection here is heuristic. */
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";

@@ -1,5 +1,5 @@
 """adb-events: the standardized ADB event shapes, shared by the runner and Python
-control planes so the wire vocabulary has one definition (docs/plan/events.md).
+control planes so the wire vocabulary has one definition (docs/book/src/reference/events.md).
 
 - `adb_events.emit` — typed emitters (validated construction → wire JSONL).
 - models + `EVENT_MODELS` + `validate_event` — for ingestion validation.

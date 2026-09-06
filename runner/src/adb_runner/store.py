@@ -1,4 +1,4 @@
-"""Run directory persistence (docs/plan/v0.md §2).
+"""Run directory persistence (docs/book/src/reference/layout.md).
 
 runs/<condition_id>/<run_id>/{run.json, events-NNNNN.jsonl, artifacts/, workspace/}
 conditions/<condition_id>.json — spec as written, once per condition.

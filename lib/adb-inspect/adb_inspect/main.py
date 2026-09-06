@@ -119,7 +119,7 @@ class PrintStream(io.TextIOBase):
             from inspect_ai.log._samples import sample_active  # internal, pinned
             active = sample_active()
             if active is not None:
-                # spec instance-convention attribution (docs/plan/events.md)
+                # spec instance-convention attribution (docs/book/src/reference/events.md)
                 return {"meta": {"instance_id": active.sample.id,
                                  "repeat": active.epoch}}
         except Exception:

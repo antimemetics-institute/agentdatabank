@@ -3,10 +3,9 @@
 runner → experiment: realized params JSON on stdin; ADB_RUN_ID/ADB_RUN_DIR/ADB_SEED env;
 fresh workspace as cwd; a small env allowlist (never the full host environment).
 experiment → runner: event payloads as JSON objects on stdout, one per line — each is
-wrapped verbatim in the transport envelope {v, ts, run, seq, event} (docs/plan/events.md);
+wrapped verbatim in the transport envelope {v, ts, run, seq, event} (docs/book/src/reference/events.md);
 `type` is optional (conformance ladder: unknown or absent types are preserved). Non-JSON
-stdout lines become `stdout` events, stderr lines `stderr` events — nothing a process
-can print breaks a run. Exit code 0 → completed, nonzero → failed, signal → interrupted.
+stdout lines become `stdout` events, stderr lines `stderr` events. Exit code 0 → completed, nonzero → failed, signal → interrupted.
 """
 
 from __future__ import annotations
@@ -34,14 +33,14 @@ from .ulid import ulid
 # per-user rootless socket on dev boxes — see `task docker:up`); like model
 # endpoints, where the daemon lives is environment, never condition identity.
 # Nothing else ambient — credentials/endpoints reach a run ONLY through the
-# credential store (docs/plan/credentials.md), so a stray key exported in the
+# credential store (docs/book/src/running/secrets.md), so a stray key exported in the
 # shell can neither leak into a run nor shadow the stored value.
 ENV_ALLOWLIST = ["PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "DOCKER_HOST"]
 
 # Liveness heartbeat: while the experiment runs, the runner touches run.json's mtime
 # (content unchanged — no deposit churn, nothing in the event stream; liveness is
 # operational state, not experimental data). Consumers: running + stale mtime =
-# crashed ("interrupted?" per docs/plan/events.md); experiments never know it exists.
+# crashed ("interrupted?" per docs/book/src/reference/layout.md); experiments never know it exists.
 HEARTBEAT_S = 10.0
 
 
@@ -97,8 +96,8 @@ def execute_run(
 ) -> RunResult:
     run_id = run_id or ulid()
     # `source` is the per-experiment content identity (feeds condition_id); `fetch_ref` is
-    # the fetchable repo rev, recorded for reproducibility and the dirty/deposit gate
-    # (docs/plan/specs/condition-hash.md). Callers that pass only `source` (older tests) get
+    # the source reference, recorded for reproduction and dirty-checkout detection
+    # (docs/book/src/running/model.md). Callers that pass only `source` (older tests) get
     # fetch_ref = source, preserving the previous dirty behavior.
     fetch_ref = fetch_ref if fetch_ref is not None else source
     dirty = fetch_ref.startswith("dirty:")
@@ -159,7 +158,7 @@ def execute_run(
     })
 
     # stored credentials/endpoints for the credential sets this run's model ids route
-    # to (docs/plan/comparability.md: endpoint + key are environment, not condition).
+    # to (docs/book/src/running/model.md: endpoint + key are environment, not condition).
     # The CLI resolves these up front (profile ladder, may prompt) and passes them in;
     # direct callers without one get the default-profile resolution.
     if credential_env is None:
@@ -193,7 +192,7 @@ def execute_run(
                 # a payload, typed or not — `type` is optional (conformance ladder)
                 events_q.put(payload)
             else:
-                # captured verbatim, untruncated, no invented severity (docs/plan/events.md)
+                # captured verbatim, untruncated, no invented severity (docs/book/src/reference/events.md)
                 events_q.put({"type": "stdout", "line": line})
         events_q.put(None)
 
@@ -243,7 +242,7 @@ def execute_run(
         if item is None:
             finished_readers += 1
             continue
-        # Ingestion lint (degraded-but-correct, docs/plan/events.md conformance ladder):
+        # Ingestion lint (docs/book/src/reference/events.md):
         # the payload is ALWAYS stored verbatim — a claimed lifecycle type (`run.*`
         # is runner-synthesized) or a known type with the wrong shape earns a
         # companion warning, never mutation or drop. Schema: the adb_events models.
@@ -271,7 +270,7 @@ def execute_run(
 
     # NOTE: no views are materialized or deposited — chat/llm-call projections are
     # rendered from the stream on demand (deposit irreducibles, never derivables;
-    # docs/plan/events.md "Standard conversation views")
+    # docs/book/src/reference/events.md#transport)
 
     results: dict[str, Any] = manifest.get("results") or {}
     summary = {name: metrics[name] for name in results if name in metrics}

@@ -218,7 +218,7 @@ in
                     # list of paths. See identity note below. Identity is strictly
                     # content — it records, never judges comparability; declared
                     # upstream versions are covariates/advisory input, not identity
-                    # (prototype specs/comparability.md).
+                    # (docs/book/src/running/model.md).
     }:
     let
       programPath =

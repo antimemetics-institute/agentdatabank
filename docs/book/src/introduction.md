@@ -12,19 +12,31 @@ The ADB curates a registry of well-specified experiments, makes it easy to run t
 
 ## Roadmap
 
-The current platform is an **MVP**, and is only meant to be run locally.
+The current platform supports local execution and browsing. Public data publication is the next milestone; the unchecked items below are directions to explore, not shipped features or a fixed delivery schedule.
 
-Done so far:
-- [x] the local loop: a catalog of pinned experiments, one-command runs, every run in a browsable store
-- [x] the web GUI: live transcripts, run comparison, and [running from the browser](running/workers.md) via queued jobs and workers
+Available now:
+
+- [x] the local loop: a catalog of Nix-packaged experiments, one-command runs, and a browsable run store — with or without cloning the repository, using flakes or classic Nix
+- [x] the web GUI: parameter forms, live transcripts, and [Run/Stop with a local job queue](running/workers.md) through `adb-local`
+- [x] viewer-only browsing of a local store through `adb-web`
 - [x] [credential profiles](running/secrets.md) — ask-once setup, multiple endpoints per provider
-- [x] [adding and updating experiments](writing/experiments.md) through repository pull requests
+- [x] [adding and updating experiments](writing/experiments.md) through ordinary repository pull requests, for humans and coding agents
 
-Planned features (in somewhat priority order):
-- [ ] publishing our runs as a public HuggingFace dataset (the run store layout verbatim, CC-BY-4.0)
-- [ ] website running publically, indexing the published runs
-- [ ] third-party deposits — submitters identified by ORCID, agents vouched for by their operators
-- [ ] claude skill for implementing an experiment
+Before publishing our experimental data:
+
+- [ ] strengthen and test execution provenance: source, resolved environment, inputs, model settings, and historical experiment declarations
+- [ ] define and validate a versioned publication format, with downloadable data and instructions for repeating runs and reproducing our analyses
+- [ ] publish our own runs and a read-only website for exploring them; Hugging Face hosting and CC-BY-4.0 licensing are proposals, with the format and release terms still to be settled
+
+Possible later work:
+
+- [ ] named parameter presets and opening an existing run in the composer
+- [ ] analysis and run comparison, with revisable comparability annotations; this may belong in a separate analysis tool
+- [ ] third-party data deposits, with attribution and review (ORCID and operator attribution for agents are possibilities)
+- [ ] dedicated experiment-authoring guidance packaged as an agent skill, and sandboxed agent tests of the guide
+- [ ] dynamic credential acquisition and explicit non-model credential requirements
+- [ ] stronger execution isolation and credential delivery through a recording proxy
+- [ ] pausing an experiment and branching its execution to explore alternatives
 
 ## How this guide is organized
 

@@ -5,9 +5,6 @@
 # scenario — the cast of `agents`, the `premise`, the `game_master` — is composed in
 # params (the webui renders the roster as an editable table), not baked into cards.
 # Cards mark code boundaries (inspect tasks are different programs); params mark data.
-# Named canonical scenarios ("the cafe scene") are the planned user-space template
-# concept — docs/plan/templates.md — which groups runs by content-matching realized
-# params, so runs recorded today collate under templates created later.
 #
 # Every configuration runs keyless on `mock/model` (deterministic scripted lines, no
 # network), against any OpenAI-compatible /chat/completions server via

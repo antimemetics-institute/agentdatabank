@@ -1,7 +1,7 @@
 """Local credential store — secrets and base URLs for real models, kept out of
 experiment params and off the command line.
 
-The split (docs/plan/comparability.md): a model *name* is the condition (a `param llm`,
+The split (docs/book/src/running/model.md): a model *name* is the condition (a `param llm`,
 e.g. ``openai/qwen3.5-9b``); *where* it is served and *which key* reaches it are
 environment, not a condition. So the runner resolves each `llm`-typed param's provider
 prefix — the segment before the first ``/`` — to a credential set and injects that set's

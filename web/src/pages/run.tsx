@@ -133,7 +133,7 @@ function RunHead({ cid, rid, events, phase }: {
   const end = events.find((e) => e.type === "run.end");
   const lastStatus = [...events].reverse().find((e) => e.type === "status");
   const summary: Record<string, unknown> = end ? end.summary ?? {} : {};
-  /* metric events collapse last-value-wins per name (docs/plan/events.md);
+  /* metric events collapse last-value-wins per name (docs/book/src/reference/events.md);
      summary keys win over same-named metrics as before */
   const metrics = dedupeMetrics(events
     .filter((e) => e.type === "metric")

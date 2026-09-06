@@ -1,4 +1,4 @@
-"""Condition identity per docs/plan/specs/condition-hash.md.
+"""Condition identity per docs/book/src/running/model.md.
 
 condition_id = sha256(JCS({experiment, source, params})), derived client-side.
 """

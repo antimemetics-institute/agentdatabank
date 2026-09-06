@@ -1,4 +1,4 @@
-"""EvalLog -> ADB event stream (docs/plan/events.md).
+"""EvalLog -> ADB event stream (docs/book/src/reference/events.md).
 
 Inspect's sample/epoch vocabulary maps onto the spec's instance convention at the
 wire boundary: each dataset sample is an *instance* (channel `instance:<id>`,
@@ -61,11 +61,10 @@ def _dump(obj: BaseModel | None) -> dict[str, Any] | None:
 
 
 def emit_provenance(log: EvalLog, agent: str) -> None:
-    """Record the exact identity of everything wrapped, as a first-class covariate
-    (specs/comparability.md): the upstream package versions (inspect_ai +
-    inspect_evals), the task version, and the dataset/source identity. Comparability
-    is judged retroactively as slices over these, so a fact not recorded here can
-    never be sliced on — this is the one thing that cannot be backfilled."""
+    """Record available package/task versions and dataset/source metadata.
+
+    Dataset name, location, and sample count are not a content fingerprint.
+    """
     e = log.eval
     ds = e.dataset
     rev = e.revision
@@ -113,11 +112,8 @@ def emit_model_event(ev: ModelEvent, agent: str,
         response = {
             "message": _dump(out.message),
             "finish_reason": out.stop_reason,
-            # the provider-echoed RESOLVED model id (ModelOutput.model), distinct
-            # from the requested id in ev.model: if a run names a moving alias
-            # (claude-sonnet-4-5, gpt-4o), this records what it resolved to at
-            # the moment of use — recorded before anyone knows it matters
-            # (specs/comparability.md), so alias drift is sliceable forever
+            # Provider-reported model, distinct from the requested ID in ev.model.
+            # A reported name alone does not establish model equivalence.
             "model": out.model,
         }
         if ev.call is not None and ev.call.response is not None:

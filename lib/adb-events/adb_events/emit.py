@@ -4,7 +4,7 @@ Drop-in for the ~30-line shim experiments used to vendor, but the construction i
 validated: EVERY typed emitter goes through msgspec.convert, so a wrong-shaped
 `metric`/`message`/`llm.call`/… raises here (loudly, in the experiment, caught by
 its tests) instead of slipping out and being linted malformed by the runner
-(docs/plan/events.md, producer validation). Non-standard events go through
+(docs/book/src/reference/events.md, producer validation). Non-standard events go through
 `emit_raw` — the deliberate escape hatch: any JSON, no checks.
 """
 
@@ -87,7 +87,7 @@ def log(message: str, *, level: str = "info") -> None:
 # required payload (status/log/emit_raw's first arg) may be positional.
 def metric(*, name: str, value: Scalar, step: int | None = None, unit: str | None = None) -> None:
     # a structured value raises at runtime too (Metric.value is Scalar) — flatten to
-    # multiple '/'-joined names instead (docs/plan/events.md)
+    # multiple '/'-joined names instead (docs/book/src/reference/events.md)
     _validated("metric", Metric, {"name": name, "value": value, "step": step, "unit": unit})
 
 
@@ -123,7 +123,7 @@ _SCALAR = (int, float, str, bool)
 def instance(*, agent: str, id: str | int, scores: Mapping[str, Scalar] | None = None,
              repeat: int | None = None, error: str | None = None, **data: Json) -> None:
     """Close out one instance — the multi-instance run convention
-    (docs/plan/events.md): one run working through many independent units (dataset
+    (docs/book/src/reference/events.md): one run working through many independent units (dataset
     rows, swebench instances, arena matches). `scores` is a FLAT scalar map;
     structured scorers flatten at emit with '/'-joined names
     ({"combined_scorer/refusal": 1}). `repeat` is the 1-based within-run repeat of
@@ -131,7 +131,7 @@ def instance(*, agent: str, id: str | int, scores: Mapping[str, Scalar] | None =
     in data untyped (target, domain fields)."""
     # runtime guards on top of the annotations: emit is the producer-validation
     # boundary and callers are frequently untyped — statically "unnecessary",
-    # deliberately kept (docs/plan/events.md, emit-side validation)
+    # deliberately kept (docs/book/src/reference/events.md, emit-side validation)
     if isinstance(id, bool) or not isinstance(id, (str, int)):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise TypeError(f"instance id must be str or int, got {type(id).__name__}")
     for k, v in (scores or {}).items():

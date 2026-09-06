@@ -1,4 +1,4 @@
-"""The event payload vocabulary as msgspec Structs (docs/plan/events.md).
+"""The event payload vocabulary as msgspec Structs (docs/book/src/reference/events.md).
 
 These model *payloads* — the `event` value inside the runner-owned transport envelope
 `{v, ts, run, seq, event}`. Single source of truth for the standardized shapes: the
@@ -31,7 +31,7 @@ import msgspec
 # assignable — invariant containers would reject them.
 type Json = Mapping[str, "Json"] | Sequence["Json"] | str | int | float | bool | None
 
-# A contract-scalar (docs/plan/events.md): metric values and instance scores are flat
+# A contract-scalar (docs/book/src/reference/events.md): metric values and instance scores are flat
 # scalars — structured values flatten to multiple '/'-joined names. Non-recursive, so
 # safe in Struct fields (msgspec validates it).
 Scalar = Union[int, float, str, bool]

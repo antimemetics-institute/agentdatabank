@@ -25,4 +25,5 @@
 # Reference
 
 - [CLI reference](reference/cli.md)
+- [Experiment protocol and events](reference/events.md)
 - [Run directory layout](reference/layout.md)

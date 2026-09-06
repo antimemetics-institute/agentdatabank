@@ -80,7 +80,7 @@ export function dedupeMetrics(ms: MetricEv[]): (MetricEv & { count: number })[] 
    language as AggChips: booleans → colored pass ratio; numerics → neutral mean
    (a 0/1 numeric is NOT judged pass/fail — refusal=1 is good on agentharm's
    harmful split and bad on the benign one); other values → distinct counts.
-   Derived at read time, stored nowhere (docs/plan/events.md). */
+   Derived at read time, stored nowhere (docs/book/src/reference/events.md). */
 export function InstanceScoreChips({ scores }: { scores: Record<string, unknown>[] }) {
   const byKey = new Map<string, unknown[]>();
   for (const s of scores)

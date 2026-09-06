@@ -197,10 +197,8 @@ def main() -> int:
             tasks[t.name] = {
                 "task": f"inspect_evals/{t.name}",
                 "summary": f"{ev.title}: {first_sentence(ev.description)}",
-                # the eval's DECLARED comparability version ("3-A"): NOT identity
-                # (identity is strict content) — it is the advisory seed: after a pin
-                # bump, the regen prints a diff of these, and each bump is a split-
-                # advisory candidate scoped to that eval (specs/comparability.md)
+                # Upstream's declared comparability version: regeneration prints
+                # changes for review; this is not the ADB source identity.
                 "version": ev.version.full_version,
                 "params": params,
                 "param_kwargs": kwargs_of,

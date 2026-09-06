@@ -57,12 +57,9 @@ let
 
   mkTask = name: { task, summary, keyless ? false, sandbox ? false, taskParams ? { }, paramKwargs ? { }, links ? [ ] }: adb.mkExperiment {
     inherit name summary links;
-    # Identity is strict content: the declaration + the env pin — a pin bump
-    # re-versions every experiment in the family, and that over-fragmentation is
-    # deliberate (identity records, never judges). Read-time pooling re-unifies
-    # harmless boundaries; genuine breaks become advisories, seeded by the
-    # comparability-version diff that `task tasks:update` prints (prototype
-    # specs/comparability.md). NOT ./. — a catalog regen alone re-versions nothing.
+    # The declaration and environment pin define this family's source identity.
+    # task_catalog.json is not included; catalog regeneration alone leaves it unchanged.
+    # Source identity does not establish comparability (docs/book/src/running/model.md).
     src = [ ./package.nix ./pyproject.toml ./uv.lock ]
       ++ lib.optional keyless ./hello_task;
 

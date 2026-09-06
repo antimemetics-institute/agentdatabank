@@ -16,11 +16,11 @@ A **condition** is an experiment version plus a full parameter binding — a com
 condition_id = sha256(canonical({experiment, source, params}))
 ```
 
-Configure the same experiment the same way, on any machine, and you land in the same bucket. This is the coordination mechanism of the whole databank: it's what will let deposited runs pool across researchers once depositing lands. In the MVP the hash is computed and recorded on every run, runs are grouped under it on disk, and the GUI shows it on every run — but nothing groups or aggregates by condition yet.
+The same experiment name, source hash, and parameters produce the same condition ID. The hash is recorded on every run, runs are grouped under it on disk, and the GUI shows it — but there is no condition aggregation or dedicated comparison view yet. Matching IDs do not establish scientific comparability: shared dependencies and execution settings outside the declared sources can differ. Publication and analysis are separate items on the [roadmap](../introduction.md#roadmap).
 
 ## Run
 
-A **run** is one execution of a condition — one sample drawn from it. Its id is a ULID. A run records the parameters, the experiment version (`source`), a fetchable repo rev (`fetch_ref`) it can be re-run from, an environment fingerprint, its status, and the full event stream.
+A **run** is one execution of a condition — one sample drawn from it. Its id is a ULID. A run records the parameters, the experiment version (`source`), a source reference (`fetch_ref`, which may instead mark a dirty checkout), its seed, status, and event stream. The runner records its version and platform in the start event; additional provenance depends on the adapter. This is not yet a complete execution-environment fingerprint.
 
 Agents are non-deterministic, so ADB never deduplicates. Two runs of the same condition are two samples; the databank accumulates *n*. Failed and interrupted runs are kept too — garbage is data.
 
@@ -30,6 +30,6 @@ Agents are non-deterministic, so ADB never deduplicates. Two runs of the same co
 
 ## Three distinctions worth knowing
 
-- **Identity is not reproducibility.** You can't `nix run` a content hash. That's why each run also records `fetch_ref` — a rev you *can* fetch and re-run. Identity buckets the run; `fetch_ref` reproduces it.
-- **Environment is a covariate, not identity.** Runner version, library versions, platform — recorded on every run so you can slice on them later, never folded into the hash. Upgrading the runner doesn't shatter your buckets.
-- **Secrets are never identity.** The model *name* (`openai/qwen3.5-9b`) is part of the condition; the endpoint and key that serve it are environment — see [Credentials](secrets.md). The model the provider *reports* serving is likewise recorded per call, and the run view shows it next to what was requested.
+- **Identity is not reproducibility.** You can't `nix run` a content hash. The recorded `fetch_ref` helps locate the source, but a dirty checkout is not a retrievable revision, and a source reference alone does not preserve every input or hosted model. Stronger reproduction guarantees remain on the roadmap.
+- **Environment is a covariate, not identity.** The condition hash excludes the shared runner and platform. The runner records its own version and platform; adapter-specific library metadata is not a complete dependency inventory. Upgrading the runner does not change the condition hash.
+- **Secrets are never identity.** The model *name* (`openai/qwen3.5-9b`) is part of the condition; the endpoint and key that serve it are environment — see [Credentials](secrets.md). Reported model information is available from some adapters, including Inspect, but is not captured uniformly across experiments. Endpoint and credential-profile provenance is also incomplete today.

@@ -24,8 +24,10 @@ Follow the transcript live as the worker runs it:
 
 ![Following a run's transcript](docs/readme/run-view.gif)
 
-Every composed run doubles as a copy-paste one-liner that reproduces the exact same condition anywhere — the builder's other tab. The local GUI runs experiments on the same machine and shows progress in Jobs: see [runs from the browser](https://antimemetics-institute.github.io/agentdatabank/running/workers.html).
+The builder's other tab provides a copy-paste command for running the configuration from a terminal. Check its selected source: a command targeting upstream may differ from an edited local checkout. The local GUI runs experiments on the same machine and shows progress in Jobs: see [runs from the browser](https://antimemetics-institute.github.io/agentdatabank/running/workers.html).
 
 ## Learn more
+
+The [roadmap](https://antimemetics-institute.github.io/agentdatabank/introduction.html#roadmap) distinguishes working local features from future public data publication and other possible additions.
 
 **[The book](https://antimemetics-institute.github.io/agentdatabank/)** covers getting started, the experiment catalog, and [adding and updating experiments](https://antimemetics-institute.github.io/agentdatabank/writing/experiments.html).

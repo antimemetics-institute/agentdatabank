@@ -275,7 +275,7 @@ function AgentsLegend({ agents }: { agents: AgentInfo[] }) {
   );
 }
 
-/* declared verdicts ONLY (docs/plan/events.md, tools convention): exit_code and
+/* declared verdicts ONLY (docs/book/src/reference/events.md, tools convention): exit_code and
    ok are the two fields an emitter declares as its own pass/fail. The old
    string-regex and pytest-tail sniffing is gone — undeclared data renders
    neutral, never judged from shape. null = no declared verdict. */
@@ -781,7 +781,7 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
         </>
       );
     } else if (e.kind === "instance" || e.kind === "sample" /* legacy */) {
-      /* instance close-out (docs/plan/events.md): id + repeat + its scores as
+      /* instance close-out (docs/book/src/reference/events.md): id + repeat + its scores as
          chips, so each unit's outcome reads inline without opening the row */
       const scores = d.scores && typeof d.scores === "object" && !Array.isArray(d.scores)
         ? flattenScores(d.scores as Record<string, unknown>) : [];

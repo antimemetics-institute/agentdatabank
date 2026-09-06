@@ -177,7 +177,7 @@ Also `credentials remove <name>` and `credentials path`. `credentials set` re-pr
 
 > The built-in names are just prompt templates — the ADB knows which field is secret and what a sensible default base URL is, nothing more. `credentials set` with *any* name creates a named set with the conventional fields (`<NAME>_API_KEY`, `<NAME>_BASE_URL`), and model ids of the form `openai-api/<name>/<model>` (inspect's OpenAI-compatible services) route to the set of that name. That's how a real OpenAI key and a self-hosted server coexist.
 >
-> One caveat: the service name is part of the model id, so it enters the condition. For poolable canonical conditions, prefer the plain `openai/<model>` form.
+> One caveat: the service name is part of the model id, so it enters the condition. The plain `openai/<model>` form avoids that service-name distinction, but matching condition IDs alone does not establish comparability.
 
 </details>
 
@@ -210,10 +210,10 @@ The file is yours to edit by hand — `credentials set` is a convenience, not a 
 
 ## How credentials reach the experiment
 
-A run's environment is constructed, not inherited — there is no passthrough of your shell into an experiment. A run receives exactly: a minimal set of system basics (`PATH`, `HOME`, locale), the credential sets this run routes to, and the `ADB_*` run vars. A stray key exported in your shell cannot leak into a run, because nothing ambient ever enters one.
+The runner forwards only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR`, and `DOCKER_HOST` from the host, then overlays routed credential fields and `ADB_RUN_ID`, `ADB_RUN_DIR`, and `ADB_SEED`. Other exported shell variables are not forwarded. This is environment filtering, not filesystem or process isolation.
 
-Because the environment is constructed, it is also recorded: each run's record lists the env var names it received and which set each came from — secret values ablated, non-secret values (like base URLs) kept as covariates. What a run ran with is never a mystery; what the secrets were is never written down.
+The runner constructs the child environment, but does not yet record a complete inventory of injected variable names, credential-profile choices, or endpoint values. Improving that provenance without recording secrets is part of the [publication roadmap](../introduction.md#roadmap).
 
 ## The trust caveat
 
-Running third-party code with your keys is a real trust decision: an experiment process receives the credentials routed to it and could misuse them. Today's mitigations: experiments in the monorepo are reviewed (nixpkgs-style), a run receives only the sets it routes to — never your whole keyring — and nothing ambient is exposed. VM-isolated execution with a recording proxy, where the raw key never enters the experiment process at all, is the planned next step (see `docs/plan/credentials.md` in the repo for the design).
+Running third-party code with your keys is a real trust decision: an experiment process receives the credentials routed to it and could misuse them. Today's mitigations: experiments in the monorepo are reviewed (nixpkgs-style), a run receives only the sets it routes to — never your whole keyring — and the inherited environment is restricted. VM-isolated execution with a recording proxy, where the raw key never enters the experiment process at all, is a possible later direction on the [roadmap](../introduction.md#roadmap), not a current isolation guarantee.

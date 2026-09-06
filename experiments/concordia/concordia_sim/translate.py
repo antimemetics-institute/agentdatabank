@@ -20,10 +20,10 @@ GM_NAME = "Game Master"
 
 def emit_provenance(*, concordia_version: str, model: str,
                     agents: int, python_version: str) -> None:
-    """Record the covariates comparability slices on later (specs/comparability.md):
-    the exact wrapped-component version and the run's external identity. This is the
-    one thing that cannot be backfilled. (The scenario itself is the roster/premise
-    params, which the runner already records as realized params.)"""
+    """Record Concordia/Python versions, requested model, and agent count.
+
+    The runner separately records the scenario parameters.
+    """
     # attributed to the wrapped component, not a scene character: this is concordia's
     # provenance, not something the game master did (agent.event requires an agent
     # string; `concordia` names the component whose identity is being recorded)

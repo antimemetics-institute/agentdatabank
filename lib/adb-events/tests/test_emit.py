@@ -1,6 +1,6 @@
 """Every emitter pathway: happy path lands on the wire correctly, and a malformed
 payload raises TypeError AT the emit site — the producer-validation guarantee
-(docs/plan/events.md). The rejection tests are load-bearing: msgspec Structs do NOT
+(docs/book/src/reference/events.md). The rejection tests are load-bearing: msgspec Structs do NOT
 type-check plain construction, so nothing but the msgspec.convert call in
 emit._validated stands between a bad payload and the wire. If a future emitter is
 added with direct Struct construction, its rejection test here is what fails.
