@@ -62,7 +62,7 @@ nix run .#inspect-hello -- \
 For an actual disposable smoke run, choose a temporary data home outside the repository:
 
 ```bash
-export ADB_HOME="$(mktemp -d)"
+export ADB_DATA_DIR="$(mktemp -d)"
 ```
 
 ```bash,repo-local

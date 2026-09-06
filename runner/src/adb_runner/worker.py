@@ -1,28 +1,7 @@
-"""The queue worker — `adb-runner worker --server URL` — mode (a) of the two
-execution modes (the other is pasting a oneliner; that path never touches this
-module or any queue).
+"""Private single-machine executor, supervised by adb-local's server.
 
-One process, headless BY DESIGN: it never prompts for anything. Jobs arrive as
-secret-free specs ({experiment, sets, profiles (NAMES), replicates}); credentials
-resolve on THIS machine from THIS machine's store, through the runner's normal
-headless ladder (explicit --profile from the job, else remembered, else default,
-else the run fails with the fix in hand). At registration the worker ADVERTISES its
-masked credential inventory (profile names, never values — credentials.inventory())
-so a GUI can offer exactly the profiles this worker can honor and gate jobs it
-can't. The same protocol later points at a hosted queue with an account token; a
-hosted worker differs only in where its store comes from, not in this loop.
-
-Lifecycle: register (name + inventory) -> long-poll claim -> execute (nix-build
-`exec.<experiment>` from --repo, then the built app with --json; run ids and phases
-come from the runner's OWN event envelopes, nothing is scraped) -> report batched
-progress (the report reply carries the stop request; stop = SIGINT to the process
-group, exactly Ctrl-C) -> done -> claim again. Server unreachable: retry with
-backoff. Unknown worker id (server restarted): re-register. SIGINT to the worker
-itself: forwarded to a live job, then exit.
-
-Requests deliberately bypass proxy env vars: workers commonly talk to loopback or
-LAN, where an http_proxy would swallow the request (same hazard the viewer probe
-guards against).
+The server provides an exact endpoint, source, home, and private capability.
+The direct experiment CLI does not depend on this protocol.
 """
 
 from __future__ import annotations
@@ -31,7 +10,6 @@ import argparse
 import json
 import os
 import signal
-import socket
 import subprocess
 import sys
 import threading
@@ -43,14 +21,10 @@ from typing import IO
 
 from adb_events import Json
 
-from . import credentials
 
 CLAIM_HOLD_S = 25          # server holds a claim open this long; timeout adds margin
 REPORT_EVERY_S = 1.0       # progress/log batch cadence (also the stop-poll cadence)
-RETRY_S = 5.0              # backoff when the server is unreachable
 LOG_BATCH_CAP = 200        # lines per report — the server tails anyway
-
-RUN_ID_TYPES = ("run.start", "run.end")
 
 # the job subprocess currently running (build or experiment), so a worker-level
 # interrupt can pass the Ctrl-C on before exiting — partial runs are kept
@@ -58,20 +32,30 @@ _active: subprocess.Popen[str] | None = None
 
 
 def _interrupt_active() -> None:
-    if _active is not None and _active.poll() is None:
+    """Bounded teardown of the entire build/run group, even if its leader exits."""
+    if _active is None:
+        return
+    for sig, grace in ((signal.SIGINT, 2.0), (signal.SIGTERM, 2.0), (signal.SIGKILL, 0.5)):
         try:
-            os.killpg(_active.pid, signal.SIGINT)
-            _active.wait(timeout=15)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+            os.killpg(_active.pid, sig)
+        except ProcessLookupError:
+            break
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            _active.poll()  # reap leader, but do not mistake that for an empty group
+            try:
+                os.killpg(_active.pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.05)
+    try:
+        _active.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def _log(msg: str) -> None:
-    print(f"adb-worker: {msg}", file=sys.stderr)
-
-
-class ServerGone(Exception):
-    """Server restarted (or never knew us) — re-register and carry on."""
+    print(f"adb-local executor: {msg}", file=sys.stderr)
 
 
 class Client:
@@ -84,7 +68,7 @@ class Client:
              timeout: float = 15.0) -> tuple[int, dict[str, Json] | None]:
         headers = {"content-type": "application/json"}
         if self.token:
-            headers["authorization"] = f"Bearer {self.token}"
+            headers["x-adb-executor"] = self.token
         req = urllib.request.Request(
             self.base + path,
             data=json.dumps(payload).encode() if payload is not None else None,
@@ -125,12 +109,7 @@ def _job_args(job: dict[str, Json]) -> list[str]:
 
 
 def plan_build(source: str, experiment: str, build_cmd: str) -> list[str]:
-    """The classic build invocation for `source` — a checkout/store path or a
-    tarball URL, both of which nix-build takes in the source position. Only
-    classic nix here: the oneliner palette's flakes-vs-stock split is shell
-    SYNTAX for humans, not a different source. Jobs never carry a source at
-    all: a worker builds from the one repo it was registered with (--repo) —
-    what a worker serves is its operator's, not the submitter's."""
+    """Build the experiment from the source selected at local ADB startup."""
     return [build_cmd, source, "--no-out-link", "-A", f"exec.{experiment}"]
 
 
@@ -195,7 +174,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     _log(f"job {job_id}: {job['experiment']} ({job.get('replicates', 1)} replicate(s))")
 
     # step 1 — resolve the experiment to its executable, the same derivation the
-    # user's oneliner would build, from THIS worker's registered repo
+    # user's oneliner would build, from the configured local source
     argv = plan_build(repo, str(job["experiment"]), build_cmd)
     report.flush(phase="building", force=True)
     global _active
@@ -212,7 +191,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         t.start()
     while build.poll() is None:
         if report.flush():
-            os.killpg(build.pid, signal.SIGINT)
+            _interrupt_active()
         time.sleep(0.2)
     for t in threads:
         t.join(timeout=5)
@@ -233,8 +212,8 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         [bin_path] + _job_args(job),
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, start_new_session=True,
-        env={**os.environ, "ADB_HOME": os.environ.get(
-            "ADB_HOME", os.path.expanduser("~/.local/share/adb"))})
+        env={**os.environ, "ADB_DATA_DIR": os.environ.get(
+            "ADB_DATA_DIR", os.path.expanduser("~/.local/share/adb"))})
     _active = child
     report.flush(phase="running", force=True)
 
@@ -264,7 +243,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     while child.poll() is None:
         if report.flush() and not stopped:
             stopped = True
-            os.killpg(child.pid, signal.SIGINT)  # Ctrl-C: partial runs are kept
+            _interrupt_active()
         time.sleep(0.2)
     for t in threads:
         t.join(timeout=5)
@@ -276,109 +255,66 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     _log(f"job {job_id}: {phase}")
 
 
-def _probe_server(patience_s: float = 10.0) -> str | None:
-    """No --server given: find the local adb-web the same way the runner's viewer
-    probe does — walk the ports it binds (8340 upward), keep the first thing that
-    answers the identity ping. A short patience window covers being started
-    TOGETHER with adb-web (adb-up) before its port is bound."""
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    deadline = time.monotonic() + patience_s
-    said = False
-    while True:
-        for port in range(8340, 8344):
-            base = f"http://127.0.0.1:{port}"
-            try:
-                with opener.open(f"{base}/api/ping", timeout=0.3) as r:
-                    body: Json = json.loads(r.read(4096))
-            except (OSError, ValueError):
-                continue
-            if isinstance(body, dict) and body.get("adb") == "web":
-                return base
-        if time.monotonic() >= deadline:
-            return None
-        if not said:
-            _log("waiting for a local adb-web on 127.0.0.1:8340-8343…")
-            said = True
-        time.sleep(0.5)
-
-
-def register(client: Client, name: str) -> str:
-    status, doc = client.call("POST", "/api/workers/register",
-                              {"name": name, "creds": credentials.inventory()})
-    worker_id = doc.get("worker") if doc else None
-    if status != 200 or not isinstance(worker_id, str):
-        raise OSError(f"register failed ({status}): {doc}")
-    _log(f"registered as {name!r} ({worker_id}) at {client.base}")
-    return worker_id
-
-
 def worker_cli(argv: list[str]) -> int:
-    p = argparse.ArgumentParser(prog="adb-worker")
-    p.add_argument("--server", default=None, metavar="URL",
-                   help="the queue to serve (an adb-web instance); omitted, the "
-                        "local viewer ports (8340+) are probed")
-    p.add_argument("--name", default=socket.gethostname(),
-                   help="how this worker introduces itself (default: hostname)")
-    p.add_argument("--repo", default=os.environ.get("ADB_WORKER_REPO"),
-                   metavar="SRC", help="adb source to nix-build experiments from: a "
-                   "checkout/store path, or a tarball URL (e.g. a github archive) "
-                   "(default: $ADB_WORKER_REPO, baked by the nix adb-worker wrapper "
-                   "to the same pinned source the worker was built from)")
-    p.add_argument("--token-file", default=None, metavar="FILE",
-                   help="bearer token for a non-loopback server (file, not argv — "
-                   "argv is visible in `ps`); also: $ADB_WORKER_TOKEN")
-    p.add_argument("--once", action="store_true",
-                   help="execute one job then exit (tests, batch cron)")
+    p = argparse.ArgumentParser(prog="python -m adb_runner.worker")
+    p.add_argument("--server", required=True)
+    p.add_argument("--repo", required=True)
+    p.add_argument("--once", action="store_true")
     args = p.parse_args(argv)
-    if not args.repo:
-        _log("no --repo / $ADB_WORKER_REPO — nothing to build experiments from")
+    token = os.environ.get("ADB_EXECUTOR_CAPABILITY")
+    if not token or not os.environ.get("ADB_DATA_DIR"):
+        _log("this private executor must be started by adb-local")
         return 2
-    if args.server is None:
-        args.server = _probe_server()
-        if args.server is None:
-            _log("no adb-web found on 127.0.0.1:8340-8343 — start one "
-                 "(nix run .#adb-web) or point me somewhere: --server URL")
-            return 2
-        _log(f"found the local adb-web at {args.server}")
-    token = os.environ.get("ADB_WORKER_TOKEN")
-    if args.token_file:
-        token = open(args.token_file).read().strip()
     client = Client(args.server, token)
-    # tests point this at a stub; everything else is the real nix-build
     build_cmd = os.environ.get("ADB_WORKER_BUILD", "nix-build")
+    parent = os.getppid()
 
-    # a supervisor's TERM (systemd, adb-local's teardown trap) is the same request
-    # as Ctrl-C: stop gracefully. Mapping it onto KeyboardInterrupt reuses the one
-    # shutdown path — including SIGINT-ing a live job's process group below.
     def _term(_sig: int, _frame: object) -> None:
         raise KeyboardInterrupt
-    signal.signal(signal.SIGTERM, _term)
 
-    worker_id: str | None = None
-    while True:
-        try:
-            if worker_id is None:
-                worker_id = register(client, args.name)
-            status, doc = client.call(
-                "POST", f"/api/workers/{worker_id}/claim", {},
-                timeout=CLAIM_HOLD_S + 10)
-            if status == 410:
-                raise ServerGone()
+    def watch_parent() -> None:
+        while os.getppid() == parent:
+            time.sleep(0.5)
+        # Unexpected supervisor death must not leave an experiment running.
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    previous = signal.signal(signal.SIGTERM, _term)
+    watcher = threading.Thread(target=watch_parent, daemon=True)
+    watcher.start()
+    current: str | None = None
+    try:
+        while True:
+            status, doc = client.call("POST", "/api/executor/claim", {}, timeout=CLAIM_HOLD_S + 10)
             if status == 200 and isinstance(doc, dict) and "id" in doc:
-                execute(client, doc, repo=args.repo, build_cmd=build_cmd)
+                current = str(doc["id"])
+                try:
+                    execute(client, doc, repo=args.repo, build_cmd=build_cmd)
+                except OSError as exc:
+                    _interrupt_active()
+                    client.call("POST", f"/api/jobs/{current}/report", {"log": [str(exc)]})
+                    client.call("POST", f"/api/jobs/{current}/done", {"phase": "error"})
+                current = None
                 if args.once:
                     return 0
-            elif status not in (200, 204):
-                _log(f"claim: unexpected {status} — retrying in {RETRY_S:.0f}s")
-                time.sleep(RETRY_S)
-        except ServerGone:
-            _log("server no longer knows this worker (restart?) — re-registering")
-            worker_id = None
-        except KeyboardInterrupt:
-            _interrupt_active()  # pass the Ctrl-C on to a live job; partial runs kept
-            _log("interrupted — bye")
-            return 0
-        except OSError as exc:
-            _log(f"server unreachable ({exc}) — retrying in {RETRY_S:.0f}s")
-            worker_id = None
-            time.sleep(RETRY_S)
+            elif status != 204:
+                raise OSError(f"local queue refused claim ({status})")
+    except KeyboardInterrupt:
+        # Ignore repeated TERM while tearing down; the supervisor has its own deadline.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        _interrupt_active()
+        if current:
+            try:
+                client.call("POST", f"/api/jobs/{current}/done", {"phase": "stopped"}, timeout=1)
+            except OSError:
+                pass
+        return 0
+    except OSError as exc:
+        _interrupt_active()
+        _log(f"local server unavailable: {exc}")
+        return 1
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+if __name__ == "__main__":
+    raise SystemExit(worker_cli(sys.argv[1:]))

@@ -15,8 +15,17 @@ from adb_runner import credentials
 def cfg(tmp_path, monkeypatch):
     path = tmp_path / "credentials.toml"
     monkeypatch.setenv("ADB_CREDENTIALS_FILE", str(path))
-    monkeypatch.setenv("ADB_PREFERENCES_FILE", str(tmp_path / "preferences.toml"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     return path
+
+
+def test_preferences_location_uses_xdg_and_ignores_removed_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ADB_PREFERENCES_FILE", str(tmp_path / "ignored.toml"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    assert credentials.prefs_path() == tmp_path / "config/adb/preferences.toml"
+    monkeypatch.delenv("XDG_CONFIG_HOME")
+    assert credentials.prefs_path() == tmp_path / "home/.config/adb/preferences.toml"
 
 
 def _stdin(monkeypatch, text):
@@ -221,7 +230,7 @@ def test_ladder_picker_enter_takes_default(cfg, monkeypatch, capsys):
     _stdin(monkeypatch, "\nn\n")  # picker: Enter → default; remember? → n
     env = _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"})
     assert env == {"OPENAI_API_KEY": "d"}
-    assert not (cfg.parent / "preferences.toml").exists()
+    assert not credentials.prefs_path().exists()
 
 
 def test_ladder_picker_choice_and_remember(cfg, monkeypatch, capsys):
@@ -241,7 +250,7 @@ def test_ladder_picker_choice_and_remember(cfg, monkeypatch, capsys):
     env = _resolve(_manifest({"kind": "llm"}), {"model": "openai/q"},
                    experiment="werewolf")
     assert env == {"OPENAI_API_KEY": "d"}
-    prefs_text = (cfg.parent / "preferences.toml").read_text()
+    prefs_text = credentials.prefs_path().read_text()
     assert 'openai = "work"' in prefs_text and "sk-" not in prefs_text
 
 

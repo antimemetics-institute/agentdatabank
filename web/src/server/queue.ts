@@ -1,37 +1,14 @@
-/* The job queue + worker registry — the server side of `adb-runner worker`.
+/* Bounded FIFO for the single local executor. In-flight jobs never replay on restart. */
 
-   The server EXECUTES NOTHING anymore: a job is a durable, secret-free record
-   ({experiment, sets, profiles (names), replicates} — the oneliner in structured
-   form) that sits `queued` until a worker claims it. Workers are clients: they
-   register (name + masked credential inventory), long-poll claim, report progress,
-   and finish jobs; the server never reaches into a worker's machine. Locally
-   adb-web supervises one worker child so the run button keeps working with zero
-   setup — but it speaks this same protocol over loopback, so a second worker on
-   another machine (with the bearer token) is the same code path, and pointing the
-   worker at a future hosted queue is a URL change.
-
-   Durability: jobs persist to $ADB_HOME/jobs/<id>.json on every transition and
-   reload at boot — `queued` ones stay queued (a worker will come), in-flight ones
-   reload as `orphaned` but late reports still land (a live worker outrunning a
-   server restart flips them back). The worker registry is deliberately ephemeral:
-   workers re-register, jobs don't re-happen.
-
-   Zero runtime dependencies, same as server.ts (node stdlib only). */
-
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { JobInfo, WorkerInfo } from "../shared/types";
+import type { JobInfo } from "../shared/types";
 
 interface Job extends JobInfo {
   stopRequested?: boolean;
 }
 
-interface Worker extends WorkerInfo {
-  creds?: unknown; /* masked inventory (list --json shape) — names only, by construction */
-}
-
 const jobs = new Map<string, Job>();
-const workers = new Map<string, Worker>();
 const TERMINAL = new Set<JobInfo["phase"]>(["completed", "failed", "stopped", "orphaned", "error"]);
 const LOG_CAP = 400;      /* narration tail lines kept per job */
 const QUEUE_CAP = 32;     /* refuse a deeper backlog — runaway guard, not a scheduler */
@@ -48,10 +25,27 @@ export function jobView(job: Job): JobInfo {
 
 const jobsDir = (home: string): string => join(home, "jobs");
 
+let writes = Promise.resolve();
 function persist(home: string, job: Job): void {
-  void mkdir(jobsDir(home), { recursive: true })
-    .then(() => writeFile(join(jobsDir(home), `${job.id}.json`), JSON.stringify(jobView(job), null, 2)))
-    .catch(() => { /* a failed write loses durability, not the job */ });
+  const snapshot = JSON.stringify(jobView(job), null, 2);
+  writes = writes.then(async () => {
+    await mkdir(jobsDir(home), { recursive: true });
+    const path = join(jobsDir(home), `${job.id}.json`);
+    await writeFile(`${path}.tmp`, snapshot);
+    await rename(`${path}.tmp`, path);
+  }).catch((err) => console.error("job persistence failed:", err));
+}
+export const flushJobs = (): Promise<void> => writes;
+
+export function interruptJobs(home: string): void {
+  for (const job of jobs.values()) {
+    if (!TERMINAL.has(job.phase) && job.phase !== "queued") {
+      job.phase = "orphaned";
+      job.finished_at = now();
+      job.log.push("Local executor exited; this job will not be retried automatically.");
+      persist(home, job);
+    }
+  }
 }
 
 function pushLog(home: string, job: Job, lines: string[]): void {
@@ -69,8 +63,7 @@ export async function initJobs(home: string): Promise<void> {
       const job = JSON.parse(await readFile(join(jobsDir(home), f), "utf8")) as Job;
       if (!TERMINAL.has(job.phase) && job.phase !== "queued") {
         job.phase = "orphaned";
-        job.log.push("adb-web restarted while this job was in flight — if its worker " +
-          "survived, its reports will still land here; its runs reach the store either way");
+        job.log.push("Local ADB restarted during this job; it will not be retried automatically.");
         persist(home, job);
       }
       jobs.set(job.id, job);
@@ -87,31 +80,9 @@ export const getJob = (id: string): JobInfo | null => {
   return job ? jobView(job) : null;
 };
 
-/* ---------------- workers ---------------- */
-
-export function registerWorker(name: string, creds: unknown): WorkerInfo {
-  const worker: Worker = {
-    id: newId("w"), name,
-    registered_at: now(), last_seen: now(),
-    busy: null,
-  };
-  worker.creds = creds;
-  workers.set(worker.id, worker);
-  return { id: worker.id, name: worker.name, registered_at: worker.registered_at, last_seen: worker.last_seen, busy: worker.busy };
-}
-
-const WORKER_STALE_MS = 90_000; /* 3+ missed claim holds → presumed gone */
-
-export const listWorkers = (): WorkerInfo[] =>
-  [...workers.values()]
-    .filter((w) => Date.now() - Date.parse(w.last_seen) < WORKER_STALE_MS)
-    .map(({ creds: _creds, ...w }) => w)
-    .sort((a, b) => a.registered_at.localeCompare(b.registered_at));
-
 /* ---------------- the queue ---------------- */
 
 interface Waiter {
-  workerId: string;
   resolve: (job: Job | null) => void;
 }
 let waiters: Waiter[] = [];
@@ -121,10 +92,8 @@ const nextQueued = (): Job | undefined =>
     .filter((j) => j.phase === "queued")
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
 
-function assign(home: string, job: Job, worker: Worker): void {
+function assign(home: string, job: Job): void {
   job.phase = "claimed";
-  job.worker = { id: worker.id, name: worker.name };
-  worker.busy = job.id;
   persist(home, job);
 }
 
@@ -134,25 +103,21 @@ const claimSpec = (job: Job) => ({
   profiles: job.profiles, replicates: job.replicates,
 });
 
-export function claim(home: string, workerId: string):
-  { gone: true } | { job: Promise<ReturnType<typeof claimSpec> | null> } {
-  const worker = workers.get(workerId);
-  if (!worker) return { gone: true };
-  worker.last_seen = now();
-  worker.busy = null;
+export function claim(home: string): { job: Promise<ReturnType<typeof claimSpec> | null> } {
+  // One supervised executor, one in-flight job. Duplicate claims cannot start another.
+  if ([...jobs.values()].some((j) => !TERMINAL.has(j.phase) && j.phase !== "queued"))
+    return { job: Promise.resolve(null) };
   const ready = nextQueued();
   if (ready) {
-    assign(home, ready, worker);
+    assign(home, ready);
     return { job: Promise.resolve(claimSpec(ready)) };
   }
   return {
     job: new Promise((resolve) => {
-      const waiter: Waiter = { workerId, resolve: (j) => resolve(j && claimSpec(j)) };
+      const waiter: Waiter = { resolve: (j) => resolve(j && claimSpec(j)) };
       waiters.push(waiter);
       setTimeout(() => {
         waiters = waiters.filter((w) => w !== waiter);
-        const stillHere = workers.get(workerId);
-        if (stillHere) stillHere.last_seen = now();
         waiter.resolve(null);
       }, CLAIM_HOLD_MS).unref?.();
     }),
@@ -185,9 +150,8 @@ export function submit(home: string, spec: JobSpec): { job: JobInfo } | { error:
   persist(home, job);
   const waiter = waiters.shift();
   if (waiter) {
-    const worker = workers.get(waiter.workerId);
-    if (worker) assign(home, job, worker);
-    waiter.resolve(worker ? job : null);
+    assign(home, job);
+    waiter.resolve(job);
   }
   return { job: jobView(job) };
 }
@@ -202,12 +166,9 @@ export function report(
 ): { stop: boolean } | null {
   const job = jobs.get(id);
   if (!job) return null;
-  if (job.worker) {
-    const worker = workers.get(job.worker.id);
-    if (worker) worker.last_seen = now();
-  }
+  if (TERMINAL.has(job.phase)) return { stop: true };
   if (body.phase && REPORT_PHASES.has(body.phase as JobInfo["phase"]))
-    job.phase = body.phase as JobInfo["phase"]; /* a live report outranks `orphaned` */
+    job.phase = body.phase as JobInfo["phase"];
   for (const rid of body.runs ?? [])
     if (!job.runs.includes(rid)) job.runs.push(rid);
   if (body.log?.length) pushLog(home, job, body.log);
@@ -227,10 +188,6 @@ export function done(
     ? (body.phase as JobInfo["phase"]) : "failed";
   if (typeof body.exit_code === "number") job.exit_code = body.exit_code;
   job.finished_at = now();
-  if (job.worker) {
-    const worker = workers.get(job.worker.id);
-    if (worker && worker.busy === job.id) worker.busy = null;
-  }
   persist(home, job);
   return true;
 }

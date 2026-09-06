@@ -5,9 +5,7 @@
    stored, logged, or echoed here.
 
    Same-machine only, on purpose: this edits the store of the user running the
-   server, which is the same store the locally-supervised worker reads. Editing a
-   REMOTE worker's store is a different feature (a write-through command on the
-   worker's channel) and deliberately doesn't exist yet. */
+   server, which is the same store the managed local executor reads. */
 
 import { spawn } from "node:child_process";
 

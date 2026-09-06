@@ -5,7 +5,7 @@
    the run page highlights Runs, experiment pages highlight Experiments. */
 
 import { FlaskConical, List, Moon, Server, Sun } from "lucide-react";
-import { JOB_TERMINAL, useJobsPoll, usePollHealth } from "@/lib/data";
+import { JOB_TERMINAL, useJobsPoll, usePollHealth, useExecutorPoll } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { CmdSettings } from "@/components/cmd-settings";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { section: "experiments", href: "#/", label: "Experiments", Icon: FlaskConical },
   { section: "runs", href: "#/runs", label: "Runs", Icon: List },
-  { section: "workers", href: "#/workers", label: "Workers", Icon: Server },
+  { section: "jobs", href: "#/jobs", label: "Jobs", Icon: Server },
 ] as const;
 
 export function Sidebar({
@@ -25,9 +25,10 @@ export function Sidebar({
   dark: boolean;
   onToggleTheme: () => void;
 }) {
-  /* queued+running job count on the Workers entry — the queue is the one thing
+  /* queued+running job count on the Jobs entry — the queue is the one thing
      that changes while you're elsewhere. Gated callers (null) just get no badge. */
   const jobs = useJobsPoll();
+  const executor = useExecutorPoll();
   const active = jobs?.filter((j) => !JOB_TERMINAL.has(j.phase)).length ?? 0;
   return (
     <aside className="flex w-44 shrink-0 flex-col border-r bg-card/50">
@@ -35,7 +36,7 @@ export function Sidebar({
         adb
       </a>
       <nav className="flex-1 space-y-0.5 px-2">
-        {NAV.map(({ section: s, href, label, Icon }) => (
+        {NAV.filter((item) => item.section !== "jobs" || executor?.enabled).map(({ section: s, href, label, Icon }) => (
           <a
             key={s}
             href={href}
@@ -46,7 +47,7 @@ export function Sidebar({
           >
             <Icon className="size-4" />
             {label}
-            {s === "workers" && active > 0 && (
+            {s === "jobs" && active > 0 && (
               <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-[10px] font-medium tabular-nums text-primary">
                 {active}
               </span>

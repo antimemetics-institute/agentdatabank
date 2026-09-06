@@ -22,7 +22,7 @@ nix run .#adb-local
 
 This starts the WebUI together with a worker for this machine — compose *and* run experiments without leaving the browser. Your browser should open <http://127.0.0.1:8340>.
 
-> Want just the viewer/composer, with runs happening elsewhere? `nix run .#adb-web` starts the WebUI alone; see [Running from the GUI](workers.md) for connecting workers.
+> Want just a read-only viewer? `nix run .#adb-web` starts the WebUI without execution. See [Running from the GUI](workers.md) for local execution and SSH forwarding.
 
 <details>
 <summary><b>WebUI doesn't open?</b> (e.g., running on a remote machine)</summary>

@@ -16,7 +16,7 @@ import {
   clearDraft, getComposerTab, getLastLlm, loadDraft, saveDraft, setComposerTab, setLastLlm,
 } from "@/lib/run-draft";
 import { rewriteCmd } from "@/lib/cmd-rewrite";
-import { useManifests, useWorkersPoll } from "@/lib/data";
+import { useManifests, useExecutorPoll } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Launcher, useLaunchSurface } from "@/components/launcher";
@@ -452,15 +452,12 @@ function BuilderForm({ name }: { name: string }) {
      command, so the form is the page's primary content */
   const [open, setOpen] = useState(true);
 
-  /* the bottom tabs: run (submit to a worker) | oneliner (copy). Explicit choice
-     is global and sticky; before one exists, worker presence picks — a connected
-     worker means the button actually works. No launch surface → no tabs at all,
-     the oneliner alone (exactly the old degrade). */
+  /* Local execution offers Run; read-only viewers expose the oneliner alone. */
   const { creds, refresh } = useLaunchSurface();
-  const workers = useWorkersPoll();
+  const executor = useExecutorPoll();
   const [tabChoice, setTabChoice] = useState<string | null>(getComposerTab);
   const [runLive, setRunLive] = useState(false); /* a job is in flight (Launcher reports) */
-  const tab = tabChoice ?? ((workers?.length ?? 0) > 0 ? "run" : "oneliner");
+  const tab = tabChoice ?? (executor?.ready ? "run" : "oneliner");
 
   const manifest = manifests?.find((m) => m.name === name);
   const params = manifest?.params ?? {};
@@ -524,8 +521,7 @@ function BuilderForm({ name }: { name: string }) {
   if (!manifest)
     return (
       <p className="text-xs text-muted-foreground">
-        run-config builder unavailable (no manifest for <b>{name}</b> — the server needs
-        its <code>ADB_WEB_MANIFESTS</code> dir, set by the nix <code>adb-web</code> wrapper).
+        Configuration unavailable: <b>{name}</b> is not in this catalog.
       </p>
     );
 

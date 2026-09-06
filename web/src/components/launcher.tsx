@@ -18,7 +18,7 @@ import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { buildArgs } from "@/lib/cmd-build";
 import { initialProfile, needsSetup, setsUsed, templateRows } from "@/lib/creds";
-import { api, apiPost, JOB_TERMINAL, useWorkersPoll } from "@/lib/data";
+import { api, apiPost, JOB_TERMINAL, useExecutorPoll } from "@/lib/data";
 import type { CredsInfo, JobInfo, ParamDecl } from "@/shared/types";
 
 const INPUT =
@@ -30,7 +30,7 @@ const NEW_PROFILE = "__new__"; /* select sentinel, not a legal profile name */
 
 /* the launch surface probe, lifted out of the panel so the builder can decide
    whether a run tab exists at all: undefined = probing, null = unavailable
-   (older server, non-loopback caller without the token) — oneliner only */
+   (older server, read-only viewer or non-loopback caller) — oneliner only */
 export function useLaunchSurface(): {
   creds: CredsInfo | null | undefined; refresh: () => void;
 } {
@@ -185,17 +185,18 @@ function JobLog({ lines }: { lines: string[] }) {
 }
 
 /* one job's live card: phase chip, run links, stop, log tail. Shared between the
-   builder's run tab (queueLink on — a pointer to the Workers page) and the Workers
+   builder's run tab (queueLink on — a pointer to the Jobs page) and the Jobs
    page's expanded rows (queueLink off — you're already there). */
 export function JobPanel({ job, onStop, queueLink }: {
   job: JobInfo; onStop: () => void; queueLink?: boolean;
 }) {
   const live = !JOB_TERMINAL.has(job.phase);
   const chip =
-    job.phase === "queued" ? "queued — waiting for a worker…"
-    : job.phase === "claimed" ? `claimed by ${job.worker?.name ?? "a worker"}…`
-    : job.phase === "building" ? `building (nix, on ${job.worker?.name ?? "worker"})…`
-    : job.phase === "running" ? `running on ${job.worker?.name ?? "worker"}…`
+    job.phase === "queued" ? "queued…"
+    : job.phase === "claimed" ? "starting locally…"
+    : job.phase === "building" ? "building locally (Nix)…"
+    : job.phase === "running" ? "running locally…"
+    : job.phase === "completed" ? "invocation finished — see individual run outcomes"
     : job.phase;
   const tone =
     job.phase === "completed" ? "text-emerald-600 dark:text-emerald-400"
@@ -212,14 +213,14 @@ export function JobPanel({ job, onStop, queueLink }: {
           </a>
         ))}
         {queueLink && (
-          <a href="#/workers"
+          <a href="#/jobs"
             className="ml-auto text-[10px] text-muted-foreground underline decoration-dotted hover:text-foreground">
-            view in Workers
+            view in Jobs
           </a>
         )}
         {live && (
           <button type="button" className={`${BTN} ${queueLink ? "" : "ml-auto"}`} onClick={onStop}
-            title="SIGINT, exactly Ctrl-C on the oneliner — partial runs are kept">
+            title="Stop execution; partial run files are kept">
             stop
           </button>
         )}
@@ -239,8 +240,8 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
   refresh: () => void;
   onLive?: (live: boolean) => void; /* a job is in flight — the run tab's pulse dot */
 }) {
-  /* worker presence: the run button is only live while someone can claim the job */
-  const workers = useWorkersPoll() ?? [];
+  /* Readiness belongs to the server-owned local executor. */
+  const executor = useExecutorPoll();
   const [choices, setChoices] = useState<Record<string, string | null>>({});
   const [job, setJob] = useState<JobInfo | null>(null);
   const [launchErr, setLaunchErr] = useState<string | null>(null);
@@ -273,8 +274,8 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
   }
 
   const gate =
-    workers.length === 0
-      ? "no worker connected — start one: nix run -f . adb-worker"
+    !executor?.ready
+      ? executor?.error ?? "Local execution unavailable — start adb-local."
     : missing.length > 0 ? `set ${missing.join(", ")} first`
     : unresolved.length > 0 ? `credentials needed: ${unresolved.join(", ")}`
     : jobActive ? "a job is already running"
@@ -283,9 +284,7 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
   const launch = () => {
     setLaunchErr(null);
     const { sets: setArgs } = buildArgs(params, vals);
-    /* the job is the oneliner in structured form MINUS the source — a worker
-       builds from the one repo it was registered with; the palette's source
-       options are pasting aids, not execution intent */
+    /* Source comes from local ADB startup; palette options affect copied commands only. */
     apiPost<JobInfo>("/api/jobs", {
       experiment: name,
       sets: setArgs,
@@ -299,9 +298,9 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
   return (
     <div className="space-y-2">
       <span className="text-xs text-muted-foreground/60">
-        {workers.length === 0 ? "no workers connected"
-          : `worker${workers.length > 1 ? "s" : ""}: ${workers.map((w) => w.name).join(", ")}`}
-        {" "}— <a href="#/workers" className="underline decoration-dotted hover:text-foreground">Workers</a>
+        {executor?.source ? `Local source: ${executor.source}` : "Local execution unavailable"}
+        {" "}— <a href="#/jobs" className="underline decoration-dotted hover:text-foreground">Jobs</a>
+        {executor?.source && <span className="block">Restart adb-local after changing experiment declarations.</span>}
       </span>
       {creds.problem && (
         <p className="text-[10px] text-amber-600 dark:text-amber-400">{creds.problem}</p>

@@ -52,9 +52,6 @@ def config_path() -> Path:
 
 
 def prefs_path() -> Path:
-    override = os.environ.get("ADB_PREFERENCES_FILE")
-    if override:
-        return Path(override)
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     return Path(base) / "adb" / "preferences.toml"
 

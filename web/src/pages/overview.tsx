@@ -51,9 +51,7 @@ export function OverviewPage() {
   if (!names.length)
     return (
       <p className="text-sm text-muted-foreground">
-        no experiments here — the server needs its manifests dir
-        (<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">ADB_WEB_MANIFESTS</code>,
-        set by the nix <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">adb-web</code> wrapper).
+        No experiments are available in this catalog.
       </p>
     );
   return (

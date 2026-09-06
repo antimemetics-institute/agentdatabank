@@ -47,7 +47,7 @@ export interface Condition {
 }
 
 /* experiment manifest (adb.mkExperiment result → JSON), served by /api/experiments
-   from the ADB_WEB_MANIFESTS dir — the schema that drives the run-config builder. */
+   from the catalog directory — the schema that drives the run-config builder. */
 export interface ParamType {
   kind: string;               /* str|int|float|bool|llm|run|harness|enum|list|struct */
   values?: string[];          /* enum */
@@ -105,9 +105,7 @@ export interface ProviderRow {
    (masked runner-side; the type change makes round-tripping impossible) — plaintext
    secrets NEVER travel this direction. */
 export interface CredsInfo {
-  /* capability flag: the server can proxy the credential store (same-machine
-     `adb-runner credentials … --json`). Execution capability is NOT a server
-     property — see /api/workers for who can run jobs. */
+  /* Local credential access; execution readiness is GET /api/executor. */
   runner: boolean;
   problem?: string;     /* e.g. a group/other-readable store file, with the chmod fix */
   path?: string;        /* server-side store path (shown as provenance, nothing more) */
@@ -122,7 +120,7 @@ export interface CredsInfo {
 
 /* one queued launch: POST /api/jobs enqueues it, a WORKER claims and executes it
    and reports back (run ids come from the runner's own run.start envelopes, never
-   scraped from log text). $ADB_HOME/jobs/<id>.json makes it durable — a job
+   scraped from log text). $ADB_DATA_DIR/jobs/<id>.json makes it durable — a job
    outlives both the server and the worker that ran it. */
 export interface JobInfo {
   id: string;
@@ -141,14 +139,11 @@ export interface JobInfo {
   error?: string;
 }
 
-/* one registered worker (GET /api/workers). The registry is ephemeral — workers
-   re-register after either side restarts; presence = recent claim polling. */
-export interface WorkerInfo {
-  id: string;
-  name: string;
-  registered_at: string;
-  last_seen: string;
-  busy: string | null; /* job id it is executing, if any */
+export interface ExecutorInfo {
+  enabled: boolean;
+  ready: boolean;
+  source: string | null;
+  error: string | null;
 }
 
 export interface Manifest {

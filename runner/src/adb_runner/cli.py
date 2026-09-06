@@ -96,7 +96,7 @@ def resolve_viewer(home: Path) -> tuple[str, str | None]:
     if mismatched is not None:
         base, served = mismatched
         return base, (f"the viewer at {base} is serving {served}, not {home} — restart it "
-                      f"with: nix run .#adb-web -- --home {home}")
+                      f"with: nix run .#adb-web -- --data-dir {home}")
     return VIEWER_URL, "no viewer running — start one with: nix run .#adb-web"
 
 
@@ -133,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="use that credential profile for that set (repeatable; "
                         "skips the interactive picker)")
     p.add_argument("--seed", type=int, default=None, help="base seed (random if omitted)")
-    p.add_argument("--out", default=None, metavar="DIR", help="override $ADB_HOME")
+    p.add_argument("--out", default=None, metavar="DIR", help="override $ADB_DATA_DIR")
     p.add_argument("--json", action="store_true", help="stream events to stdout (headless)")
     p.add_argument("--dry-run", action="store_true",
                    help="print the resolved condition + hash, execute nothing")
@@ -200,12 +200,6 @@ def main() -> int:
     if sys.argv[1:2] == ["credentials"]:
         from .credentials import credentials_cli
         return credentials_cli(sys.argv[2:])
-    # `adb-runner worker` is the queue worker — a long-lived headless process that
-    # claims jobs from an adb-web (or, later, hosted) queue. Standalone like
-    # `credentials`: it needs no manifest env; each claimed job builds its own.
-    if sys.argv[1:2] == ["worker"]:
-        from .worker import worker_cli
-        return worker_cli(sys.argv[2:])
 
     args = build_parser().parse_args()
 

@@ -1,75 +1,59 @@
 # Running from the GUI
 
-The [run-config builder](web.md#the-run-config-builder-composer) composes a one-liner; pasting it into a terminal is always the canonical way to run an experiment. But the composer also has a **run** tab that launches the same condition without leaving the browser — pick credential profiles, set replicates, press run, watch the job report in place. Each run it starts appears in the runs table like any other, with a link to its page.
+Start the local ADB:
 
-The web server itself never executes anything. Running is a **worker**'s job: a separate process, usually on the same machine, that claims queued jobs and runs them. The panel stays greyed out until a worker is connected — the GUI tells you what to start.
-
-## The one-command local setup
-
-```console
-$ nix run .#adb-local
+```sh
+nix run .#adb-local
 ```
 
-That starts the web GUI **and** one worker, wired together, torn down together with a single `Ctrl-C`. For running experiments on your own machine from your own browser, this is all you need.
+Open an experiment, configure it, and press **Run**. The local server builds the
+experiment and runs it on the same machine. **Jobs** shows the queue, build logs,
+run links, and finished jobs. Jobs execute one at a time, with at most 32 queued or
+active jobs. Replicates run sequentially. A finished invocation can contain failed
+runs; inspect the individual run outcomes.
 
-Started from inside a repo checkout (this repo or a Git fork of it), the worker builds experiments from **that checkout** — edits are picked up on the next run, no restart needed. Started anywhere else, it runs the pinned source it was built from.
+**Stop** cancels a queued job immediately or interrupts its execution. If a process
+ignores the interruption, local ADB escalates to termination and then a forced kill.
+Partial run files remain available. Closing local ADB stops its active execution;
+queued jobs resume when it starts again. Jobs interrupted by a restart are marked
+orphaned and never automatically retried. Re-run submits the same parameters and
+profile selections against the currently configured source; it is not historical
+reproduction.
 
-## What a job is
+## Source and local data
 
-Pressing run enqueues exactly what the composed one-liner says: the experiment name, every `--set` binding, replicates, and the credential **profile names** you picked. Nothing else — no secrets (the worker resolves profile names against its own credential store) and no code locations (a worker only ever builds from the repo its operator configured it with). The job record lands in the run store (`$ADB_HOME/jobs/`) and survives restarts of both server and worker.
+Inside an ADB Git checkout, `adb-local` uses that checkout. Outside an ADB checkout,
+it uses the pinned source from which it was built. You can choose explicitly with
+`--repo /path/to/adb`. The Run panel displays that path. The experiment catalog is
+built from the same source at startup. **Restart adb-local after editing experiment
+declarations** so forms and parameter validation reflect the changes.
 
-While a job runs, the panel shows its phase (`building` → `running` → `completed`), the run ids as the runner announces them, and a tail of the runner's narration. **Stop** delivers the equivalent of `Ctrl-C` to the job — in-flight runs are kept and marked `interrupted`, same as stopping a terminal run.
-
-## Running the pieces separately
-
-```console
-$ nix run .#adb-web       # the GUI: serves and queues, executes nothing
-$ nix run .#adb-worker    # a worker: finds the local GUI and serves it
+```sh
+nix run .#adb-local -- --data-dir /tmp/adb-test --port 8350 --no-open
 ```
 
-A worker with no `--server` probes the local GUI ports (`8340`–`8343`) and attaches to the first adb-web it finds. Useful when the GUI outlives your workers, or the worker should run under different credentials or a different `--repo`:
+The server and its managed executor share the exact data directory and credential
+environment, including `ADB_CREDENTIALS_FILE` and `XDG_CONFIG_HOME`. The data
+path follows `--data-dir`, then `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb` (normally
+`~/.local/share/adb`). Keep data outside the source checkout.
 
-| Flag | Meaning |
-|---|---|
-| `--server URL` | The queue to serve. Default: probe `127.0.0.1:8340`–`8343`. |
-| `--name NAME` | How the worker introduces itself in the GUI (default: hostname). |
-| `--repo SRC` | What it builds experiments from: a checkout path or a repo tarball URL. Default: the pinned source the worker was built from. Point it at your fork to serve that fork's experiments. |
-| `--token-file FILE` | Bearer token for a non-loopback server (a file, never argv). |
-| `--once` | Execute one job, then exit (cron, smoke tests). |
+The server picks the next available port if the requested port is occupied. Its
+executor always uses the actual bound port, so separate instances with separate
+data directories cannot accidentally attach to each other.
 
-Workers are headless by design: they never prompt. A job that needs an unconfigured credential set fails honestly into the job log, and the fix is `credentials set` on the **worker's** machine — secrets live where execution happens and never travel through the browser or the queue.
+## Read-only viewing and remote machines
 
-## A worker on another machine
+`nix run .#adb-web` starts a read-only viewer. It does not accept jobs or credential
+changes. Direct experiment commands work independently of either web mode.
 
-The GUI accepts non-loopback workers only when both sides share a token:
+The browser, server, and executor do not need to share a desktop, but **the server
+and executor must share a machine**. To run on another machine, start `adb-local`
+there and forward its port with SSH:
 
-```console
-$ ADB_WEB_TOKEN=<token> nix run .#adb-web -- --host 0.0.0.0
+```sh
+ssh -L 8340:127.0.0.1:8340 your-machine
 ```
 
-and on the worker machine:
-
-```console
-$ nix run github:{{repo}}#adb-worker -- --server http://<gui-host>:8340 --token-file /path/to/token
-```
-
-The worker registers under its hostname and advertises which credential sets it has configured (names only — values never leave its machine), so the GUI's credential picker offers what that worker can actually honor.
-
-## As a NixOS service
-
-For a permanent worker — a lab box that serves your team's GUI — the repo ships a NixOS module:
-
-```nix
-{
-  imports = [ (adb + "/pkgs/adb-worker/module.nix") ];
-  services.adb-worker = {
-    enable = true;
-    package = (import adb { }).adb-worker;
-    serverUrl = "http://192.168.1.10:8340";
-    tokenFile = config.age.secrets.adb-worker-token.path;
-    credentialsFile = config.age.secrets.adb-credentials.path;
-  };
-}
-```
-
-Secrets are **files** delivered by your secret manager (agenix, sops-nix, …), never Nix-store values: they reach the service via systemd's `LoadCredential`, readable by that service alone. `credentialsFile` is a `credentials.toml` in the [same shape the CLI writes](secrets.md); `repo` (optional) points the worker at a fork. The worker builds with Nix, so allow its dynamic user in `nix.settings.allowed-users`.
+Visit `http://127.0.0.1:8340` in your browser. Execution and credential endpoints
+require loopback requests and reject cross-origin browser requests. There is no
+remote worker registration, token configuration, or standalone worker service.

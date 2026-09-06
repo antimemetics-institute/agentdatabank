@@ -23,66 +23,82 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { existsSync, realpathSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { join, extname, normalize, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { LocalExecutor } from "./server/executor";
 import { parseArgs } from "node:util";
 import type { Ev, Manifest, RunMeta } from "./shared/types";
 import {
-  claim, done, getJob, initJobs, listJobs, listWorkers, registerWorker, report,
+  claim, done, getJob, initJobs, listJobs, report, flushJobs, interruptJobs,
   stopJob, submit,
 } from "./server/queue";
 import { credsList, credsRemember, credsSet } from "./server/runner-cli";
 
-/* Config policy: USER INTENT is flags (--host/--port/--home/--no-open — explicit,
-   discoverable); env is kept for two things only: deployment wiring the nix wrapper
-   bakes (ADB_WEB_STATIC / ADB_WEB_MANIFESTS — a user never types those) and the
-   cross-tool context ADB_HOME shares with the runner. Where both exist: flag > env
-   > default. */
+/* Launch flags include wrapper-managed paths; ADB_DATA_DIR remains shared cross-tool context. */
 const { values: args } = parseArgs({
   options: {
     host: { type: "string" },
     port: { type: "string" },
-    home: { type: "string" },
+    "data-dir": { type: "string" },
+    repo: { type: "string" },
+    "static-dir": { type: "string" },
+    catalog: { type: "string" },
+    runner: { type: "string" },
+    "executor-python": { type: "string" },
+    "execution-source": { type: "string" },
+    "viewer-only": { type: "boolean" },
     "no-open": { type: "boolean" },
     help: { type: "boolean" },
   },
 });
+if (args["viewer-only"] && (args["execution-source"] !== undefined || args.runner !== undefined || args["executor-python"] !== undefined || args.repo !== undefined))
+  throw new Error("adb-web is read-only; execution arguments belong to adb-local.");
+const EXECUTE = args["execution-source"] !== undefined;
+if (args.repo && !EXECUTE) throw new Error("--repo belongs to adb-local; adb-web is read-only.");
 if (args.help) {
   console.log(
-    "adb-web [--host ADDR] [--port N] [--home DIR] [--repo DIR] [--no-open]\n\n" +
+    `${EXECUTE ? "adb-local [--repo DIR]" : "adb-web"} [--host ADDR] [--port N] [--data-dir DIR] [--no-open]\n\n` +
     "  --host ADDR   bind address (default 127.0.0.1; 0.0.0.0 exposes to the network)\n" +
     "  --port N      listen port (default 8340; walks up if taken)\n" +
-    "  --home DIR    run store to serve (default $ADB_HOME, else ~/.local/share/adb)\n" +
-    "  --no-open     don't open the browser (also: ADB_NO_OPEN=1)\n\n" +
-    "  ADB_WEB_TOKEN a bearer token that lets non-loopback workers and launchers in\n" +
-    "                (without it, the launch surface answers loopback only)",
+    "  --data-dir DIR  run data directory (default $ADB_DATA_DIR, else ~/.local/share/adb)\n" +
+    "  --no-open     don't open the browser\n\n" +
+    (EXECUTE ? "  --repo DIR   execution source; restart after editing declarations." : "  Read-only viewer. Use adb-local for browser execution."),
   );
   process.exit(0);
 }
 
-const HOME =
-  args.home ??
-  process.env.ADB_HOME ??
-  join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? ".", ".local", "share"), "adb");
-const STATIC = process.env.ADB_WEB_STATIC ?? null;
+const HOME = resolve(
+  args["data-dir"] ??
+  process.env.ADB_DATA_DIR ??
+  join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? ".", ".local", "share"), "adb"));
+const STATIC = args["static-dir"] ?? null;
 /* dir of <name>.json experiment manifests (the nix adb-web wrapper points this at the
    manifests linkFarm); drives the run-config builder. Absent in bare `dev.sh` → the
    builder degrades to a note. */
-const MANIFESTS = process.env.ADB_WEB_MANIFESTS ?? null;
-const PORT = Number(args.port ?? process.env.ADB_PORT ?? "8340");
+let MANIFESTS = args.catalog ?? null;
+const PORT = Number(args.port ?? "8340");
 /* bind address. Default loopback — this serves your local run data; opt into other
    interfaces explicitly (`--host 0.0.0.0`, e.g. behind a code-server/reverse proxy). */
-const HOST = args.host ?? process.env.ADB_HOST ?? "127.0.0.1";
-const NO_OPEN = Boolean(args["no-open"] || process.env.ADB_NO_OPEN);
-/* the one optional capability (baked by the nix adb-web wrapper): the adb-runner
-   binary whose `credentials … --json` faces the credential picker proxies. Absent →
-   that picker degrades to nothing. Execution needs NOTHING here: adb-web serves
-   and queues, workers execute — starting one is the user's explicit act. */
-const RUNNER = process.env.ADB_RUNNER ?? null;
-/* shared bearer token: the ticket that lets a worker (or launcher) on ANOTHER
-   machine use the launch surface. Absent → that surface is loopback-only. */
-const TOKEN = process.env.ADB_WEB_TOKEN || null;
+const HOST = args.host ?? "127.0.0.1";
+const NO_OPEN = Boolean(args["no-open"]);
+if (EXECUTE && !["127.0.0.1", "::1", "localhost", "0.0.0.0", "::"].includes(HOST))
+  throw new Error("adb-local must bind loopback or a wildcard address; use SSH forwarding for remote access.");
+// Only local mode supplies the runner and execution source.
+const RUNNER = args.runner ?? null;
+const EXECUTOR_PYTHON = args["executor-python"] ?? null;
+const source = args.repo ?? args["execution-source"];
+const REPO = source ? realpathSync(source) : null;
+if (EXECUTE && (!RUNNER || !EXECUTOR_PYTHON || !REPO)) {
+  console.error("Local execution needs --execution-source, --runner and --executor-python.");
+  process.exit(2);
+}
+// Credentials subprocesses and executor inherit the exact same context.
+process.env.ADB_DATA_DIR = HOME;
+const executor = new LocalExecutor(() => interruptJobs(HOME));
+let shuttingDown = false;
+const startupAbort = new AbortController();
 
 const PARAM_REF_LIMIT = 2048; /* param values above this become descriptors */
 const ELIDE_LIMIT = 4096;     /* event string fields above this become markers */
@@ -301,17 +317,7 @@ async function runPhase(cid: string, rid: string): Promise<string | null> {
   } catch { return null; }
 }
 
-/* the experiment manifests (schema for the run-config builder) — one JSON per
-   experiment in the ADB_WEB_MANIFESTS dir; [] when the dir is unset/unreadable.
-
-   TODO: this catalog is frozen at the wrapper's build while workers build fresh
-   per job — map the EXACT discrepancies when the served repo moves under a
-   running adb-web (main advances, or a live checkout is edited): stale form
-   schema vs the new runner's validation, parseJobBody's unknown-experiment
-   check against the old catalog (new experiments unlaunchable, deleted ones
-   still offered), and the composed oneliner inheriting the frozen view.
-   Enumerate first; the fix is the sources-first design (manifests keyed by
-   source, worker = executor + trust set), not a reload hack here. */
+/* Catalog evaluated from the configured execution source at startup. */
 async function readManifests(): Promise<unknown[]> {
   if (!MANIFESTS) return [];
   let files: string[] = [];
@@ -350,15 +356,9 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, urlPath: s
    writes a secret store — so it is gated on the requester being the machine's own
    user: same-origin (a browser tab on another site can't drive it) AND a loopback
    peer (a network client can't, even when the bind is 0.0.0.0 for remote VIEWING).
-   Remote launching is a real feature with a real design (runner registration +
-   tokens), not a default we back into by serving spawn(2) on all interfaces. */
+   Remote access to local execution uses SSH forwarding. */
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-
-const bearerOk = (req: IncomingMessage): boolean => {
-  const auth = (req.headers.authorization ?? "").toString();
-  return TOKEN !== null && auth === `Bearer ${TOKEN}`;
-};
 
 function writeBlocked(req: IncomingMessage): string | null {
   const origin = req.headers.origin;
@@ -366,12 +366,8 @@ function writeBlocked(req: IncomingMessage): string | null {
     try { if (new URL(origin).host !== req.headers.host) return "cross-origin request refused"; }
     catch { return "malformed Origin"; }
   }
-  if (!LOOPBACK.has(req.socket.remoteAddress ?? "") && !bearerOk(req))
-    return TOKEN
-      ? "launch/credential/worker endpoints need the bearer token off-loopback"
-      : "launch/credential/worker endpoints answer loopback only — use the machine's " +
-        "own browser, tunnel the port (ssh -L 8340:127.0.0.1:8340), or set " +
-        "ADB_WEB_TOKEN and hand workers the token";
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? ""))
+    return "local execution and credentials answer loopback only; use SSH port forwarding";
   return null;
 }
 
@@ -450,7 +446,7 @@ const server = createServer(async (req, res) => {
            (8340 upward) looking for a viewer serving the store its runs go to, so it
            can print a link that actually resolves. Deliberately tiny and store-scan
            free — it's hit at every run start. The home is real-pathed so the two sides
-           compare equal through symlinks and relative --home. */
+           compare equal through symlinks and relative --data-dir. */
         let home = resolve(HOME);
         try { home = realpathSync(home); } catch { /* not created yet — absolute is enough */ }
         return json(req, res, 200, { adb: "web", home }, { "cache-control": "no-store" });
@@ -465,6 +461,7 @@ const server = createServer(async (req, res) => {
            metadata, not run data */
         const blocked = writeBlocked(req);
         if (blocked) return json(req, res, 403, { error: blocked });
+        if (!EXECUTE) return json(req, res, 403, { error: "read-only viewer; use adb-local" });
         if (req.method === "GET" && parts.length === 2) {
           const base = { runner: Boolean(RUNNER) };
           if (!RUNNER)
@@ -476,7 +473,7 @@ const server = createServer(async (req, res) => {
           return json(req, res, 200, { ...base, ...(doc as object) }, { "cache-control": "no-store" });
         }
         if (req.method !== "POST") return json(req, res, 405, { error: "POST only" });
-        if (!RUNNER) return json(req, res, 409, { error: "server has no ADB_RUNNER — credential editing is off" });
+        if (!RUNNER) return json(req, res, 409, { error: "server has no runner — credential editing is off" });
         const body = await readJsonBody(req) as Record<string, unknown> | null;
         if (parts.length === 3 && parts[2] === "remember") {
           const { experiment, set, profile } = (body ?? {}) as Record<string, string>;
@@ -501,26 +498,20 @@ const server = createServer(async (req, res) => {
         }
         return json(req, res, 404, { error: "unknown endpoint" });
       }
-      if (parts[1] === "workers") {
-        /* the worker protocol: register → claim (long-poll) → report/done (under
-           /api/jobs). Same gate as the launch surface: loopback, or the bearer
-           token — which is exactly what makes a LAN/remote worker a one-flag
-           story instead of a new auth system. */
+      if (parts[1] === "executor") {
         const blocked = writeBlocked(req);
         if (blocked) return json(req, res, 403, { error: blocked });
         if (req.method === "GET" && parts.length === 2)
-          return json(req, res, 200, listWorkers(), { "cache-control": "no-store" });
-        if (req.method === "POST" && parts.length === 3 && parts[2] === "register") {
-          const body = await readJsonBody(req) as { name?: unknown; creds?: unknown } | null;
-          const name = typeof body?.name === "string" && body.name.trim()
-            ? body.name.trim().slice(0, 64) : "worker";
-          const worker = registerWorker(name, body?.creds);
-          return json(req, res, 200, { worker: worker.id }, { "cache-control": "no-store" });
-        }
-        if (req.method === "POST" && parts.length === 4 && parts[3] === "claim") {
-          const r = claim(HOME, parts[2]!);
-          if ("gone" in r) return json(req, res, 410, { error: "unknown worker — re-register" });
-          const spec = await r.job;
+          return json(req, res, 200, {
+            enabled: EXECUTE, ready: executor.ready && !shuttingDown,
+            source: REPO, error: executor.error,
+          }, { "cache-control": "no-store" });
+        if (!EXECUTE || req.headers["x-adb-executor"] !== executor.capability)
+          return json(req, res, 403, { error: "private executor endpoint" });
+        if (req.method === "POST" && parts[2] === "claim" && parts.length === 3) {
+          if (shuttingDown) { res.writeHead(204); res.end(); return; }
+          executor.ready = true;
+          const spec = await claim(HOME).job;
           if (!spec) { res.writeHead(204); res.end(); return; }
           return json(req, res, 200, spec, { "cache-control": "no-store" });
         }
@@ -536,6 +527,10 @@ const server = createServer(async (req, res) => {
         }
         const blocked = writeBlocked(req);
         if (blocked) return json(req, res, 403, { error: blocked });
+        if (!EXECUTE) return json(req, res, 403, { error: "read-only viewer; use adb-local" });
+        if ((parts[3] === "report" || parts[3] === "done") &&
+            req.headers["x-adb-executor"] !== executor.capability)
+          return json(req, res, 403, { error: "private executor endpoint" });
         if (req.method === "POST" && parts.length === 4 && parts[3] === "stop") {
           return stopJob(HOME, parts[2]!)
             ? json(req, res, 200, { ok: true })
@@ -562,8 +557,8 @@ const server = createServer(async (req, res) => {
             : json(req, res, 404, { error: "no such job" });
         }
         if (req.method === "POST" && parts.length === 2) {
-          /* enqueue only — execution belongs to whichever worker claims it (the
-             locally-supervised one, or any `adb-worker --server <here>`) */
+          if (shuttingDown || !executor.ready)
+            return json(req, res, 503, { error: executor.error ?? "Local executor is not ready." });
           const spec = await parseJobBody(await readJsonBody(req));
           if (typeof spec === "string") return json(req, res, 400, { error: spec });
           const queued = submit(HOME, spec);
@@ -624,7 +619,7 @@ const server = createServer(async (req, res) => {
 /* open the URL in the user's browser — best-effort and only where it can work:
    there must be a frontend to show, a browser to reach (macOS, or a Linux display —
    over SSH/code-server the browser lives on ANOTHER machine and xdg-open here would
-   be wrong), and no ADB_NO_OPEN=1 opt-out. Failures are silently ignored: the URL is
+   be wrong), and no --no-open opt-out. Failures are silently ignored: the URL is
    printed either way. */
 function openBrowser(url: string): void {
   if (NO_OPEN) return;
@@ -644,12 +639,19 @@ server.on("listening", () => {
   const addr = server.address();
   const port = addr && typeof addr === "object" ? addr.port : PORT;
   const hasFrontend = Boolean(STATIC && existsSync(STATIC));
-  const frontend = hasFrontend ? "" : " (API only — no ADB_WEB_STATIC)";
+  const frontend = hasFrontend ? "" : " (API only — no static directory)";
   /* 0.0.0.0 isn't a clickable URL — print localhost and say what's actually bound */
   const shown = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
   const bound = HOST === "0.0.0.0" ? " (bound on 0.0.0.0 — reachable from other hosts)" : "";
   const url = `http://${shown}:${port}`;
   console.log(`adb-web: serving ${HOME} on ${url}${frontend}${bound}`);
+  if (EXECUTE) {
+    const address = addr && typeof addr === "object" ? addr.address : HOST;
+    const loopback = address === "::" ? "::1" : address === "0.0.0.0" ? "127.0.0.1" : address;
+    const localHost = loopback.includes(":") ? `[${loopback}]` : loopback;
+    executor.start(EXECUTOR_PYTHON!, `http://${localHost}:${port}`, REPO!, HOME);
+    console.log(`adb-local: executing from ${REPO}; restart after editing experiment declarations.`);
+  }
   if (hasFrontend) openBrowser(url);
 });
 
@@ -665,5 +667,25 @@ function listenFrom(port: number, attemptsLeft: number): void {
   });
   server.listen(port, HOST);
 }
-/* prior jobs reload as records (non-terminal ones as `orphaned`) before we serve */
-void initJobs(HOME).then(() => listenFrom(PORT, 20));
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  startupAbort.abort();
+  await executor.stop(); // keep HTTP open for the final stopped report
+  await flushJobs();
+  server.close();
+  server.closeAllConnections();
+}
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
+
+async function start(): Promise<void> {
+  if (EXECUTE) {
+    const { stdout } = await promisify(execFile)("nix-build", [REPO!, "--no-out-link", "-A", "manifests"],
+      { maxBuffer: 8 * 1024 * 1024, signal: startupAbort.signal });
+    MANIFESTS = stdout.trim().split("\n").at(-1)!;
+  }
+  if (EXECUTE) await initJobs(HOME);
+  if (!shuttingDown) listenFrom(PORT, 20);
+}
+void start().catch((err) => { if (!shuttingDown) { console.error(String(err)); process.exitCode = 1; } });

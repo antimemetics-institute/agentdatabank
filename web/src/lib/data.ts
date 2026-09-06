@@ -4,7 +4,7 @@
    (filters, agent pick). */
 
 import { useEffect, useState } from "react";
-import type { Condition, Ev, JobInfo, Manifest, RunMeta, WorkerInfo } from "@/shared/types";
+import type { Condition, Ev, JobInfo, Manifest, RunMeta, ExecutorInfo } from "@/shared/types";
 
 /* Resolve "/api/..." against the directory the app is served from, not the origin
    root: behind a path-stripping proxy (code-server's /proxy/8340/) the browser must
@@ -108,8 +108,8 @@ function useGatedPoll<T>(path: string): T | null | undefined {
 
 export const useJobsPoll = (): JobInfo[] | null | undefined =>
   useGatedPoll<JobInfo[]>("/api/jobs");
-export const useWorkersPoll = (): WorkerInfo[] | null | undefined =>
-  useGatedPoll<WorkerInfo[]>("/api/workers");
+export const useExecutorPoll = (): ExecutorInfo | null | undefined =>
+  useGatedPoll<ExecutorInfo>("/api/executor");
 
 export const fmtAgo = (iso: string): string => {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));

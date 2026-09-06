@@ -37,11 +37,6 @@
             type = "app";
             program = "${adbPkgs.adb-runner}/bin/adb-runner";
           };
-          # queue worker: `nix run adb#adb-worker -- --server <adb-web url>`
-          adb-worker = {
-            type = "app";
-            program = "${adbPkgs.adb-worker}/bin/adb-worker";
-          };
         }
         // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
           adb-web = {
@@ -55,15 +50,13 @@
           };
         });
 
-      # self-hosted queue workers: imports = [ adb.nixosModules.adb-worker ];
-      nixosModules.adb-worker = ./pkgs/adb-worker/module.nix;
 
       packages = forAllSystems (pkgs:
         let
           adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
-          inherit (adbPkgs) adb-runner adb-worker;
+          inherit (adbPkgs) adb-runner;
           manifests = pkgs.linkFarm "adb-manifests"
             (nixpkgs.lib.mapAttrsToList
               (name: exp: { name = "${name}.json"; path = exp.manifest; })

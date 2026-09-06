@@ -23,9 +23,7 @@ if curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/experiments"; then
 fi
 
 DIST=$(nix build .#adb-web-dist --print-out-paths --no-link)
-MAN=$(nix build .#manifests --print-out-paths --no-link)
 RUNNER=$(nix build .#adb-runner --print-out-paths --no-link)
-WORKER=$(nix build .#adb-worker --print-out-paths --no-link)
 STORE=$(mktemp -d)
 PW_BROWSERS="$(nix build --inputs-from . nixpkgs#playwright-driver.browsers --print-out-paths --no-link)"
 
@@ -44,23 +42,15 @@ OPENAI_API_KEY = "unused"
 OPENAI_BASE_URL = "http://llama.forest.local:11434/v1"
 EOF
 
-ADB_WEB_STATIC="$DIST" ADB_WEB_MANIFESTS="$MAN" \
-  ADB_RUNNER="$RUNNER/bin/adb-runner" ADB_CREDENTIALS_FILE="$CREDS" \
-  node "$DIST/server.cjs" --home "$STORE" --port "$PORT" --no-open &
+ADB_CREDENTIALS_FILE="$CREDS" \
+  node "$DIST/server.cjs" --execution-source "$PWD" --static-dir "$DIST" --runner "$RUNNER/bin/adb-runner" --executor-python "$RUNNER/bin/python" --data-dir "$STORE" --port "$PORT" --no-open &
 SERVER=$!
-trap 'kill $SERVER ${WORKER_PID:-} 2>/dev/null; rm -rf "$STORE" "$CREDS"' EXIT
+trap 'kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null; rm -rf "$STORE" "$CREDS"' EXIT
 
 for _ in $(seq 50); do
   curl -sf "http://127.0.0.1:$PORT/api/experiments" >/dev/null 2>&1 && break
   sleep 0.2
 done
-
-# the worker, exactly as adb-local starts it: builds from this live checkout,
-# runs against the same store the server serves
-ADB_HOME="$STORE" ADB_CREDENTIALS_FILE="$CREDS" \
-  "$WORKER/bin/adb-worker" --server "http://127.0.0.1:$PORT" \
-  --name this-machine --repo "$PWD" &
-WORKER_PID=$!
 
 # pre-warm the build the worker will run per job, so the recorded "building"
 # phase is eval-only seconds instead of a cold build

@@ -16,10 +16,10 @@ Every run the runner starts prints a link straight to its page here. It finds th
 |---|---|
 | `--host ADDR` | Bind address. Default loopback; `--host 0.0.0.0` exposes it to the network (no auth — trusted networks only). |
 | `--port N` | Listen port (default `8340`; walks up if taken). |
-| `--home DIR` | Run store to serve (default `$ADB_HOME`, else `~/.local/share/adb`). |
+| `--data-dir DIR` | Run store to serve (default `$ADB_DATA_DIR`, else `~/.local/share/adb`). |
 | `--no-open` | Don't auto-open the browser. |
 
-On a machine with a local browser it also opens the URL for you. Where that can't work — over SSH, or behind a code-server proxy — it just prints the URL instead; see [Getting started](getting-started.md) for the port-forward recipe. `ADB_NO_OPEN=1` turns auto-open off entirely.
+On a machine with a local browser it also opens the URL for you. Where that can't work — over SSH, or behind a code-server proxy — it just prints the URL instead; see [Getting started](getting-started.md) for the port-forward recipe. `--no-open` turns auto-open off entirely.
 
 ## Pages
 
@@ -40,7 +40,7 @@ Run pages poll for new events every 2 seconds, so you watch `provisioning` → `
 
 The experiment page hosts a form generated from the experiment's schema, prefilled from its `initial` values. It regenerates the exact `nix run .#<experiment> -- --set …` one-liner as you edit — every param becomes a `--set`, because [experiments have no defaults](cli.md#every-param-is-on-the-command-line), so the copied one-liner is the complete condition spec. The model field suggests concrete models, each noting which credentials it needs (see [Credentials](secrets.md)).
 
-The builder itself only composes the condition. Below the form, two tabs offer it two ways: the **run** tab to launch it through a worker without leaving the browser (the default when one is connected — `adb-local` always connects one for this machine; see [Running from the GUI](workers.md)), and the **oneliner** tab to copy into a terminal. With no worker connected the oneliner is the default.
+Below the form, the **run** tab launches on this machine through `adb-local`, and the **oneliner** tab supplies a terminal command. Run is the default when local execution is ready; the read-only viewer defaults to the oneliner. See [Running from the GUI](workers.md).
 
 The **settings** menu in the bottom-left adapts the composed command to your Nix setup — the same choices as this guide's [⚙ command settings](nix.md), stored in the same place, so setting one sets both.
 

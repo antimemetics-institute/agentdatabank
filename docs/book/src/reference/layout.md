@@ -1,9 +1,9 @@
 # Run directory layout
 
-The runner writes everything under `$ADB_HOME` (default `$XDG_DATA_HOME/adb`, else `~/.local/share/adb`).
+The runner writes everything under `$ADB_DATA_DIR` (default `$XDG_DATA_HOME/adb`, else `~/.local/share/adb`).
 
 ```
-$ADB_HOME/
+$ADB_DATA_DIR/
   conditions/
     <condition_id>.json        # the spec as written, one per condition (write-once)
   runs/

@@ -1,7 +1,4 @@
-/* The queue's contract: a job is a durable secret-free record; workers claim,
-   report (the reply carries stop), and finish; restarts orphan in-flight jobs but
-   keep queued ones. The long-poll park (25s) is deliberately not exercised —
-   claims here always find a queued job or an unknown worker. */
+/* Local FIFO transitions, durable records, and restart behavior. */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  claim, done, getJob, initJobs, listWorkers, registerWorker, report, stopJob, submit,
+  claim, done, getJob, initJobs, flushJobs, report, stopJob, submit,
 } from "./queue.ts";
 
 const home = mkdtempSync(join(tmpdir(), "adb-queue-"));
@@ -17,14 +14,12 @@ const SPEC = { experiment: "hello", sets: ["x=1"], profiles: { openai: "work" },
   replicates: 2 };
 
 test("submit → claim → report → stop-via-report → done, durably", async () => {
-  const w = registerWorker("testbox", { store: {} });
-  assert.ok(listWorkers().some((x) => x.id === w.id));
   const sub = submit(home, SPEC);
   assert.ok("job" in sub);
   const id = sub.job.id;
   assert.equal(sub.job.phase, "queued");
 
-  const c = claim(home, w.id);
+  const c = claim(home);
   assert.ok(!("gone" in c));
   const spec = await (c as {
     job: Promise<{ id: string; sets: string[] } | null>;
@@ -33,7 +28,6 @@ test("submit → claim → report → stop-via-report → done, durably", async 
   assert.equal(spec.id, id);
   assert.deepEqual(spec.sets, ["x=1"]); /* the spec passes through verbatim */
   assert.equal(getJob(id)!.phase, "claimed");
-  assert.equal(getJob(id)!.worker!.name, "testbox");
 
   assert.deepEqual(report(home, id, { phase: "running", runs: ["R1"], log: ["hi"] }),
     { stop: false });
@@ -47,21 +41,20 @@ test("submit → claim → report → stop-via-report → done, durably", async 
   assert.deepEqual(j.runs, ["R1"]);
   /* durable: the disk record survives this process (persist is fire-and-forget,
      so give the write a beat to land) */
-  await new Promise((r) => setTimeout(r, 100));
+  await flushJobs();
   const disk = JSON.parse(readFileSync(join(home, "jobs", `${id}.json`), "utf8"));
   assert.equal(disk.phase, "stopped");
   assert.ok(!("stopRequested" in disk)); /* server-private state never persists */
 });
 
-test("a queued job stops immediately; an unknown worker is told to re-register", () => {
+test("a queued job stops immediately", () => {
   const sub = submit(home, SPEC);
   assert.ok("job" in sub);
   assert.ok(stopJob(home, sub.job.id));
   assert.equal(getJob(sub.job.id)!.phase, "stopped");
-  assert.ok("gone" in claim(home, "w-never"));
 });
 
-test("boot: in-flight jobs orphan (but late reports still land), queued jobs survive", async () => {
+test("boot: in-flight jobs orphan and cannot revive, queued jobs survive", async () => {
   const home2 = mkdtempSync(join(tmpdir(), "adb-queue-boot-"));
   mkdirSync(join(home2, "jobs"), { recursive: true });
   const base = { experiment: "hello", sets: [], profiles: {}, replicates: 1, created_at: "t", runs: [], log: [] };
@@ -72,7 +65,7 @@ test("boot: in-flight jobs orphan (but late reports still land), queued jobs sur
   await initJobs(home2);
   assert.equal(getJob("j-flight")!.phase, "orphaned");
   assert.equal(getJob("j-waiting")!.phase, "queued");
-  /* the worker outran the restart: its report un-orphans the job */
-  assert.deepEqual(report(home2, "j-flight", { phase: "running" }), { stop: false });
-  assert.equal(getJob("j-flight")!.phase, "running");
+  /* Late reports cannot revive an orphaned execution. */
+  assert.deepEqual(report(home2, "j-flight", { phase: "running" }), { stop: true });
+  assert.equal(getJob("j-flight")!.phase, "orphaned");
 });

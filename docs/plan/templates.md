@@ -47,7 +47,7 @@ in the UI, stored as data, never code.
 ## Object model
 
 ```
-$ADB_HOME/templates/<experiment>/<slug>.json
+$ADB_DATA_DIR/templates/<experiment>/<slug>.json
 {
   "name": "market-haggle",
   "description": "Buyer and seller haggle over a used bicycle — zone of agreement $60–$90.",
@@ -105,9 +105,9 @@ actually ran.
 
 ## Server
 
-The web server today is a read-only pipe over `$ADB_HOME`. Templates add its first
+The web server today is a read-only pipe over `$ADB_DATA_DIR`. Templates add its first
 write surface: `GET /api/templates`, `PUT/DELETE /api/templates/<experiment>/<slug>`
-writing under `$ADB_HOME/templates/`. This is a deliberate, narrow departure: still
+writing under `$ADB_DATA_DIR/templates/`. This is a deliberate, narrow departure: still
 file-per-artifact, still no server-side logic, still local-only — the server stays a
 pipe, just bidirectional for this one artifact class. (Rejected alternative: browser
 localStorage — invisible to the CLI, undepositable, dies with the profile.)

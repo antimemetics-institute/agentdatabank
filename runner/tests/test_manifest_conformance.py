@@ -8,7 +8,7 @@ type — a manifest with `order: "1"` or a string where a list belongs fails her
 with the file and path in the message. (msgspec would do this in one call but
 rejects untagged TypedDict unions like StructField, hence the small walker.)
 
-Gated on ADB_WEB_MANIFESTS (task test:python wires it to the nix-built manifests
+Gated on ADB_TEST_MANIFESTS (task test:python wires it to the nix-built manifests
 dir, same as the web suite's sweep); skips without it.
 """
 
@@ -96,9 +96,9 @@ def _kinds(node: object) -> typing.Iterator[str]:
 
 
 def test_every_shipped_manifest_conforms():
-    manifests_dir = os.environ.get("ADB_WEB_MANIFESTS")
+    manifests_dir = os.environ.get("ADB_TEST_MANIFESTS")
     if not manifests_dir:
-        pytest.skip("ADB_WEB_MANIFESTS unset (run via `task test:python`)")
+        pytest.skip("ADB_TEST_MANIFESTS unset (run via `task test:python`)")
     files = sorted(Path(manifests_dir).glob("*.json"))
     assert files, f"no manifests in {manifests_dir}"
     for f in files:

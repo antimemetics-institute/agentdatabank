@@ -1,6 +1,6 @@
 # Dev targets — run inside the devshell (`nix develop`), which provides task, pnpm,
-# node, python, jq, mdbook. Data lands in the tools' default $ADB_HOME
-# (~/.local/share/adb); override with ADB_HOME=... — but never point it inside this
+# node, python, jq, mdbook. Data lands in the tools' default $ADB_DATA_DIR
+# (~/.local/share/adb); override with ADB_DATA_DIR=... — but never point it inside this
 # repo (a dirty-tree flake hashes its whole directory, so an in-repo data dir mints a
 # new condition every run).
 version: "3"
@@ -30,7 +30,7 @@ tasks:
   test:python:
     desc: the python unit tests alone (runner, the event emitters, the shared inspect wrapper, concordia) via uv; the runner suite gets the nix-built manifests for its conformance sweep (same wiring as web:test)
     cmds:
-      - cd runner && ADB_WEB_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
+      - cd runner && ADB_TEST_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
       - cd experiments/concordia && uv run -q pytest -q
@@ -49,7 +49,7 @@ tasks:
   web:test:
     desc: web unit tests + render guard, with the nix-built manifests so the oneliner sweep runs against every real experiment
     cmds:
-      - ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" pnpm --dir web test
+      - ADB_TEST_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" pnpm --dir web test
 
   web:typecheck:
     desc: typescript check of the web app (tsc --noEmit)
@@ -65,18 +65,9 @@ tasks:
     desc: build once, then serve the local GUI (auto-picks a free port from 8340)
     deps: [web:build]
     cmds:
-      # serve the frontend + the experiment manifests (nix builds the manifests dir)
-      # so the run-config builder works here too. ADB_RUNNER makes the credential
-      # picker work. adb-web serves and queues ONLY — `task worker` (or nix run
-      # .#adb-worker) executes jobs. --host 0.0.0.0 so a code-server/reverse proxy
-      # on another host can reach it (same stance as the docs task; the nix adb-web
-      # wrapper stays loopback-only by default).
-      - ADB_WEB_STATIC=web/dist ADB_WEB_MANIFESTS="$(nix build .#manifests --no-link --print-out-paths)" ADB_RUNNER="$(nix build .#adb-runner --no-link --print-out-paths)/bin/adb-runner" node web/dist/server.cjs --host 0.0.0.0 --no-open
-
-  worker:
-    desc: start a queue worker against the local adb-web (probes ports 8340+)
-    cmds:
-      - nix run .#adb-worker
+      - |
+          runner_package=$(nix build .#adb-runner --no-link --print-out-paths)
+          node web/dist/server.cjs --execution-source "$PWD" --static-dir web/dist --runner "$runner_package/bin/adb-runner" --executor-python "$runner_package/bin/python" --no-open
 
   web:dev:
     desc: vite dev server (HMR, /api proxied) + auto-restarting API server — same as `pnpm dev` in web/
@@ -192,7 +183,7 @@ tasks:
       - nix-build --no-out-link -A manifests
       # keyless run — inspect-hello on the mock model, databank in a throwaway home
       - |
-        ADB_HOME="$(mktemp -d)" \
+        ADB_DATA_DIR="$(mktemp -d)" \
           "$(nix-build --no-out-link -A exec.inspect-hello)" \
           --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
       - ./scripts/check-entrypoint-identity.sh

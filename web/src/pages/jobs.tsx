@@ -1,106 +1,38 @@
-/* Workers & queue (#/workers) — manage the launch queue from one place: who can
-   run jobs (the worker registry) and everything queued/running/finished (the
-   durable job records). Pure viewer over the server's existing surface
-   (GET /api/jobs, GET /api/workers, POST /api/jobs/<id>/stop) — re-run needs no
-   server support either, because a JobInfo already carries the full secret-free
-   spec (sets, profile NAMES, replicates): resubmitting is just POST /api/jobs.
-   The same gate as the launch surface applies (loopback, or the bearer token) —
-   a refused caller gets a note, not an empty page. */
+/* Local job queue and history. */
 
 import { useState } from "react";
-import { apiPost, fmtAgo, JOB_TERMINAL, useJobsPoll, useWorkersPoll } from "@/lib/data";
+import { apiPost, JOB_TERMINAL, useJobsPoll, useExecutorPoll } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { PageLoading, PhaseBadge } from "@/components/bits";
 import { JobPanel } from "@/components/launcher";
-import type { JobInfo, WorkerInfo } from "@/shared/types";
+import type { JobInfo } from "@/shared/types";
 
 const BTN = "rounded border px-2 py-0.5 text-[11px] hover:bg-muted disabled:opacity-40";
 
 const fmtTs = (iso?: string): string => (iso ?? "").replace("T", " ").slice(0, 19);
 
-export function WorkersPage() {
+export function JobsPage() {
   const jobs = useJobsPoll();
-  const workers = useWorkersPoll();
-  if (jobs === undefined || workers === undefined) return <PageLoading />;
-  if (jobs === null || workers === null)
-    return (
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Workers</h2>
-        <p className="text-sm text-muted-foreground">
-          this server refuses the queue surface for this caller — it answers only
-          loopback, or remote callers presenting the worker bearer token
-          (<code>ADB_WEB_TOKEN</code>). The oneliner on each experiment page always works.
-        </p>
-      </div>
-    );
+  const executor = useExecutorPoll();
+  if (jobs === undefined) return <PageLoading />;
+  if (!executor?.enabled) return <p>Jobs are available in adb-local.</p>;
+  if (jobs === null) return <p>Unable to read local jobs.</p>;
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Workers</h2>
-      <WorkersTable workers={workers} jobs={jobs} />
-      <JobsTable jobs={jobs} />
+      <h2 className="text-lg font-semibold">Jobs</h2>
+      <p className="text-sm text-muted-foreground">
+        {executor?.error ?? (executor?.ready ? "Local execution ready. Jobs run one at a time."
+          : "Execution unavailable. Start adb-local to run experiments from this browser.")}
+      </p>
+      <JobsTable jobs={jobs} enabled={executor?.ready === true} />
     </div>
   );
 }
 
-function WorkersTable({ workers, jobs }: { workers: WorkerInfo[]; jobs: JobInfo[] }) {
-  /* `busy` on the registry can lag a worker's own reports by one claim cycle —
-     prefer the job side (a non-terminal job claimed by this worker) */
-  const runningFor = (w: WorkerInfo): JobInfo | undefined =>
-    jobs.find((j) => !JOB_TERMINAL.has(j.phase) && j.worker?.id === w.id);
-  return (
-    <section className="space-y-1.5">
-      <h3 className="text-sm font-medium text-muted-foreground">workers</h3>
-      {workers.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          no worker connected — start one:{" "}
-          <code className="rounded bg-muted/60 px-1.5 py-0.5">nix run -f . adb-worker</code>{" "}
-          (on this machine or any that can reach this server with the token)
-        </p>
-      ) : (
-        <Card className="overflow-hidden py-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {["name", "status", "last seen", "registered"].map((h) => (
-                  <TableHead key={h}>{h}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workers.map((w) => {
-                const job = runningFor(w);
-                return (
-                  <TableRow key={w.id}>
-                    <TableCell className="font-mono text-xs">{w.name}</TableCell>
-                    <TableCell className="text-xs">
-                      {job ? (
-                        <span className="text-blue-700 dark:text-blue-400">
-                          busy — {job.experiment}{" "}
-                          <span className="font-mono text-muted-foreground">{job.id.slice(-6)}</span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">idle</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{fmtAgo(w.last_seen)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {fmtTs(w.registered_at)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-    </section>
-  );
-}
-
-function JobsTable({ jobs }: { jobs: JobInfo[] }) {
+function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [err, setErr] = useState<string | null>(null);
   const stop = (id: string) =>
@@ -111,7 +43,7 @@ function JobsTable({ jobs }: { jobs: JobInfo[] }) {
     void apiPost("/api/jobs", {
       experiment: j.experiment, sets: j.sets, profiles: j.profiles, replicates: j.replicates,
     }).then(() => setErr(null)).catch((e: Error) => setErr(e.message));
-  const cols = ["job", "experiment", "phase", "worker", "runs", "created", ""];
+  const cols = ["job", "experiment", "phase", "runs", "created", ""];
   return (
     <section className="space-y-1.5">
       <h3 className="text-sm font-medium text-muted-foreground">jobs</h3>
@@ -137,7 +69,7 @@ function JobsTable({ jobs }: { jobs: JobInfo[] }) {
               return (
                 <JobRows key={j.id} job={j} live={live} open={open} colSpan={cols.length}
                   onToggle={() => setExpanded((e) => ({ ...e, [j.id]: !open }))}
-                  onStop={() => stop(j.id)} onRerun={() => rerun(j)} />
+                  enabled={enabled} onStop={() => stop(j.id)} onRerun={() => rerun(j)} />
               );
             })}
           </TableBody>
@@ -149,8 +81,8 @@ function JobsTable({ jobs }: { jobs: JobInfo[] }) {
 
 /* one job: its table row (click to expand) + the expanded detail row (the same
    JobPanel the builder's run tab shows — log tail, error, run links) */
-function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun }: {
-  job: JobInfo; live: boolean; open: boolean; colSpan: number;
+function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabled }: {
+  enabled: boolean; job: JobInfo; live: boolean; open: boolean; colSpan: number;
   onToggle: () => void; onStop: () => void; onRerun: () => void;
 }) {
   return (
@@ -168,7 +100,6 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun }: {
           </a>
         </TableCell>
         <TableCell><PhaseBadge phase={j.phase} /></TableCell>
-        <TableCell className="text-xs text-muted-foreground">{j.worker?.name ?? "—"}</TableCell>
         <TableCell className="text-xs">
           <span className="flex flex-wrap gap-1.5">
             {j.runs.length === 0 && <span className="text-muted-foreground">—</span>}
@@ -185,13 +116,13 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun }: {
         </TableCell>
         <TableCell className="text-right">
           {live ? (
-            <button type="button" className={BTN}
-              title="SIGINT, exactly Ctrl-C on the oneliner — partial runs are kept"
+            <button type="button" disabled={!enabled} className={BTN}
+              title="Stop execution; partial run files are kept"
               onClick={(e) => { e.stopPropagation(); onStop(); }}>
               stop
             </button>
           ) : (
-            <button type="button" className={BTN}
+            <button type="button" disabled={!enabled} className={BTN}
               title="submit the same spec again (same --sets, profiles, replicates) as a new job"
               onClick={(e) => { e.stopPropagation(); onRerun(); }}>
               re-run

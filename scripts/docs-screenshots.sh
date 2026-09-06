@@ -27,8 +27,7 @@ DIST=$(nix build .#adb-web-dist --print-out-paths --no-link)
 MAN=$(nix build .#manifests --print-out-paths --no-link)
 STORE=$(mktemp -d)
 
-ADB_WEB_STATIC="$DIST" ADB_WEB_MANIFESTS="$MAN" \
-  node "$DIST/server.cjs" --home "$STORE" --port "$PORT" --no-open &
+node "$DIST/server.cjs" --viewer-only --static-dir "$DIST" --catalog "$MAN" --data-dir "$STORE" --port "$PORT" --no-open &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null; rm -rf "$STORE"' EXIT
 

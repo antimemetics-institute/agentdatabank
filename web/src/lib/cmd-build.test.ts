@@ -5,7 +5,7 @@
    anywhere lands in `missing` (the `<split>` incident's descendant: an unset enum
    now composes as its first member instead of gating the copy button).
 
-   The last test sweeps every real manifest when ADB_WEB_MANIFESTS points at the
+   The last test sweeps every real manifest when ADB_TEST_MANIFESTS points at the
    nix-built manifests dir (task web:test wires it); without the env it skips. */
 
 import { test } from "node:test";
@@ -171,8 +171,8 @@ test("a half-typed number is quoted rather than spliced in bare", () => {
    not nullable — and the command must never carry a placeholder, with the form
    blank or fully filled */
 test("every shipped manifest composes placeholder-free", (t) => {
-  const dir = process.env.ADB_WEB_MANIFESTS;
-  if (!dir) return t.skip("ADB_WEB_MANIFESTS unset (run via `task web:test`)");
+  const dir = process.env.ADB_TEST_MANIFESTS;
+  if (!dir) return t.skip("ADB_TEST_MANIFESTS unset (run via `task web:test`)");
   const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
   assert.ok(files.length > 0, `no manifests in ${dir}`);
   for (const f of files) {
@@ -286,8 +286,8 @@ function checkDecl(decl: Record<string, unknown>, path: string): void {
 }
 
 test("every shipped manifest uses only declared keys", (t) => {
-  const dir = process.env.ADB_WEB_MANIFESTS;
-  if (!dir) return t.skip("ADB_WEB_MANIFESTS unset (run via `task web:test`)");
+  const dir = process.env.ADB_TEST_MANIFESTS;
+  if (!dir) return t.skip("ADB_TEST_MANIFESTS unset (run via `task web:test`)");
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
     const doc = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>;
     checkSubset(doc, MANIFEST_KEYS, f);

@@ -18,8 +18,8 @@ CHUNK_BYTES = 1_000_000
 
 
 def default_home() -> Path:
-    if "ADB_HOME" in os.environ:
-        return Path(os.environ["ADB_HOME"])
+    if "ADB_DATA_DIR" in os.environ:
+        return Path(os.environ["ADB_DATA_DIR"])
     xdg = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
     return Path(xdg) / "adb"
 

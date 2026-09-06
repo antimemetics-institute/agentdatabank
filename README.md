@@ -24,7 +24,7 @@ Follow the transcript live as the worker runs it:
 
 ![Following a run's transcript](docs/readme/run-view.gif)
 
-Every composed run doubles as a copy-paste one-liner that reproduces the exact same condition anywhere — the builder's other tab. Workers on other machines can serve the same browser too: see [runs from the browser](https://antimemetics-institute.github.io/agentdatabank/running/workers.html).
+Every composed run doubles as a copy-paste one-liner that reproduces the exact same condition anywhere — the builder's other tab. The local GUI runs experiments on the same machine and shows progress in Jobs: see [runs from the browser](https://antimemetics-institute.github.io/agentdatabank/running/workers.html).
 
 ## Learn more
 
