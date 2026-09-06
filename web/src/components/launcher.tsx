@@ -202,7 +202,8 @@ export function JobPanel({ job, onStop, queueLink }: {
     : job.phase === "failed" || job.phase === "error" ? "text-red-600 dark:text-red-400"
     : "text-muted-foreground";
   return (
-    <div className="space-y-1.5 rounded border p-2">
+    /* data-job: stable hook for e2e drivers and the docs GIF recorder */
+    <div data-job className="space-y-1.5 rounded border p-2">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`${tone} ${live ? "animate-pulse" : ""}`}>{chip}</span>
         {job.runs.map((rid) => (
@@ -312,7 +313,8 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
           refresh={refresh} />
       ))}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button"
+        {/* data-launch: stable hook for e2e drivers and the docs GIF recorder */}
+        <button type="button" data-launch
           className="rounded border border-emerald-600/40 bg-emerald-600/10 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-600/20 disabled:opacity-40 dark:text-emerald-400"
           disabled={gate !== null} title={gate ?? "build and run on this machine"}
           onClick={launch}>

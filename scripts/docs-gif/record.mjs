@@ -9,10 +9,14 @@
    Scenarios (selectors ride the STABLE ids in hrefs/data attributes, so page
    redesigns don't break them as long as routes and run ids survive):
      builder  — overview → type `hello` into the experiments search (the catalog
-                is ~180 cards now) → click the inspect-hello card → dropdown →
-                type `anthropic` → pick a model → click the command to copy
-     run-view — the builder page (where the previous clip ended) → sidebar "Runs" →
-                click the first run row → linger on the transcript
+                is ~180 cards now) → click the inspect-hello card → type a model →
+                press ▶ run on the run tab (docs-clips.sh has a live worker
+                attached, the adb-local shape) → watch the job claim/build/run
+                until the run link appears
+     run-view — replays the builder flow off-camera (fast, no capture) so a live
+                job panel exists, then records: click the job's run link straight
+                into the run view → linger on the transcript → filter chips →
+                scroll back through the earlier events
 
    Quality note: playwright's recordVideo pipes lossy JPEG screencast frames into
    VP8 — mushy text no re-encode can fix. So this captures LOSSLESS PNG frames in a
@@ -25,8 +29,9 @@ import { writeFileSync } from "node:fs";
 import { chromium } from "playwright-core";
 
 const { BASE_URL, OUT_DIR, DARK, SCENARIO } = process.env;
-// must be one of the generated model suggestions (lib/adb-inspect/model_catalog.json)
-const MODEL = "anthropic/claude-sonnet-5";
+// the model the ▶ run press actually executes against — docs-clips.sh picks it
+// by what's reachable (the local llama server, else the mock)
+const MODEL = process.env.RUN_MODEL || "mockllm/model";
 
 const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-gpu"] });
 const context = await browser.newContext({
@@ -128,33 +133,44 @@ async function builder() {
   await page.waitForSelector('[data-param="model"] li');
   await page.waitForTimeout(800);
 
-  // type `anthropic` — the dropdown narrows — pick the sonnet snapshot
+  // type the model this machine can actually serve (free-text combobox: the
+  // dropdown narrows away, the typed value binds)
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type("anthropic", { delay: 110 });
-  await page.waitForTimeout(900);
-  await glideClick(page.locator('[data-param="model"] li', { hasText: MODEL }).first());
-  await page.waitForTimeout(1000);
+  await page.keyboard.type(MODEL, { delay: 90 });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(700);
 
-  // click the composed command — "copied ✓"
-  await glideClick(page.locator("pre", { hasText: "nix run" }));
-  await page.waitForTimeout(1200);
+  // the run tab (default when a worker is connected — clicked anyway so the
+  // clip shows the choice), then ▶ run once the worker's presence enables it
+  await glideClick(page.locator('button[role="tab"]', { hasText: "run" }));
+  await page.waitForSelector("[data-launch]:not([disabled])", { timeout: 30000 });
+  await page.waitForTimeout(600);
+  await glideClick(page.locator("[data-launch]"));
+
+  // the job narrates queued → claimed → building → running; hold until the
+  // worker's first run report links the run id, then take that in
+  await page.waitForSelector('[data-job] a[href^="#/runs/"]', { timeout: 180000 });
+  await page.waitForTimeout(2500);
 }
 
 async function runView() {
-  // start where the builder clip ended: the experiment page
+  // replay the builder's ending off-camera: same experiment, same model, ▶ run —
+  // so the clip opens exactly where the builder clip left the reader, with a
+  // fresh job's run link waiting in the job panel
   await page.goto(`${BASE_URL}/#/experiments/inspect-hello`);
   await page.waitForSelector('[data-param="model"] input');
+  await page.locator('[data-param="model"] input').fill(MODEL);
+  await page.locator('button[role="tab"]', { hasText: "run" }).click();
+  await page.waitForSelector("[data-launch]:not([disabled])", { timeout: 30000 });
+  await page.locator("[data-launch]").click();
+  await page.waitForSelector('[data-job] a[href^="#/runs/"]', { timeout: 180000 });
+
   await page.mouse.move(700, 60);
   startCapture();
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(800);
 
-  // sidebar → Runs
-  await glideClick(page.locator('nav a[href="#/runs"]'));
-  await page.waitForSelector("tbody tr[data-run]");
-  await page.waitForTimeout(1000);
-
-  // click the newest run, take in the header
-  await glideClick(page.locator("tbody tr[data-run]").first());
+  // straight into the run: the job panel's run link
+  await glideClick(page.locator('[data-job] a[href^="#/runs/"]').first());
   await page.waitForSelector('[data-filter="all"]', { timeout: 10000 });
   await page.waitForTimeout(1500);
 

@@ -14,6 +14,12 @@ SHOTS=(
 )
 
 PORT=8391
+
+# the server walks to the next port when this one is taken, but the shots below
+# would still hit this one — capturing someone else's store. Fail instead.
+if curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/experiments"; then
+  echo "port $PORT is already serving an adb-web — kill it first" >&2; exit 1
+fi
 OUT=docs/book/src/images
 WIN=1024,800
 
