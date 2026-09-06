@@ -13,7 +13,7 @@
 # experiments/ holds experiment code only; everything ADB-specific (this wiring,
 # build-support, tool packaging) lives under pkgs/ and the tools' own source trees
 # (runner/, web/).
-{ pkgs, experiments ? null, rev ? null, narHash ? null }:
+{ pkgs, rev ? null, narHash ? null }:
 
 let
   inherit (pkgs) lib;
@@ -22,12 +22,6 @@ let
 
   experimentsDir = ../../experiments;
 
-  # the authoring entrypoint: an external experiment directory (a dir holding package.nix)
-  # joins the registry beside the in-tree ones — same shape, same names
-  externalPackageNix =
-    if experiments == null then null
-    else if builtins.pathExists (experiments + "/package.nix") then experiments + "/package.nix"
-    else experiments;
   dirNames =
     if builtins.pathExists experimentsDir then
       lib.attrNames
@@ -47,9 +41,6 @@ let
       # The runner packages itself from its own uv.lock (uv2nix) — see runner/default.nix,
       # including why its workspace import cannot go through adb.cleanImport.
       adb-runner = final.callPackage ../../runner { };
-
-      # the authoring CLI (init/bump/pin) — built knowing which adb it came from
-      adb-dev = final.callPackage ../adb-dev { inherit origin rev; };
 
       # the queue worker (package + its NixOS module live in pkgs/adb-worker)
       adb-worker = final.callPackage ../adb-worker { };
@@ -137,17 +128,7 @@ let
     // lib.mapAttrs'
       (name: _: lib.nameValuePair "experiments-${name}"
         (final.callPackage (experimentsDir + "/${name}/package.nix") { }))
-      (lib.genAttrs dirNames (_: null))
-    // lib.optionalAttrs (externalPackageNix != null) {
-      # the external directory's fetch_ref must NOT claim adb's origin/rev — its
-      # code doesn't live here. Until a scaffold can state its own origin
-      # (--flakes), external runs record `dirty:` — honest for a working directory.
-      experiments-external = final.callPackage externalPackageNix {
-        adb = final.callPackage ../build-support {
-          origin = "external"; rev = null; narHash = null;
-        };
-      };
-    });
+      (lib.genAttrs dirNames (_: null)));
 
   # flatten the per-directory sets into the experiment registry, refusing name
   # collisions (callPackage decorates each set with override/overrideDerivation —
@@ -161,12 +142,11 @@ let
       if dup != [ ] then throw "duplicate experiment name(s): ${toString dup}"
       else acc // set)
     { }
-    (map (name: scope."experiments-${name}") dirNames
-      ++ lib.optional (externalPackageNix != null) scope.experiments-external);
+    (map (name: scope."experiments-${name}") dirNames);
 in
 {
   experiments = registry;
-  inherit (scope) adb-runner adb-dev adb-worker;
+  inherit (scope) adb-runner adb-worker;
 }
 // lib.optionalAttrs (builtins.pathExists ../../web) {
   inherit (scope) adb-web adb-web-dist adb-local;

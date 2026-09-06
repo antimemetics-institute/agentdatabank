@@ -15,7 +15,7 @@ import { useCmdPrefs } from "@/lib/cmd-prefs";
 import {
   clearDraft, getComposerTab, getLastLlm, loadDraft, saveDraft, setComposerTab, setLastLlm,
 } from "@/lib/run-draft";
-import { REPO_LOCAL_PREFS, rewriteCmd } from "@/lib/cmd-rewrite";
+import { rewriteCmd } from "@/lib/cmd-rewrite";
 import { useManifests, useWorkersPoll } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -507,14 +507,10 @@ function BuilderForm({ name }: { name: string }) {
      shown but copy is gated: the incomplete state lives in the UI, never in
      the copied text. */
   const prefs = useCmdPrefs();
-  /* an external experiment exists only in its author's repo — the palette's
-     github/tarball forms cannot name it, so its oneliner is pinned to the
-     repo-local form regardless of the settings menu */
-  const external = manifest?.origin === "external";
   const { oneliner, missing } = useMemo(() => {
     const { cmd, missing } = buildCmd(name, params, seeded);
-    return { oneliner: rewriteCmd(cmd, external ? REPO_LOCAL_PREFS : prefs), missing };
-  }, [name, params, seeded, prefs, external]);
+    return { oneliner: rewriteCmd(cmd, prefs), missing };
+  }, [name, params, seeded, prefs]);
 
   const copy = () => {
     if (missing.length > 0) return;
@@ -612,10 +608,7 @@ function BuilderForm({ name }: { name: string }) {
           {/* the two outputs of the same condition: submit it (run tab) or copy it
               (oneliner tab). No launch surface → no tabs, the oneliner alone. The
               run tab stays mounted while hidden (forceMount) so an in-flight job
-              keeps polling; its trigger pulses while one is live. External
-              experiments run too — when a worker registered for their fork repo
-              is connected; otherwise the build fails into the job log with
-              attribute-missing, and the oneliner remains the path. */}
+              keeps polling; its trigger pulses while one is live. */}
           {creds ? (
             <Tabs value={tab} onValueChange={(t) => { setTabChoice(t); setComposerTab(t); }}>
               <TabsList className="h-7">
@@ -631,12 +624,12 @@ function BuilderForm({ name }: { name: string }) {
               </TabsContent>
               <TabsContent value="oneliner">
                 <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-                  copy={copy} external={external} />
+                  copy={copy} />
               </TabsContent>
             </Tabs>
           ) : (
             <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-              copy={copy} external={external} />
+              copy={copy} />
           )}
         </div>
       )}
@@ -646,20 +639,13 @@ function BuilderForm({ name }: { name: string }) {
 
 /* the copyable command block — the composer's original artifact, now one of the
    two bottom tabs (and the whole bottom when the launch surface is absent) */
-function Oneliner({ oneliner, missing, copied, copy, external }: {
+function Oneliner({ oneliner, missing, copied, copy }: {
   oneliner: string; missing: string[]; copied: boolean; copy: () => void;
-  external: boolean;
 }) {
   return (
     <div className="space-y-1">
       <span className="text-xs text-muted-foreground">
         oneliner
-        {external && (
-          <span className="ml-1 text-muted-foreground/70">
-            — run from this experiment&apos;s own repo directory (the Nix settings menu
-            doesn&apos;t apply to it)
-          </span>
-        )}
         {copied && <span className="ml-1 text-emerald-600 dark:text-emerald-400">copied ✓</span>}
         {missing.length > 0 && (
           <span className="ml-1 text-amber-600 dark:text-amber-400">

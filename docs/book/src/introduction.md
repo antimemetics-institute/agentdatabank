@@ -18,7 +18,7 @@ Done so far:
 - [x] the local loop: a catalog of pinned experiments, one-command runs, every run in a browsable store
 - [x] the web GUI: live transcripts, run comparison, and [running from the browser](running/workers.md) via queued jobs and workers
 - [x] [credential profiles](running/secrets.md) — ask-once setup, multiple endpoints per provider
-- [x] [bring-your-own experiment repos](writing/external.md) — `adb-dev init`/`fork`, with the same identity guarantees
+- [x] [adding and updating experiments](writing/experiments.md) through repository pull requests
 
 Planned features (in somewhat priority order):
 - [ ] publishing our runs as a public HuggingFace dataset (the run store layout verbatim, CC-BY-4.0)

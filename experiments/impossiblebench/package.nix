@@ -68,8 +68,8 @@ let
       description = "Generation config overrides; leave a field unset to keep the provider's default.";
       initial = { };
       # typed sub-form generated from the pinned inspect_ai's GenerateConfig —
-      # through `adb`, never a ../../ path: this directory must evaluate outside
-      # the tree (that is what `adb-dev fork` produces)
+      # through `adb`, never a ../../ path, so the declaration uses the
+      # schema provided by the selected adb package set
       fields = adb.inspectGenerateFields;
       order = 1020;
       group = "generation";

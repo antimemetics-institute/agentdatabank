@@ -20,8 +20,7 @@
 
 # Writing experiments
 
-- [Writing an experiment](writing/external.md)
-- [Indexing an experiment](writing/contributing.md)
+- [Adding and updating experiments](writing/experiments.md)
 
 # Reference
 

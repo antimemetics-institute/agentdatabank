@@ -12,7 +12,7 @@ $ nix run .#adb-local
 
 That starts the web GUI **and** one worker, wired together, torn down together with a single `Ctrl-C`. For running experiments on your own machine from your own browser, this is all you need.
 
-Started from inside a repo checkout (this repo or [your own experiment repo](../writing/external.md)), the worker builds experiments from **that checkout** — edits are picked up on the next run, no restart needed. Started anywhere else, it runs the pinned source it was built from.
+Started from inside a repo checkout (this repo or a Git fork of it), the worker builds experiments from **that checkout** — edits are picked up on the next run, no restart needed. Started anywhere else, it runs the pinned source it was built from.
 
 ## What a job is
 

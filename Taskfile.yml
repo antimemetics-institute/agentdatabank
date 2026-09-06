@@ -196,7 +196,6 @@ tasks:
           "$(nix-build --no-out-link -A exec.inspect-hello)" \
           --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
       - ./scripts/check-entrypoint-identity.sh
-      - ./scripts/check-authoring-loop.sh
 
   check:
     desc: nix flake check + uv lock freshness

@@ -28,4 +28,4 @@ Every composed run doubles as a copy-paste one-liner that reproduces the exact s
 
 ## Learn more
 
-**[The book](https://antimemetics-institute.github.io/agentdatabank/)** covers getting started, the experiment catalog, and writing your own experiments — including [bring-your-own-repo](https://antimemetics-institute.github.io/agentdatabank/writing/external.html) experiments that keep the same reproducibility guarantees.
+**[The book](https://antimemetics-institute.github.io/agentdatabank/)** covers getting started, the experiment catalog, and [adding and updating experiments](https://antimemetics-institute.github.io/agentdatabank/writing/experiments.html).

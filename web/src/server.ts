@@ -416,9 +416,6 @@ async function parseJobBody(body: unknown): Promise<JobBody | string> {
   const manifests = (await readManifests()) as Manifest[];
   const manifest = manifests.find((m) => m.name === experiment);
   if (!manifest) return `unknown experiment "${experiment}"`;
-  /* external experiments included: they run when a worker is registered for the
-     fork repo (its --repo); a worker that isn't fails the build with
-     attribute-missing, honestly, into the job log */
   const sets = Array.isArray(b.sets) ? b.sets : null;
   if (!sets || sets.length > 128 ||
       !sets.every((s) => typeof s === "string" && SET_ARG_RE.test(s)))

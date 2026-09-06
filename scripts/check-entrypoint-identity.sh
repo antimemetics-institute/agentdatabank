@@ -10,9 +10,7 @@
 #
 # Default: inspect-hello on mockllm in the adb checkout — four doors. The flake
 # door sees git-TRACKED files only, so a mismatch there can also mean a file that
-# should be tracked isn't yet. With --dir it checks an experiment repo scaffolded
-# by `adb-dev init`: the plain scaffold has no flake.nix, so the flake door drops
-# out and the remaining three must still agree.
+# should be tracked isn't yet. --dir can select another ADB checkout.
 set -euo pipefail
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"

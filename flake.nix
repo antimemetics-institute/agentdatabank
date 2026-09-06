@@ -37,12 +37,6 @@
             type = "app";
             program = "${adbPkgs.adb-runner}/bin/adb-runner";
           };
-          # authoring CLI: `nix run adb#adb-dev -- init my-exp` scaffolds an
-          # external experiment repo pinned to this adb
-          adb-dev = {
-            type = "app";
-            program = "${adbPkgs.adb-dev}/bin/adb-dev";
-          };
           # queue worker: `nix run adb#adb-worker -- --server <adb-web url>`
           adb-worker = {
             type = "app";
@@ -69,7 +63,7 @@
           adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
-          inherit (adbPkgs) adb-runner adb-dev adb-worker;
+          inherit (adbPkgs) adb-runner adb-worker;
           manifests = pkgs.linkFarm "adb-manifests"
             (nixpkgs.lib.mapAttrsToList
               (name: exp: { name = "${name}.json"; path = exp.manifest; })
@@ -84,11 +78,11 @@
           adbPkgs.experiments);
 
       # lean by design: pure builds only (registry-wide manifest eval + the tools).
-      # The impure acceptance tests — entrypoint identity, the authoring smoke —
+      # The impure entrypoint identity checks
       # can't be derivations (they invoke nix itself / need network) and live in
       # scripts/ + CI instead.
       checks = nixpkgs.lib.genAttrs systems (system: {
-        inherit (self.packages.${system}) manifests adb-dev adb-runner;
+        inherit (self.packages.${system}) manifests adb-runner;
       });
 
       devShells = forAllSystems (pkgs: {

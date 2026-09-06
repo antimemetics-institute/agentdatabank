@@ -11,10 +11,6 @@
 # rev and runs record a real fetchable ref. In a checkout the placeholder stays
 # unexpanded and runs record `dirty:` — correct, a working tree has no rev. The
 # `adbRev` argument overrides the stamp (the fetchGit flow states its own rev).
-#
-# `experiments` is the authoring entrypoint: a path to an external experiment directory
-# (see the book's "Writing experiments") joins the registry beside the in-tree
-# ones — same bare names, same manifests linkFarm, same web catalog.
 let
   lock = builtins.fromJSON (builtins.readFile ./flake.lock);
   locked = lock.nodes.nixpkgs.locked;
@@ -28,18 +24,17 @@ let
 in
 { system ? builtins.currentSystem
 , pkgs ? import nixpkgsSrc { inherit system; }
-, experiments ? null
 , adbRev ? null
 }:
 let
   inherit (pkgs) lib;
   adbPkgs = import ./pkgs/top-level {
-    inherit pkgs experiments;
+    inherit pkgs;
     rev = if adbRev != null then adbRev else stampRev;
   };
 
   runnables =
-    { inherit (adbPkgs) adb-runner adb-dev adb-worker; }
+    { inherit (adbPkgs) adb-runner adb-worker; }
     // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web adb-local; }
     // lib.mapAttrs' (name: exp: lib.nameValuePair "experiment-${name}" exp.app)
       adbPkgs.experiments;
@@ -63,7 +58,7 @@ runnables
   #   $(nix-build --no-out-link -A exec.inspect-hello) --set …
   exec = lib.mapAttrs
     (name: drv: pkgs.runCommand "exec-${name}" { } "ln -s ${lib.getExe drv} $out")
-    ({ inherit (adbPkgs) adb-runner adb-dev adb-worker; }
+    ({ inherit (adbPkgs) adb-runner adb-worker; }
       // lib.optionalAttrs (adbPkgs ? adb-web) { inherit (adbPkgs) adb-web adb-local; }
       // lib.mapAttrs (_: exp: exp.app) adbPkgs.experiments);
 }

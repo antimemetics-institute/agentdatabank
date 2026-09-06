@@ -78,7 +78,7 @@ in
         The ONE repo this worker builds experiments from — its registration
         identity: a checkout/store path or a tarball URL. null = the pinned
         source baked into `package` (same-pin with the worker itself). Point
-        this at a FORK repo to serve that fork's external experiments. Jobs are
+        this at an ADB checkout or Git fork to serve its experiments. Jobs are
         source-free; what a worker runs is decided here, by its operator.
       '';
     };
