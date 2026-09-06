@@ -1,6 +1,4 @@
-/* The colorful event stream — two modes over one pane:
-
-   mode="flat" (the "events" tab, first and DEFAULT — the ground-truth view): every
+/* The colorful event stream — the ground-truth view: every
    event is its own row, one by one, strictly in seq order, no grouping. Row headers
    are MINIMAL: per-agent constants (model, provider, via) live once in the agents
    legend; a row carries only what varies — time, agent (multi-agent runs), the
@@ -9,14 +7,8 @@
    the row tooltip and raw JSON. Tool rows read as actions: colored icon + tool +
    primary arg, then the result preview.
 
-   mode="turns" (the "turns" tab): the grouped TURN-CARD projection — one card per
-   llm.call absorbing the same-agent tool_call/tool_result agent.events that follow
-   it (matched by agent + order/id, up to the next llm.call). Grouping (groupEvents,
-   pure) is presentation only and recomputed per render, so tool events arriving in
-   later polls join their card without disturbing incremental append.
-
-   Both modes share the pane: independent scrolling, auto-follow with pause-on-
-   scroll-up, and the LiveDot in the header vouching for exactly this stream. */
+   The pane provides independent scrolling, auto-follow with pause-on-scroll-up,
+   and the LiveDot in the header vouching for exactly this stream. */
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
@@ -185,14 +177,6 @@ const Gutter = ({ g }: { g?: GutterInfo }) => (
   </span>
 );
 
-/* "12:00:02"–"12:00:07" → "12:00:02–07" (trim the shared prefix at a colon) */
-const trimCommon = (a: string, b: string): string => {
-  let cut = 0;
-  for (let i = 0; i < Math.min(a.length, b.length) && a[i] === b[i]; i++)
-    if (a[i] === ":") cut = i + 1;
-  return b.slice(cut);
-};
-
 /* ---------- display profile (the presentation-hint seam, v1 §4) ----------
    Derived from the stream per render: what's CONSTANT across the whole stream is
    noise in row headers (single-agent runs don't need an agent chip; single-channel
@@ -352,9 +336,8 @@ function LoadFullButton({ onLoad, loading }: { onLoad: () => void; loading: bool
 /* harness-normalized events carry `via: "<normalizer>"` — a provenance stamp:
    secondary record, reconstructed from the tool's session transcript (experiment-
    primary events have no via). Rendered as a subtle badge. */
-/* per-call facts (model, tokens, latency, provenance) — one string, two homes:
-   the turn card's first body line (FactsLine) and the flat row's OPEN header
-   (where the collapsed preview was) */
+/* per-call facts (model, tokens, latency, provenance) appear in the open row's
+   header, replacing its collapsed preview. */
 function factsStr(e: Ev): string {
   const u = e.usage ?? {};
   const served = (e.response as { model?: unknown } | undefined)?.model;
@@ -365,10 +348,6 @@ function factsStr(e: Ev): string {
   return `${model} · ${fmtVal(u.input_tokens)}+${fmtVal(u.output_tokens)} tok · ${fmtVal(e.latency_ms)}ms`
     + `${e.via ? ` · via ${String(e.via)}` : ""}`;
 }
-const FactsLine = ({ e }: { e: Ev }) => (
-  <div className="font-mono text-[11px] text-muted-foreground">{factsStr(e)}</div>
-);
-
 /* request-section label: new linear streams carry request.derived_from_stream
    (messages: [] — reproducible from the pinned rev + prior events); old pi
    streams carry actual folded messages (reconstructed); primary events carry the
@@ -488,41 +467,7 @@ const RedactedReasoning = ({ n }: { n: number }) => (
   </div>
 );
 
-/* tool output, visible-by-default: first lines shown, full scrollable block
-   behind the expander */
-function ClampedMono({ text, clamp = 4 }: { text: string; clamp?: number }) {
-  const [full, setFull] = useState(false);
-  const long = text.split("\n").length > clamp || text.length > 400;
-  if (!long || full)
-    return (
-      <div>
-        <Mono>{text}</Mono>
-        {long && (
-          <button type="button" onClick={() => setFull(false)}
-            className="mt-0.5 text-[10px] text-primary hover:underline">
-            clamp
-          </button>
-        )}
-      </div>
-    );
-  return (
-    <div>
-      <pre className="line-clamp-4 whitespace-pre-wrap rounded-md border bg-muted/50 px-2.5 py-1.5 font-mono text-xs [overflow-wrap:anywhere]">
-        {text}
-      </pre>
-      <button type="button" onClick={() => setFull(true)}
-        className="mt-0.5 text-[10px] text-primary hover:underline">
-        show all · {text.split("\n").length} lines
-      </button>
-    </div>
-  );
-}
-
-/* ---------------- turn grouping (presentation only) ---------------- */
-
-type StreamItem =
-  | { kind: "row"; e: Ev }
-  | { kind: "turn"; call: Ev; tools: Ev[] };
+/* ---------------- tool request/result links ---------------- */
 
 /* tool_result seq → the paired request (name + primary arg), resolved from the
    preceding same-agent llm.call's tool_calls via tool_call_id (single-request
@@ -558,51 +503,10 @@ function buildLinkIndexes(events: Ev[]): {
   return { reqIndex, resSeq };
 }
 
-/* one llm.call + the same-agent tool_result (and, in old streams, tool_call)
-   agent.events that follow it, up to the next llm.call. The pi normalizer no longer
-   emits standalone tool_call events — requests live in response.message.tool_calls
-   (with ids) and results pair back via data.tool_call_id; absorbing tool_call here
-   is the compatibility path for archived runs. Recomputed per render: tool events
-   landing in a later poll join their turn card automatically. */
-export function groupEvents(events: Ev[]): StreamItem[] {
-  const items: StreamItem[] = [];
-  const consumed = new Set<number>();
-  for (let i = 0; i < events.length; i++) {
-    if (consumed.has(i)) continue;
-    const e = events[i]!;
-    if (e.type !== "llm.call") {
-      items.push({ kind: "row", e });
-      continue;
-    }
-    const tools: Ev[] = [];
-    for (let j = i + 1; j < events.length; j++) {
-      const f = events[j]!;
-      if (f.type === "llm.call") break;
-      if (f.type === "agent.event" && (f.kind === "tool_call" || f.kind === "tool_result")
-          && f.agent === e.agent) {
-        tools.push(f);
-        consumed.add(j);
-      }
-    }
-    items.push({ kind: "turn", call: e, tools });
-  }
-  return items;
-}
-
-/* ---------------- turn card ---------------- */
-
 /* requested call (from response.message.tool_calls, kept verbatim by the
    normalizer) — tolerate OpenAI nesting or flat {name, arguments} */
 function toolName(tc: Ev): string {
   return String(tc.function?.name ?? tc.name ?? tc.tool ?? "tool");
-}
-function toolArgs(tc: Ev): string {
-  const a = tc.function?.arguments ?? tc.arguments ?? tc.args;
-  if (a === undefined) return "";
-  if (typeof a === "string") {
-    try { return JSON.stringify(JSON.parse(a), null, 2); } catch { return a; }
-  }
-  return JSON.stringify(a, null, 2);
 }
 /* what the tool acted on — shown in the collapsed chip/row header itself:
    path-shaped tools → path/file/filename, shell-shaped → command, else the first
@@ -684,217 +588,7 @@ function resultOutput(res: Ev | undefined): string | null {
   return typeof out === "string" ? out : JSON.stringify(out, null, 2);
 }
 
-function ToolChip({ name, args, primary, callEv, resultEv, onExpand }: {
-  name: string; args: string; primary: string; callEv?: Ev; resultEv?: Ev;
-  onExpand?: () => void;
-}) {
-  const v = verdict(resultEv?.data);
-  const out = resultOutput(resultEv);
-  const raws = [callEv, resultEv].filter((x): x is Ev => !!x);
-  const headline = primary || args;
-  const hue = toolHue(name);
-  return (
-    <details
-      className="rounded-md border bg-muted/30"
-      onToggle={(ev) => { if ((ev.target as HTMLDetailsElement).open) onExpand?.(); }}
-    >
-      <summary className="flex flex-nowrap cursor-pointer items-baseline gap-2 px-2 py-1 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
-        <Wrench className={cn("size-3 shrink-0 self-center", hue)} />
-        <span className={cn("font-mono text-xs font-semibold", hue)}>{name}</span>
-        {headline && (
-          <TailClamp text={headline} className="font-mono text-[11px] text-muted-foreground" />
-        )}
-        <span className="ml-auto flex shrink-0 items-baseline gap-2">
-          <ToolOutcomeChip name={name} exitCode={resultEv?.data?.exit_code} v={v} />
-          {!resultEv && <span className="text-[10px] text-muted-foreground">no result yet</span>}
-        </span>
-      </summary>
-      <div className="space-y-1.5 border-t px-2 py-1.5">
-        {args && (
-          <>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">args</div>
-            <JsonPre src={args} />
-          </>
-        )}
-        {out !== null && (
-          <>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">result</div>
-            <ClampedMono text={out} />
-          </>
-        )}
-        {raws.length > 0 && <RawDetails events={raws} />}
-      </div>
-    </details>
-  );
-}
-
-function TurnCard({ call: callProp, tools, gutters, profile, gutterMode, fetchFull }: {
-  call: Ev; tools: Ev[]; gutters: Map<unknown, GutterInfo>; profile: StreamProfile;
-  gutterMode: GutterMode; fetchFull?: (seq: unknown) => Promise<Ev | null>;
-}) {
-  /* wire-diet: previews render from the elided event; expanding an elided
-     section swaps in the full event (fetched once, cached) */
-  const [full, setFull] = useState<Ev | null>(null);
-  const [loadingFull, setLoadingFull] = useState(false);
-  const call = full ?? callProp;
-  const elided = full === null && hasElisions(callProp);
-  const ensureFull = () => {
-    if (full || !fetchFull || !elided) return;
-    setLoadingFull(true);
-    void fetchFull(callProp.seq).then((f) => { if (f) setFull(f); setLoadingFull(false); });
-  };
-  const resp = call.response?.message;
-  const u = call.usage ?? {};
-  const { text: content, reasoning, summarized, redacted } = splitContent(resp);
-  const respCalls: Ev[] = Array.isArray(resp?.tool_calls) ? resp.tool_calls : [];
-  const callEvs = tools.filter((t) => t.kind === "tool_call");
-  const resultEvs = tools.filter((t) => t.kind === "tool_result");
-  const lastSeq = tools.length ? tools[tools.length - 1]!.seq : call.seq;
-
-  /* result → requested call: STRICTLY by tool_call_id when both sides carry ids
-     (the new normalizer shape); order fallback only for id-less old data */
-  const resultsHaveIds = resultEvs.some((r) => (r.data?.tool_call_id ?? r.data?.id) !== undefined);
-  const resultFor = (tc: Ev | undefined, i: number): Ev | undefined => {
-    const id = tc?.id ?? tc?.tool_call_id;
-    if (id !== undefined && resultsHaveIds)
-      return resultEvs.find((r) => (r.data?.tool_call_id ?? r.data?.id) === id);
-    return resultEvs[i];
-  };
-  /* legacy standalone tool_call events: attach to an in-response request by id,
-     else by order WHEN the name agrees — otherwise leave unmatched (rendered as
-     an extra chip below, never silently dropped) */
-  const callEvFor = (tc: Ev | undefined, i: number): Ev | undefined => {
-    const id = tc?.id ?? tc?.tool_call_id;
-    if (id !== undefined) {
-      const hit = callEvs.find((c) => (c.data?.tool_call_id ?? c.data?.id) === id);
-      if (hit) return hit;
-    }
-    const byOrder = callEvs[i];
-    if (!byOrder) return undefined;
-    const evName = String(byOrder.data?.name ?? byOrder.data?.tool ?? "");
-    return !evName || !tc || evName === toolName(tc) ? byOrder : undefined;
-  };
-  /* chips come from the model's requested tool_calls; if the normalizer gave none
-     but the harness emitted tool_call events, fall back to those */
-  const chips = respCalls.length
-    ? respCalls.map((tc, i) => ({
-        key: String(tc.id ?? i),
-        name: toolName(tc),
-        args: toolArgs(tc),
-        primary: primaryArg(toolName(tc), tc.function?.arguments ?? tc.arguments ?? tc.args),
-        callEv: callEvFor(tc, i),
-        resultEv: resultFor(tc, i),
-      }))
-    : callEvs.map((c, i) => ({
-        key: String(c.seq),
-        name: String(c.data?.name ?? c.data?.tool ?? "tool"),
-        args: c.data?.args !== undefined ? JSON.stringify(c.data.args, null, 2) : "",
-        primary: primaryArg(String(c.data?.name ?? c.data?.tool ?? "tool"), c.data?.args),
-        callEv: c,
-        resultEv: resultFor(c.data, i),
-      }));
-  /* legacy tool_call events that matched no in-response request (name/order
-     mismatch) still render — as their own chips, never double-shown */
-  const matched = new Set(chips.map((c) => c.callEv).filter(Boolean));
-  const extraChips = respCalls.length
-    ? callEvs.filter((c) => !matched.has(c)).map((c, i) => ({
-        key: `x${c.seq}`,
-        name: String(c.data?.name ?? c.data?.tool ?? "tool"),
-        args: c.data?.args !== undefined ? JSON.stringify(c.data.args, null, 2) : "",
-        primary: primaryArg(String(c.data?.name ?? c.data?.tool ?? "tool"), c.data?.args),
-        callEv: c,
-        resultEv: undefined as Ev | undefined,
-      }))
-    : [];
-
-  /* three independent optional components — "empty" means ALL absent (a
-     redacted-only turn is thinking we can't read, not a dead turn) */
-  const emptyResp = !call.error && !content.trim() && !reasoning.trim() && !redacted
-    && !chips.length && (u.output_tokens === 0 || u.output_tokens === undefined);
-
-  /* seq-range becomes a time-range; seqs + absolute ts stay in the tooltip */
-  const g0 = gutters.get(call.seq);
-  const g1 = tools.length ? gutters.get(lastSeq) : undefined;
-  const range = g0
-    ? g1 && g1.label !== g0.label
-      ? `${g0.label}–${gutterMode === "absolute" ? trimCommon(g0.label, g1.label) : g1.label.replace(/^\+/, "")}`
-      : g0.label
-    : "";
-  const gTitle = `llm.call · seq ${fmtVal(call.seq)}${tools.length ? `–${fmtVal(lastSeq)}` : ""}`
-    + `${call.via ? ` · via ${String(call.via)}` : ""}${call.ts ? ` · ${call.ts}` : ""}`;
-  return (
-    <div id={`ev-${String(call.seq)}`} className="border-b border-l-2 border-border/60 border-l-violet-500/40 px-2 py-1.5 last:border-b-0">
-      {/* header */}
-      <div className="flex items-baseline gap-2">
-        <span
-          title={gTitle}
-          className={cn(
-            "w-14 shrink-0 select-none text-right font-mono text-muted-foreground/70",
-            range.includes("–") ? "text-[9px]" : "text-[10px]",
-          )}
-        >
-          {range}
-        </span>
-        <Sparkles className="size-3.5 shrink-0 self-center text-violet-600 dark:text-violet-400" />
-        <span
-          className="shrink-0 rounded bg-violet-500/15 px-1.5 font-mono text-[10px] leading-4 text-violet-700 dark:text-violet-400"
-          title="one model call + the tool results it caused — a derived grouping; the underlying llm.call event is in the raw details"
-        >
-          turn
-        </span>
-        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 text-sm">
-          {profile.showAgent && <span className="font-semibold">{call.agent}</span>}
-          {call.error && (
-            <span className={cn("rounded px-1 font-mono text-[10px]", RED)}>{call.error.kind}</span>
-          )}
-          {emptyResp && (
-            <span className={EMPTY_FLAG} title="no reasoning, no text, no tool calls, no output tokens — a dead model turn">
-              empty response
-            </span>
-          )}
-        </span>
-      </div>
-      {/* body */}
-      <div className="space-y-1.5 py-1 pl-[5.7rem] pr-1">
-        <FactsLine e={call} />
-        {call.error ? (
-          <div className="text-sm text-red-700 dark:text-red-400">
-            error: {call.error.kind} — {call.error.message}
-          </div>
-        ) : (
-          <>
-            {reasoning.trim() && (
-              <ReasoningBlock text={reasoning} summarized={summarized} onExpand={ensureFull} />
-            )}
-            {redacted > 0 && <RedactedReasoning n={redacted} />}
-            {content.trim() && <MdView src={content} />}
-            {elided && (containsElision(resp?.content) || containsElision(resp?.reasoning_content)) && (
-              <LoadFullButton onLoad={ensureFull} loading={loadingFull} />
-            )}
-            {[...chips, ...extraChips].map((c) => (
-              <ToolChip key={c.key} name={c.name} args={c.args} primary={c.primary}
-                callEv={c.callEv} resultEv={c.resultEv} onExpand={ensureFull} />
-            ))}
-          </>
-        )}
-        {call.request ? (
-          <details onToggle={(ev) => { if ((ev.target as HTMLDetailsElement).open) ensureFull(); }}>
-            <summary
-              className="cursor-pointer text-[10px] uppercase tracking-wider text-muted-foreground"
-              title={reqLabel(call).title}
-            >
-              {reqLabel(call).text}{elided ? " · elided, opens full" : ""}
-            </summary>
-            <JsonPre className="mt-1" src={JSON.stringify(call.request, null, 2)} />
-          </details>
-        ) : null}
-        <RawDetails events={[call, ...tools]} onOpen={ensureFull} />
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- one row (non-turn events) ---------------- */
+/* ---------------- one event row ---------------- */
 
 function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
   e: Ev;
@@ -1300,8 +994,8 @@ export const evChannel = (e: Ev): string | null => {
   return sid === undefined || sid === null ? null : `instance:${String(sid)}`;
 };
 
-export function EventStream({ events, phase, mode = "flat", cid, rid }: {
-  events: Ev[]; phase: string; mode?: "flat" | "turns"; cid?: string; rid?: string;
+export function EventStream({ events, phase, cid, rid }: {
+  events: Ev[]; phase: string; cid?: string; rid?: string;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
@@ -1374,24 +1068,20 @@ export function EventStream({ events, phase, mode = "flat", cid, rid }: {
     setGModePick(m as GutterMode);
   };
   const gutters = buildGutters(shown, gutterMode);
-  const items: StreamItem[] = mode === "turns"
-    ? groupEvents(shown)
-    : shown.map((e) => ({ kind: "row", e }));
-
   /* ---------- windowed rendering (hand-rolled, no dependency) ----------
      A 5000-event stream must not build 5000 DOM nodes: above the threshold we
      render only the rows near the viewport between two spacer divs sized by a
-     per-mode height estimate. Auto-follow keeps working: scrolling to the
+     row-height estimate. Auto-follow keeps working: scrolling to the
      (spacer-inflated) bottom updates scrollTop, which selects the tail window. */
   const VIRT_AT = 200;
-  const EST = mode === "turns" ? 120 : 34;
-  const virt = items.length > VIRT_AT;
+  const EST = 34;
+  const virt = shown.length > VIRT_AT;
   const OVERSCAN = 30;
   const start = virt ? Math.max(0, Math.floor(scrollTop / EST) - OVERSCAN) : 0;
   const end = virt
-    ? Math.min(items.length, Math.ceil((scrollTop + viewH) / EST) + OVERSCAN)
-    : items.length;
-  const windowed = items.slice(start, end);
+    ? Math.min(shown.length, Math.ceil((scrollTop + viewH) / EST) + OVERSCAN)
+    : shown.length;
+  const windowed = shown.slice(start, end);
 
   /* jump that works when the target row isn't rendered yet: scroll the window
      there first, then flash */
@@ -1461,15 +1151,11 @@ export function EventStream({ events, phase, mode = "flat", cid, rid }: {
       <AgentsLegend agents={profile.agents} />
       <div ref={paneRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
         {virt && start > 0 && <div style={{ height: start * EST }} aria-hidden />}
-        {windowed.map((it) =>
-          it.kind === "turn"
-            ? <TurnCard key={`t${it.call.seq}`} call={it.call} tools={it.tools}
-                gutters={gutters} profile={profile} gutterMode={gutterMode}
-                fetchFull={fetchFull} />
-            : <Row key={it.e.seq} e={it.e} req={reqIndex.get(it.e.seq)}
-                links={resSeq} profile={profile} gutter={gutters.get(it.e.seq)}
-                onJump={jumpToSeq} fetchFull={fetchFull} />)}
-        {virt && end < items.length && <div style={{ height: (items.length - end) * EST }} aria-hidden />}
+        {windowed.map((e) =>
+          <Row key={e.seq} e={e} req={reqIndex.get(e.seq)}
+            links={resSeq} profile={profile} gutter={gutters.get(e.seq)}
+            onJump={jumpToSeq} fetchFull={fetchFull} />)}
+        {virt && end < shown.length && <div style={{ height: (shown.length - end) * EST }} aria-hidden />}
         {!shown.length && (
           <p className="p-3 text-sm text-muted-foreground">
             {events.length ? "no events in this channel" : "no events yet"}

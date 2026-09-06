@@ -114,7 +114,7 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <EventStream events={visible} phase={phase} mode="flat" cid={cid} rid={rid} />
+        <EventStream events={visible} phase={phase} cid={cid} rid={rid} />
       </div>
     </div>
   );
