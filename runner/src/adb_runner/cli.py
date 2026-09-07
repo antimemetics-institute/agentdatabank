@@ -321,20 +321,24 @@ def main() -> int:
                 on_event=on_event,
                 credential_env=credential_env,
             )
-            counts[result.phase] = counts.get(result.phase, 0) + 1
+            counts[result.state] = counts.get(result.state, 0) + 1
             summary = " ".join(f"{k}={v}" for k, v in result.summary.items())
-            _log(f"{label} {result.run_id} {result.phase} "
+            _log(f"{label} {result.run_id} {result.state} "
                  f"{summary} ({result.duration_s:.1f}s, "
                  f"{result.usage['llm_calls']} calls, "
                  f"{result.usage['input_tokens']}+{result.usage['output_tokens']} tok) "
                  f"— {viewer}/#/runs/{result.run_id}")
+            if result.state == "interrupted":
+                break
     except KeyboardInterrupt:
         _log("interrupted — partial runs kept (garbage is data)")
         counts["interrupted"] += 1
 
     _log(f"done: {counts['completed']} completed, {counts['failed']} failed, "
          f"{counts['interrupted']} interrupted")
-    return 0
+    if counts["interrupted"]:
+        return 130
+    return 1 if counts["failed"] else 0
 
 
 if __name__ == "__main__":

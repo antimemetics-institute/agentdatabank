@@ -5,7 +5,7 @@
 import { useEffect } from "react";
 import type { RunMeta } from "@/shared/types";
 import {
-  displayPhase, fmtVal, groupBy, paramsOf, prefetchRun,
+  displayState, fmtVal, groupBy, paramsOf, prefetchRun,
   useRunsPoll, variedKeys,
 } from "@/lib/data";
 import { navigateWithGlow } from "@/lib/nav";
@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { PageLoading, PhaseBadge } from "@/components/bits";
+import { PageLoading, StateBadge } from "@/components/bits";
 import { ParamChip } from "@/components/param-value";
 import { ResultChips } from "@/components/results";
 
@@ -52,8 +52,8 @@ export function RunsTable({ runs, hideExperiment = false }: { runs: RunMeta[]; h
   for (const [exp, rs] of Object.entries(groupBy(runs, (r) => r.experiment)))
     varied[exp] = variedKeys(rs);
   const cols = hideExperiment
-    ? ["condition", "run", "params", "rep", "phase", "results", "started"]
-    : ["condition", "run", "experiment", "params", "rep", "phase", "results", "started"];
+    ? ["condition", "run", "params", "rep", "state", "results", "started"]
+    : ["condition", "run", "experiment", "params", "rep", "state", "results", "started"];
   return (
     <Card className="overflow-hidden py-0">
       <Table>
@@ -100,7 +100,7 @@ export function RunsTable({ runs, hideExperiment = false }: { runs: RunMeta[]; h
                   )}
                 </TableCell>
                 <TableCell>r{String(r.replicate)}</TableCell>
-                <TableCell><PhaseBadge phase={displayPhase(r)} /></TableCell>
+                <TableCell><StateBadge state={displayState(r)} /></TableCell>
                 <TableCell>
                   <span className="flex flex-wrap gap-1">
                     <ResultChips summary={r.summary} />

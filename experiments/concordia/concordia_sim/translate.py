@@ -160,12 +160,11 @@ class TurnEmitter:
                 agent_event(agent=agent, kind="perception", step=step, **perception)
 
 
-def emit_summary(*, status_str: str, steps: int, agents: int,
+def emit_summary(*, steps: int, agents: int,
                  world_events: int, model_calls: int) -> dict:
     """Emit the scalar results (last-value-wins metrics) and return them as the summary
     dict matching the experiment's `results` schema."""
     summary = {
-        "status": status_str,
         "steps": steps,
         "agents": agents,
         "world_events": world_events,

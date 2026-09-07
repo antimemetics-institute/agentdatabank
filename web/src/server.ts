@@ -176,7 +176,7 @@ async function scanRuns(): Promise<RunsScan> {
           run: full.run,
           condition: full.condition,
           experiment: full.experiment,
-          phase: full.phase,
+          state: full.state,
           replicate: full.replicate,
           seed: full.seed,
           started_at: full.started_at,
@@ -311,9 +311,9 @@ async function fullEvent(cid: string, rid: string, seq: number): Promise<Ev | nu
   return null;
 }
 
-async function runPhase(cid: string, rid: string): Promise<string | null> {
+async function runState(cid: string, rid: string): Promise<string | null> {
   try {
-    return JSON.parse(await readFile(join(HOME, "runs", cid, rid, "run.json"), "utf8")).phase ?? null;
+    return JSON.parse(await readFile(join(HOME, "runs", cid, rid, "run.json"), "utf8")).state ?? null;
   } catch { return null; }
 }
 
@@ -550,7 +550,7 @@ const server = createServer(async (req, res) => {
         if (req.method === "POST" && parts.length === 4 && parts[3] === "report") {
           const body = await readJsonBody(req) as Record<string, unknown> | null;
           const r = report(HOME, parts[2]!, {
-            phase: typeof body?.phase === "string" ? body.phase : undefined,
+            state: typeof body?.state === "string" ? body.state : undefined,
             runs: Array.isArray(body?.runs)
               ? (body.runs as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
             log: Array.isArray(body?.log)
@@ -561,7 +561,7 @@ const server = createServer(async (req, res) => {
         if (req.method === "POST" && parts.length === 4 && parts[3] === "done") {
           const body = await readJsonBody(req) as Record<string, unknown> | null;
           return done(HOME, parts[2]!, {
-            phase: typeof body?.phase === "string" ? body.phase : undefined,
+            state: typeof body?.state === "string" ? body.state : undefined,
             exit_code: typeof body?.exit_code === "number" ? body.exit_code : undefined,
           })
             ? json(req, res, 200, { ok: true })
@@ -583,10 +583,10 @@ const server = createServer(async (req, res) => {
         const [, , cid, rid] = parts as [string, string, string, string];
         const events = await runEvents(cid, rid, Number(url.searchParams.get("after") ?? "-1"));
         if (events === null) return json(req, res, 404, { error: "no such run" });
-        const phase = await runPhase(cid, rid);
-        if (phase && TERMINAL.has(phase)) {
+        const state = await runState(cid, rid);
+        if (state && TERMINAL.has(state)) {
           /* terminal runs' streams never change — immutable */
-          return withEtag(req, res, `"ev-${rid}-${phase}-${events.length}"`, IMMUTABLE, () => events);
+          return withEtag(req, res, `"ev-${rid}-${state}-${events.length}"`, IMMUTABLE, () => events);
         }
         return json(req, res, 200, events, { "cache-control": "no-store" });
       }
@@ -594,8 +594,8 @@ const server = createServer(async (req, res) => {
         const [, , cid, rid, , seqStr] = parts as [string, string, string, string, string, string];
         const ev = await fullEvent(cid, rid, Number(seqStr));
         if (ev === null) return json(req, res, 404, { error: "no such event" });
-        const phase = await runPhase(cid, rid);
-        const cc = phase && TERMINAL.has(phase) ? IMMUTABLE : "no-cache";
+        const state = await runState(cid, rid);
+        const cc = state && TERMINAL.has(state) ? IMMUTABLE : "no-cache";
         return withEtag(req, res, `"evt-${rid}-${seqStr}"`, cc, () => ev);
       }
       if (parts[1] === "conditions" && parts.length === 3) {

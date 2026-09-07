@@ -19,7 +19,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from . import __version__
 from . import credentials
@@ -68,11 +68,14 @@ def child_env(run_id: str, run_dir: str, seed: int,
     return env
 
 
+RunState = Literal["provisioning", "running", "completed", "failed", "interrupted"]
+
+
 class RunResult:
-    def __init__(self, run_id: str, phase: str, summary: dict[str, Any],
+    def __init__(self, run_id: str, state: RunState, summary: dict[str, Any],
                  usage: dict[str, int], duration_s: float):
         self.run_id = run_id
-        self.phase = phase
+        self.state = state
         self.summary = summary
         self.usage = usage
         self.duration_s = duration_s
@@ -135,7 +138,7 @@ def execute_run(
         "dirty": dirty,
         "seed": seed,
         "replicate": replicate,
-        "phase": "provisioning",
+        "state": "provisioning",
         "started_at": _now(),
     }
     store.write_run_json(run_meta)
@@ -175,9 +178,9 @@ def execute_run(
     stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
     if stdin is None or stdout is None or stderr is None:
         raise RuntimeError("child pipes missing")  # typeshed can't see Popen(PIPE)
-    run_meta["phase"] = "running"
+    run_meta["state"] = "running"
     store.write_run_json(run_meta)
-    emit({"type": "run.status", "phase": "running"})
+    emit({"type": "run.status", "state": "running"})
 
     def read_stdout() -> None:
         for line in stdout:
@@ -261,12 +264,13 @@ def execute_run(
 
     returncode = proc.wait()
     duration = time.monotonic() - start
+    state: RunState
     if interrupted or returncode < 0:
-        phase = "interrupted"
+        state = "interrupted"
     elif returncode == 0:
-        phase = "completed"
+        state = "completed"
     else:
-        phase = "failed"
+        state = "failed"
 
     # NOTE: no views are materialized or deposited — chat/llm-call projections are
     # rendered from the stream on demand (deposit irreducibles, never derivables;
@@ -276,14 +280,14 @@ def execute_run(
     summary = {name: metrics[name] for name in results if name in metrics}
     emit({
         "type": "run.end",
-        "phase": phase,
+        "state": state,
         "duration_s": round(duration, 3),
         "summary": summary,
         "usage_totals": usage,
         "exit_code": returncode,
     })
     run_meta.update(
-        phase=phase,
+        state=state,
         finished_at=_now(),
         duration_s=round(duration, 3),
         summary=summary,
@@ -292,4 +296,4 @@ def execute_run(
     )
     store.write_run_json(run_meta)
     store.close()
-    return RunResult(run_id, phase, summary, usage, duration)
+    return RunResult(run_id, state, summary, usage, duration)

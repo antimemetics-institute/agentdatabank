@@ -34,7 +34,7 @@ Known event types are checked against the event models. A malformed known payloa
 
 The runner drains captured output and waits for the process. Exit code zero produces `completed`; a nonzero code produces `failed`; a signal exit or handled interrupt produces `interrupted`. It then emits `run.end` and writes final metadata and summary values.
 
-The phase reports the process outcome. An adapter that catches errors and returns zero should emit metrics, logs or instance errors that make the research outcome clear. A hard runner crash may leave an active phase and an incomplete stream.
+The state reports the process outcome. An adapter that catches errors and returns zero should emit metrics, logs or instance errors that make the research outcome clear. A hard runner crash may leave an active state and an incomplete stream.
 
 ## How can Python experiments emit validated events?
 
@@ -47,6 +47,6 @@ message(from_="agent-1", channel="discussion", content="I choose option A.")
 metric(name="choices", value=1)
 ```
 
-Typed emitters validate standard payloads before writing them. `emit_raw(type_, **fields)` emits custom types or extension fields without this validation. `adb_experiment.scaffold.deposit_artifact` writes a text artifact and emits its pointer; its `experiment_main` helper reads and validates parameters but catches run-function exceptions and returns zero with any supplied fallback metrics.
+Typed emitters validate standard payloads before writing them. `emit_raw(type_, **fields)` emits custom types or extension fields without this validation. `adb_experiment.scaffold.deposit_artifact` writes a text artifact and emits its pointer; its `experiment_main` helper reads and validates parameters, reports validation or run-function exceptions to stderr, and returns `1` on those errors. A run-function exception also emits any supplied fallback metrics. Successful execution returns `0`.
 
 For other languages, emit JSON directly or use `adb-emit`, packaged with `adb-runner`. The [event reference](events.md#emission-tools) describes that CLI and its schema output.

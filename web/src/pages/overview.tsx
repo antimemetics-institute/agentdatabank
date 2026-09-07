@@ -7,9 +7,9 @@
 
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { displayPhase, groupBy, useManifests, useRunsPoll } from "@/lib/data";
+import { displayState, groupBy, useManifests, useRunsPoll } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageLoading, PHASES, phaseText } from "@/components/bits";
+import { PageLoading, STATES, stateText } from "@/components/bits";
 
 const INPUT =
   "w-full max-w-md rounded-lg border bg-background px-3 py-1.5 text-sm " +
@@ -87,7 +87,7 @@ export function OverviewPage() {
           const rs = byExp[exp] ?? [];
           const summary = byName.get(exp)?.summary;
           const counts: Record<string, number> = {};
-          for (const r of rs) counts[displayPhase(r)] = (counts[displayPhase(r)] ?? 0) + 1;
+          for (const r of rs) counts[displayState(r)] = (counts[displayState(r)] ?? 0) + 1;
           const last = lastOf(exp);
           return (
             <a key={exp} href={`#/experiments/${encodeURIComponent(exp)}`} className="block no-underline">
@@ -110,8 +110,8 @@ export function OverviewPage() {
                         <span className="font-medium text-foreground">
                           {rs.length} {rs.length === 1 ? "run" : "runs"}
                         </span>
-                        {PHASES.filter((p) => counts[p]).map((p) => (
-                          <span key={p} className={phaseText[p]}>{counts[p]} {p}</span>
+                        {STATES.filter((p) => counts[p]).map((p) => (
+                          <span key={p} className={stateText[p]}>{counts[p]} {p}</span>
                         ))}
                         {last && <span>last {last.replace("T", " ").slice(5, 16)}</span>}
                       </>

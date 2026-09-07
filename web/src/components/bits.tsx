@@ -1,4 +1,4 @@
-/* Small app-specific atoms shared across pages: phase badge, param chip,
+/* Small app-specific atoms shared across pages: state badge, param chip,
    exit-code badge, inherited-message badge, segmented toggle, markdown view with
    rendered|source toggle, and the run-liveness dot. */
 import { useState } from "react";
@@ -60,9 +60,9 @@ export function MdView({ src, className, imageBase, showSourceToggle = true }: {
 
 /* run-liveness dot — sits NEXT TO the stream it vouches for. Green pulsing while
    the run's heartbeat is fresh; steady yellow when the heartbeat stopped with
-   phase=running (interrupted?); nothing for terminal phases. */
-export function LiveDot({ phase }: { phase: string }) {
-  if (phase === "running")
+   state=running (interrupted?); nothing for terminal states. */
+export function LiveDot({ state }: { state: string }) {
+  if (state === "running")
     return (
       <span
         className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400"
@@ -72,7 +72,7 @@ export function LiveDot({ phase }: { phase: string }) {
         live
       </span>
     );
-  if (phase === "interrupted?")
+  if (state === "interrupted?")
     return (
       <span
         className="inline-flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400"
@@ -95,20 +95,20 @@ export function InheritedBadge({ ev }: { ev: Ev }) {
   return <Badge variant="outline" className="text-[10px] text-muted-foreground">{from}</Badge>;
 }
 
-/* "interrupted?" is a DISPLAY phase, not a stored one: a `running` run whose
-   heartbeat went stale (lib/data.ts displayPhase, per the events spec) */
-export const PHASES =
+/* "interrupted?" is a DISPLAY state, not a stored one: a `running` run whose
+   heartbeat went stale (lib/data.ts displayState, per the events spec) */
+export const STATES =
   ["provisioning", "running", "interrupted?", "completed", "failed", "interrupted"] as const;
 
-const phaseClasses: Record<string, string> = {
+const stateClasses: Record<string, string> = {
   completed: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   failed: "border-transparent bg-red-500/15 text-red-700 dark:text-red-400",
   interrupted: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
   "interrupted?": "border-dashed border-amber-500/60 bg-amber-500/5 text-amber-700 dark:text-amber-400",
   running: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
   provisioning: "border-transparent bg-muted text-muted-foreground",
-  /* job phases (shared/types JobInfo) — the Workers page and job panels reuse
-     this badge; run phases above stay authoritative where names collide */
+  /* job states (shared/types JobInfo) — the Workers page and job panels reuse
+     this badge; run states above stay authoritative where names collide */
   queued: "border-transparent bg-muted text-muted-foreground",
   claimed: "border-transparent bg-blue-500/10 text-blue-700 dark:text-blue-400",
   building: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
@@ -121,7 +121,7 @@ const STALE_TIP =
   "no run.end, and the runner's heartbeat (run.json mtime, touched every 10s while alive) went stale — likely crash-orphaned (events spec: Ordering & integrity)";
 
 /* text-only variant for inline use (matrix cells, counts) */
-export const phaseText: Record<string, string> = {
+export const stateText: Record<string, string> = {
   completed: "text-emerald-700 dark:text-emerald-400",
   failed: "text-red-700 dark:text-red-400",
   interrupted: "text-amber-700 dark:text-amber-400",
@@ -139,30 +139,30 @@ const dotClasses: Record<string, string> = {
   provisioning: "bg-muted-foreground/50",
 };
 
-export function PhaseBadge({ phase, className }: { phase: string; className?: string }) {
+export function StateBadge({ state, className }: { state: string; className?: string }) {
   return (
     <Badge
-      title={phase === "interrupted?" ? STALE_TIP : undefined}
-      className={cn(phaseClasses[phase] ?? "bg-muted text-muted-foreground border-transparent", className)}
+      title={state === "interrupted?" ? STALE_TIP : undefined}
+      className={cn(stateClasses[state] ?? "bg-muted text-muted-foreground border-transparent", className)}
     >
-      {(phase === "running" || phase === "building") && (
+      {(state === "running" || state === "building") && (
         <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />
       )}
-      {phase}
+      {state}
     </Badge>
   );
 }
 
 /* tiny colored status dot for dense contexts (matrix cells, inline run refs);
    running pulses to read as alive */
-export function PhaseDot({ phase, className }: { phase: string; className?: string }) {
+export function StateDot({ state, className }: { state: string; className?: string }) {
   return (
     <span
-      title={phase === "interrupted?" ? STALE_TIP : phase}
+      title={state === "interrupted?" ? STALE_TIP : state}
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
-        dotClasses[phase] ?? "bg-muted-foreground/50",
-        phase === "running" && "animate-pulse",
+        dotClasses[state] ?? "bg-muted-foreground/50",
+        state === "running" && "animate-pulse",
         className,
       )}
     />

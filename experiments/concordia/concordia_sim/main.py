@@ -6,8 +6,8 @@ One run = one Concordia `Simulation.play()`, assembled exactly as upstream's tut
 notebook does it: prefabs + instances + Config + Simulation + play. Everything beyond
 that assembly lives at the edges — params in (models.py), the instrumented model client
 (client.py), the transcript out (translate.py). A plain program: no ADB imports beyond
-the event vocabulary; failure at any stage is data — the run finishes with a zeroed
-summary and exit 0, never crashes.
+the event vocabulary. Execution failures preserve partial events and summaries
+and return a nonzero exit code.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import hashlib
 import platform
 import random
 import sys
-import traceback
 from importlib.metadata import version
 
 import numpy as np
@@ -135,30 +134,28 @@ def run(params: Params) -> None:
         # deposited verbatim; the event stream stays the semantic tier + llm.calls
         deposit_artifact("concordia log", sim_log.to_html(),
                          filename="concordia_log.html", media_type="text/html")
-    except Exception as exc:  # a simulation that fails mid-run is data, not a crash
+    except Exception as exc:  # preserve the partial transcript before reporting failure
         failure = exc
     finally:
         turns.drain()  # semantic events from entries appended after the last callback
 
     if failure is not None:
         log(f"concordia simulation failed: {failure}", level="error")
-        traceback.print_exception(failure)  # to stderr; the real traceback
     summary = emit_summary(
-        status_str="error" if failure is not None else "completed",
         steps=turns.steps,
         agents=len(params.agents),
         world_events=scene + turns.world_events,
         model_calls=sum(c.n_calls for c in clients),
     )
-    status(f"done: status={summary['status']} steps={summary['steps']} "
+    status(f"done: steps={summary['steps']} "
            f"world_events={summary['world_events']} model_calls={summary['model_calls']}")
+    if failure is not None:
+        raise failure
 
 
 def main() -> int:
     return experiment_main(
         Params, run, prog="concordia-sim", description=__doc__,
-        fallback_summary={"status": "error", "steps": 0, "agents": 0,
-                          "world_events": 0, "model_calls": 0},
     )
 
 

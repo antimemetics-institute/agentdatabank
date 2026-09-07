@@ -69,7 +69,7 @@ def test_mock_eval_summary(inspect_ok, tmp_path, capsys):
     log = _run_hello(tmp_path)
     assert log.status == "success"
     summary = emit_all(log, "mockllm/model")
-    assert summary["status"] == "success"
+    assert "status" not in summary
     assert summary["samples"] == 2 and summary["completed"] == 2
     assert summary["score"] == 1.0
     assert summary["score_name"] == "includes/accuracy"
@@ -155,7 +155,7 @@ def test_score_reproducible(inspect_ok, tmp_path):
     a = emit_all(_run_hello(tmp_path / "a"), "m")
     b = emit_all(_run_hello(tmp_path / "b"), "m")
     # latency varies run to run; the graded outcome must not
-    for k in ("status", "samples", "completed", "score", "score_name"):
+    for k in ("samples", "completed", "score", "score_name"):
         assert a[k] == b[k]
 
 
@@ -174,3 +174,50 @@ def test_events_conform_to_schema(inspect_ok, tmp_path, capsys):
     assert events
     for ev in events:
         jsonschema.validate(ev, schema)
+
+
+@pytest.mark.parametrize("eval_status,exit_code", [("success", 0), ("error", 1), ("cancelled", 1)])
+def test_eval_exit_preserves_partial_summary(inspect_ok, tmp_path, monkeypatch, capsys,
+                                            eval_status, exit_code):
+    import importlib
+    from types import SimpleNamespace
+    import inspect_ai
+    from adb_inspect.models import Params
+
+    main_module = importlib.import_module("adb_inspect.main")
+    record = SimpleNamespace(status=eval_status, samples=[], error=None)
+    monkeypatch.setattr(inspect_ai, "eval", lambda *args, **kwargs: [record])
+    monkeypatch.setattr(main_module, "emit_provenance", lambda *args: None)
+    monkeypatch.setattr(main_module, "emit_aggregate", lambda *args: {"score": 0.5, "completed": 1, "samples": 2})
+    deposited = []
+    monkeypatch.setattr(main_module, "deposit_log", lambda log, path: deposited.append(log))
+    monkeypatch.chdir(tmp_path)
+    assert main_module.run(Params(task="fake", model="mockllm/model")) == exit_code
+    assert deposited == [record]
+    assert "1/2 samples" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("empty_logs", [False, True])
+def test_eval_startup_failure_exits_nonzero(inspect_ok, tmp_path, monkeypatch, capsys, empty_logs):
+    import importlib
+    import sys
+    import inspect_ai
+
+    main_module = importlib.import_module("adb_inspect.main")
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"task": "fake", "model": "mockllm/model"}))
+    monkeypatch.setattr(sys, "argv", ["adb-inspect-eval", str(config)])
+    monkeypatch.chdir(tmp_path)
+
+    def crash(*args, **kwargs):
+        if empty_logs:
+            return []
+        raise RuntimeError("eval startup crashed")
+
+    monkeypatch.setattr(inspect_ai, "eval", crash)
+    assert main_module.main() == 1
+    captured = capsys.readouterr()
+    assert ("inspect eval produced no log" if empty_logs else "eval startup crashed") in captured.err
+    events = [json.loads(line) for line in captured.out.splitlines()]
+    assert any(e["type"] == "log" and e["level"] == "error" for e in events)
+    assert not any(e["type"] == "metric" and e["name"] == "status" for e in events)

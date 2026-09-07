@@ -121,7 +121,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment):
     assert proc.returncode == 0, proc.stderr
     events = [json.loads(line) for line in proc.stdout.splitlines()]
     metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
-    assert metrics["status"] == "completed", proc.stderr
+    assert "status" not in metrics
     assert metrics["rounds"] == 1
     assert metrics["total_harvest"] == (20 if "outsider" in experiment else 25)
     assert metrics["equality"] == 1.0
@@ -137,14 +137,14 @@ def test_upstream_mock_pipeline(tmp_path, experiment):
     assert (tmp_path / "artifacts/log_env.json").exists()
 
 
-def test_missing_upstream_reports_error_metric(tmp_path):
+def test_missing_upstream_exits_nonzero_with_traceback(tmp_path):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params()))
     env = dict(os.environ, ADB_RUN_DIR=str(tmp_path))
     env.pop("GOVSIM_UPSTREAM", None)
     proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
-    assert proc.returncode == 0
+    assert proc.returncode != 0
     events = [json.loads(line) for line in proc.stdout.splitlines()]
-    assert any(e["type"] == "metric" and e["name"] == "status" and e["value"] == "error" for e in events)
+    assert not any(e["type"] == "metric" and e["name"] == "status" for e in events)
     assert "GOVSIM_UPSTREAM is not set" in proc.stderr

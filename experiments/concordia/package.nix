@@ -103,7 +103,6 @@ in
       };
     };
     results = with adb.types; {
-      status = str;        # "completed" | "error"
       steps = int;         # simulation steps actually run
       agents = int;        # size of the scenario roster
       world_events = int;  # world-channel messages (premise + agent turns)

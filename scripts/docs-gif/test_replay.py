@@ -19,7 +19,7 @@ class ReplayTests(unittest.TestCase):
         self.source.mkdir()
         self.dest.mkdir()
         self.params = {'model': 'openai/captured-model'}
-        (self.source / 'run.json').write_text(json.dumps({'run': 'old', 'phase': 'completed', 'realized_params': self.params}))
+        (self.source / 'run.json').write_text(json.dumps({'run': 'old', 'state': 'completed', 'realized_params': self.params}))
 
     def capture(self, payloads):
         (self.source / 'events-00001.jsonl').write_text('\n'.join(json.dumps({
@@ -45,6 +45,30 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(before, {p: p.read_bytes() for p in self.source.rglob('*') if p.is_file()})
         provenance = json.loads((self.dest / emitted[0]['path']).read_text())
         self.assertEqual(provenance['original_run']['run'], 'old')
+
+    def test_capture_preserves_metadata_and_progress(self):
+        metadata = {'run': 'old', 'state': 'completed', 'realized_params': self.params}
+        path = self.source / 'run.json'
+        path.write_text(json.dumps(metadata))
+        original = path.read_bytes()
+        payloads = [{'type': 'status', 'phase': 'scoring'}]
+        self.capture(payloads)
+        emitted = []
+        replay.replay(self.source, self.dest, 10000, self.params, emitted.append)
+        self.assertEqual(emitted[1:], payloads)
+        self.assertEqual(path.read_bytes(), original)
+        provenance = json.loads((self.dest / emitted[0]['path']).read_text())
+        self.assertEqual(provenance['original_run'], metadata)
+
+    def test_reject_incomplete_capture(self):
+        self.capture([{'type': 'metric'}])
+        path = self.source / 'run.json'
+        for state in ('failed', None):
+            with self.subTest(state=state):
+                path.write_text(json.dumps({'run': 'old', 'state': state,
+                                            'realized_params': self.params}))
+                with self.assertRaisesRegex(ValueError, 'completed saved run'):
+                    replay.load_capture(self.source)
 
     def test_unknown_types_preserved(self):
         payloads = [{'type': None}, {'type': 42}, {'custom': 'payload'}]

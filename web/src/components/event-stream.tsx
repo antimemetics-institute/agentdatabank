@@ -19,7 +19,7 @@ import {
 import type { Ev } from "@/shared/types";
 import { fetchFullEvent, fmtVal, uiState } from "@/lib/data";
 import { highlightJson } from "@/lib/markdown";
-import { ExitBadge, InheritedBadge, LiveDot, MdView, PhaseBadge, Segmented } from "@/components/bits";
+import { ExitBadge, InheritedBadge, LiveDot, MdView, StateBadge, Segmented } from "@/components/bits";
 import { ResultChip, flattenScores } from "@/components/results";
 import { cn } from "@/lib/utils";
 import { containsElision, elStr, isElided, splitContent } from "@/lib/content";
@@ -914,7 +914,7 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
   } else if (quiet) {
     /* narration — keep it visually quiet */
     summary = (
-      <span className="truncate text-xs italic text-muted-foreground/80">{e.detail ?? e.phase}</span>
+      <span className="truncate text-xs italic text-muted-foreground/80">{e.detail ?? (e.type === "status" ? e.phase : e.state)}</span>
     );
   } else if (e.type === "run.start") {
     summary = (
@@ -923,11 +923,11 @@ function Row({ e: eProp, req, links, profile, gutter, onJump, fetchFull }: {
       </span>
     );
   } else if (e.type === "run.end") {
-    if (e.phase !== "completed") s = { ...s, badge: RED, icon: RED_ICON };
+    if (e.state !== "completed") s = { ...s, badge: RED, icon: RED_ICON };
     const u = e.usage_totals ?? {};
     summary = (
       <>
-        <PhaseBadge phase={e.phase} className="text-[10px]" />
+        <StateBadge state={e.state} className="text-[10px]" />
         <span className="text-muted-foreground">
           {fmtVal(e.duration_s)}s · {fmtVal(u.llm_calls)} calls · {fmtVal(u.input_tokens)}+{fmtVal(u.output_tokens)} tok
         </span>
@@ -994,8 +994,8 @@ export const evChannel = (e: Ev): string | null => {
   return sid === undefined || sid === null ? null : `instance:${String(sid)}`;
 };
 
-export function EventStream({ events, phase, cid, rid }: {
-  events: Ev[]; phase: string; cid?: string; rid?: string;
+export function EventStream({ events, state, cid, rid }: {
+  events: Ev[]; state: string; cid?: string; rid?: string;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
@@ -1040,7 +1040,7 @@ export function EventStream({ events, phase, cid, rid }: {
     setScrollTop(el.scrollTop);
   };
 
-  const live = phase === "running";
+  const live = state === "running";
   const fetchFull = cid && rid
     ? (seq: unknown) => fetchFullEvent(cid, rid, seq)
     : undefined;
@@ -1107,7 +1107,7 @@ export function EventStream({ events, phase, cid, rid }: {
       {/* pane header: the liveness dot sits HERE, next to the stream it vouches
           for, adjacent to the auto-follow control */}
       <div className="flex items-center gap-3 border-b bg-muted/30 px-2.5 py-1">
-        <LiveDot phase={phase} />
+        <LiveDot state={state} />
         <span className="font-mono text-[11px] text-muted-foreground">
           {channelPick ? `${shown.length}/${events.length}` : events.length} events
         </span>

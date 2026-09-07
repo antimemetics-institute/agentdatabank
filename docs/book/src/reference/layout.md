@@ -23,7 +23,7 @@ DATA_DIR/
 | Path | Contents |
 | --- | --- |
 | `conditions/CONDITION_ID.json` | `{experiment, source, params}` for the condition, written once. |
-| `run.json` | Current or final run metadata. Replaced atomically as the run changes phase. |
+| `run.json` | Current or final run metadata. Replaced atomically as the run changes state. |
 | `events-NNNNN.jsonl` | Event envelopes, one JSON object per line, in ascending sequence order. Chunks rotate at roughly one million characters. |
 | `artifacts/` | Files deliberately retained by the experiment; artifact events point to run-relative paths. |
 | `workspace/` | Fresh working directory used to execute the experiment. |
@@ -56,7 +56,7 @@ A run ID is a newly generated ULID. Replicates of a condition share its conditio
 | `dirty` | Whether `fetch_ref` starts with `dirty:`. |
 | `seed` | Derived run seed, not the CLI base seed. |
 | `replicate` | One-based replicate number within this invocation. |
-| `phase` | Current or terminal process phase. |
+| `state` | Current or terminal process state. |
 | `started_at` | UTC timestamp written when the run begins. |
 | `finished_at` | UTC completion timestamp; added at termination. |
 | `duration_s` | Elapsed run duration in seconds; added at termination. |
@@ -66,14 +66,14 @@ A run ID is a newly generated ULID. Replicates of a condition share its conditio
 
 Token totals use the usage the adapter reports; absent token counts contribute zero. `llm_calls` counts emitted call events, including calls with errors. These are recorded-event totals, not an independently verified provider bill.
 
-## What do the phases mean?
+## What do the states mean?
 
-| Phase | Meaning |
+| State | Meaning |
 | --- | --- |
-| `provisioning` | Run metadata has been created; the experiment has not yet reached the running phase. |
+| `provisioning` | Run metadata has been created; the experiment has not yet reached the running state. |
 | `running` | Experiment process has started. |
 | `completed` | Experiment process exited with code zero. |
 | `failed` | Experiment process exited with a nonzero code. |
 | `interrupted` | Runner handled an interrupt, or the experiment exited due to a signal. |
 
-While active, the runner touches `run.json` approximately every ten seconds without changing its contents. The viewer uses that file modification time as a heartbeat. Its **interrupted?** label for stale active runs is display state; it is not written back as a terminal phase. A hard crash can leave partial files and no `run.end`.
+While active, the runner touches `run.json` approximately every ten seconds without changing its contents. The viewer uses that file modification time as a heartbeat. Its **interrupted?** label for stale active runs is display state; it is not written back as a terminal state. A hard crash can leave partial files and no `run.end`.

@@ -184,23 +184,23 @@ function JobLog({ lines }: { lines: string[] }) {
   );
 }
 
-/* one job's live card: phase chip, run links, stop, log tail. Shared between the
+/* one job's live card: state chip, run links, stop, log tail. Shared between the
    builder's run tab (queueLink on — a pointer to the Jobs page) and the Jobs
    page's expanded rows (queueLink off — you're already there). */
 export function JobPanel({ job, onStop, queueLink }: {
   job: JobInfo; onStop: () => void; queueLink?: boolean;
 }) {
-  const live = !JOB_TERMINAL.has(job.phase);
+  const live = !JOB_TERMINAL.has(job.state);
   const chip =
-    job.phase === "queued" ? "queued…"
-    : job.phase === "claimed" ? "starting locally…"
-    : job.phase === "building" ? "building locally (Nix)…"
-    : job.phase === "running" ? "running locally…"
-    : job.phase === "completed" ? "invocation finished — see individual run outcomes"
-    : job.phase;
+    job.state === "queued" ? "queued…"
+    : job.state === "claimed" ? "starting locally…"
+    : job.state === "building" ? "building locally (Nix)…"
+    : job.state === "running" ? "running locally…"
+    : job.state === "completed" ? "invocation finished — see individual run outcomes"
+    : job.state;
   const tone =
-    job.phase === "completed" ? "text-emerald-600 dark:text-emerald-400"
-    : job.phase === "failed" || job.phase === "error" ? "text-red-600 dark:text-red-400"
+    job.state === "completed" ? "text-emerald-600 dark:text-emerald-400"
+    : job.state === "failed" || job.state === "error" ? "text-red-600 dark:text-red-400"
     : "text-muted-foreground";
   return (
     /* data-job: stable hook for e2e drivers and the docs GIF recorder */
@@ -250,7 +250,7 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
 
   /* the 1s job poll, while one is live */
   useEffect(() => {
-    if (!job || JOB_TERMINAL.has(job.phase)) return;
+    if (!job || JOB_TERMINAL.has(job.state)) return;
     jobId.current = job.id;
     const t = setInterval(() => {
       api<JobInfo>(`/api/jobs/${job.id}`)
@@ -260,7 +260,7 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
     return () => clearInterval(t);
   }, [job]);
 
-  const jobActive = job !== null && !JOB_TERMINAL.has(job.phase);
+  const jobActive = job !== null && !JOB_TERMINAL.has(job.state);
   useEffect(() => { onLive?.(jobActive); }, [jobActive, onLive]);
 
   const sets = setsUsed({ name, params }, vals, creds.mock_prefixes);

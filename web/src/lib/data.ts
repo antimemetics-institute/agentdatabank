@@ -81,8 +81,8 @@ export function useRunsPoll(): RunMeta[] | null {
 /* ------------- jobs + workers (the launch queue) ------------- */
 
 /* mirror of the server's terminal set (server/queue.ts) — a job in one of these
-   phases will never change again */
-export const JOB_TERMINAL = new Set<JobInfo["phase"]>(
+   states will never change again */
+export const JOB_TERMINAL = new Set<JobInfo["state"]>(
   ["completed", "failed", "stopped", "orphaned", "error"]);
 
 /* both polls share the creds surface's tri-state: undefined = first fetch still
@@ -141,13 +141,13 @@ export function usePollHealth(): { live: boolean; lastOkAt: number } {
 /* stale-running detection (events spec, Ordering & integrity): the runner touches
    run.json every 10s while alive; a `running` run whose heartbeat is older than 45s
    is displayed as `interrupted?` — never silently `running` forever. Terminal
-   phases are untouched (pre-heartbeat stores freeze mtime at the final write). */
+   states are untouched (pre-heartbeat stores freeze mtime at the final write). */
 const HEARTBEAT_STALE_MS = 45_000;
-export function displayPhase(r: RunMeta): string {
-  if (r.phase === "running" && r.heartbeat_at
+export function displayState(r: RunMeta): string {
+  if (r.state === "running" && r.heartbeat_at
       && Date.now() - Date.parse(r.heartbeat_at) > HEARTBEAT_STALE_MS)
     return "interrupted?";
-  return r.phase;
+  return r.state;
 }
 
 /* run-reference lookup (lineage navigation): resolve a bare run id to its run */

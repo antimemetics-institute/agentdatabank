@@ -133,7 +133,7 @@ def test_full_translation_shape(capsys):
     assert any(e["type"] == "metric" and e["name"] == "includes/accuracy"
                and e["value"] == 0.5 for e in events)
 
-    assert summary == {"status": "success", "samples": 2, "completed": 2,
+    assert summary == {"samples": 2, "completed": 2,
                        "errors": 0, "score": 0.5, "score_name": "includes/accuracy",
                        "tokens_input": 3, "tokens_output": 38}
 

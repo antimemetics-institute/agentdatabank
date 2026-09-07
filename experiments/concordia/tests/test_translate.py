@@ -88,9 +88,9 @@ def test_provenance_is_an_agent_event(capsys):
 
 
 def test_summary_emits_metrics_and_returns_dict(capsys):
-    summary = emit_summary(status_str="completed", steps=3, agents=2,
+    summary = emit_summary(steps=3, agents=2,
                            world_events=9, model_calls=14)
-    assert summary == {"status": "completed", "steps": 3, "agents": 2,
+    assert summary == {"steps": 3, "agents": 2,
                        "world_events": 9, "model_calls": 14}
     events = _events(capsys)
     assert {e["type"] for e in events} == {"metric"}

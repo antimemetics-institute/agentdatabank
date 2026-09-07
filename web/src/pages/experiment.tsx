@@ -1,8 +1,8 @@
 /* Experiment page: manifest-driven configuration and optional documentation are
    available even before any runs exist. */
 
-import { displayPhase, useManifests, useRunsPoll } from "@/lib/data";
-import { ExtLinks, MdView, PageLoading, PHASES, phaseText } from "@/components/bits";
+import { displayState, useManifests, useRunsPoll } from "@/lib/data";
+import { ExtLinks, MdView, PageLoading, STATES, stateText } from "@/components/bits";
 import { Builder } from "@/components/builder";
 import { RunsTable } from "@/pages/runs";
 
@@ -22,7 +22,7 @@ export function ExperimentPage({ name }: { name: string }) {
   const manifest = useManifests()?.find((m) => m.name === name);
   const rs = (runs ?? []).filter((r) => r.experiment === name);
   const counts: Record<string, number> = {};
-  for (const r of rs) counts[displayPhase(r)] = (counts[displayPhase(r)] ?? 0) + 1;
+  for (const r of rs) counts[displayState(r)] = (counts[displayState(r)] ?? 0) + 1;
 
   return (
     <div className="space-y-4">
@@ -30,8 +30,8 @@ export function ExperimentPage({ name }: { name: string }) {
         <h2 className="text-lg font-semibold">{name}</h2>
         <ExtLinks links={manifest?.links} />
         <span className="flex flex-wrap gap-3 text-xs">
-          {PHASES.filter((p) => counts[p]).map((p) => (
-            <span key={p} className={phaseText[p]}>{counts[p]} {p}</span>
+          {STATES.filter((p) => counts[p]).map((p) => (
+            <span key={p} className={stateText[p]}>{counts[p]} {p}</span>
           ))}
         </span>
       </div>

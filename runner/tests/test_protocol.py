@@ -16,6 +16,7 @@ MANIFEST = {"name": "t", "params": {"x": {"type": {"kind": "int"}, "default": 1}
 FIXTURE = r"""#!/bin/sh
 read -r params
 echo "{\"type\":\"status\",\"detail\":\"got $params\"}"
+echo '{"type":"status","phase":"experiment-stage"}'
 echo '{"type":"metric","name":"m","value":42}'
 echo '{"type":"metric","name":"undeclared","value":1}'
 echo '{"type":"message","from":"a","channel":"town","content":"hi"}'
@@ -50,11 +51,17 @@ def run_fixture(tmp_path, script=FIXTURE, params=None):
 def test_protocol_end_to_end(tmp_path):
     result, envelopes, store = run_fixture(tmp_path)
 
-    assert result.phase == "completed"
+    assert result.state == "completed"
     # transport envelope: runner owns v/ts/run/seq; the payload rides under `event`
     assert [e["seq"] for e in envelopes] == list(range(len(envelopes)))
     assert all(e["v"] == 0 and e["run"] == "rid" and "event" in e for e in envelopes)
     payloads = [e["event"] for e in envelopes]
+
+    record = json.loads((store.dir / "run.json").read_text())
+    assert record["state"] == "completed" and "phase" not in record
+    assert payloads[1] == {"type": "run.status", "state": "running"}
+    assert {"type": "status", "phase": "experiment-stage"} in payloads
+    assert payloads[-1]["state"] == "completed" and "phase" not in payloads[-1]
 
     start = payloads[0]
     assert start["type"] == "run.start"
@@ -92,7 +99,7 @@ def test_protocol_end_to_end(tmp_path):
 
 def test_nonzero_exit_is_failed(tmp_path):
     result, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n")
-    assert result.phase == "failed"
+    assert result.state == "failed"
     assert envelopes[-1]["event"]["exit_code"] == 3
 
 
@@ -118,7 +125,7 @@ def test_orphaned_pipe_holders_do_not_hang_the_run(tmp_path):
     start = _time.monotonic()
     result, envelopes, _ = run_fixture(tmp_path, script=script)
     assert _time.monotonic() - start < 25  # not held hostage by the sleeping orphan
-    assert result.phase == "completed"
+    assert result.state == "completed"
     assert any("descendants still hold" in str(e["event"].get("message", ""))
                for e in envelopes)
 

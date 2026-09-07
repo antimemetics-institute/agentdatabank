@@ -2,15 +2,15 @@
 
 The protocol (runner side: adb_runner/protocol.py): realized params arrive as
 JSON on stdin, ``ADB_RUN_DIR``/``ADB_SEED`` ride in the env, events leave as
-JSON lines on stdout, and failure at any stage is data — the run finishes with
-a fallback summary and exit 0; only unreadable params exit nonzero. A config
-file named on argv overrides stdin — the hand-run/debug path, and the seam an
+JSON lines on stdout, and execution failures return a nonzero exit code after
+emitting diagnostic evidence and any fallback summary. A config file named on
+argv overrides stdin — the hand-run/debug path, and the seam an
 adapter uses when it reshapes params first (concordia). Every experiment
 repeats that scaffold verbatim, so it lives here:
 
     def main() -> int:
         return experiment_main(Params, run, prog="my-experiment",
-                               fallback_summary={"status": "error"})
+                               fallback_summary={"samples": 0})
 
 Also here: ``protected_stream()`` — run a wrapped tool that prints to stdout
 without corrupting the JSONL channel — and ``deposit_artifact()`` — write a file
@@ -46,9 +46,9 @@ def experiment_main(params_model: SupportsModelValidate,
                     argv: list[str] | None = None) -> int:
     """The whole main(): read params (stdin, or a config file named on argv),
     validate them (any object with a pydantic-style ``model_validate``), default
-    ``ADB_RUN_DIR``, call ``run(params)``. A `run` that raises is data — the
-    traceback goes to stderr, each entry of `fallback_summary` is emitted as a
-    metric, and the exit code stays 0."""
+    ``ADB_RUN_DIR``, call ``run(params)``. If `run` raises, the traceback goes
+    to stderr, each entry of `fallback_summary` is emitted as a metric, and
+    the exit code is 1. Successful execution returns 0."""
     parser = argparse.ArgumentParser(prog=prog, description=description)
     parser.add_argument(
         "config", nargs="?",
@@ -69,6 +69,7 @@ def experiment_main(params_model: SupportsModelValidate,
         traceback.print_exc()
         for name, value in (fallback_summary or {}).items():
             metric(name=name, value=value)
+        return 1
     return 0
 
 

@@ -27,7 +27,7 @@ const raw = readFileSync(process.env.FIXTURE!, "utf8"); // absolute path from re
 const events: Ev[] = raw.split("\n").filter(Boolean).map((l) => flattenEv(JSON.parse(l) as Ev));
 
 const html = renderToStaticMarkup(
-  <EventStream events={events} phase="completed" cid="fixturecid" rid="FIXTURERID" />,
+  <EventStream events={events} state="completed" cid="fixturecid" rid="FIXTURERID" />,
 );
 
 const leaks = ["[object Object]", "undefined,undefined", "NaN undefined"]

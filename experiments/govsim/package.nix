@@ -131,7 +131,6 @@ in
       };
     };
     results = with adb.types; {
-      status = str;            # completed | error
       rounds = int;            # months actually simulated
       collapsed = bool;        # pool dropped below 5 before the round cap
       survival_months = int;   # paper metric (plots.py formula): collapse round + 1, else the cap

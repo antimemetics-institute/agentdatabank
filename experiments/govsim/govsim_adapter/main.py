@@ -229,12 +229,10 @@ def _run(params: Params) -> None:
     deposit_artifact("config", OmegaConf.to_yaml(cfg),
                      filename="config.yaml", media_type="application/yaml")
 
-    metric(name="status", value="completed")
     for name, value in results.items():
         metric(name=name, value=value)
     metric(name="model_calls", value=backend.client.n_calls)
 
 
 def main() -> int:
-    return experiment_main(Params, run, prog="govsim",
-                           fallback_summary={"status": "error"})
+    return experiment_main(Params, run, prog="govsim")

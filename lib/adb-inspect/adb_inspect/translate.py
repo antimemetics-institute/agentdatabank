@@ -233,7 +233,7 @@ def emit_aggregate(log: EvalLog, agent: str) -> dict[str, Any]:
     score, score_name = headline(log)
 
     summary: dict[str, Any] = {
-        "status": log.status, "samples": total, "completed": completed,
+        "samples": total, "completed": completed,
         "errors": errors, "score": score, "score_name": score_name,
         "tokens_input": ti, "tokens_output": to,
     }

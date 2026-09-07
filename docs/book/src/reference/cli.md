@@ -22,7 +22,7 @@ All experiment apps accept these runner options:
 | `--describe` | Print the experiment manifest as JSON and exit without requiring parameter bindings. |
 | `-h`, `--help` | Print usage. |
 
-The runner returns status `2` for input or credential-resolution errors handled before execution. After executing runs it reports phase counts and normally returns `0`, including when individual runs failed or were interrupted. For automation, inspect `run.end` or saved `run.json` phases rather than treating a zero runner exit code as proof that every experiment succeeded.
+The runner returns exit code `2` for input or credential-resolution errors handled before execution. After execution it reports state counts and returns `0` if all runs completed, `1` if any run failed or timed out, or `130` if interrupted. An interruption stops the remaining replicates. Inspect `run.end` or saved `run.json` states for individual process outcomes, and summaries and events for evaluation results.
 
 ## How are parameter values read?
 

@@ -6,9 +6,9 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { Ev } from "@/shared/types";
-import { api, conds, displayPhase, flattenEv, fmtVal, runCache, uiState, useManifests, useRunsPoll } from "@/lib/data";
+import { api, conds, displayState, flattenEv, fmtVal, runCache, uiState, useManifests, useRunsPoll } from "@/lib/data";
 import type { RunMeta } from "@/shared/types";
-import { Chip, ExitBadge, ExtLinks, LiveDot, LoadingBar, PhaseBadge, Skeleton } from "@/components/bits";
+import { Chip, ExitBadge, ExtLinks, LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
 import { InstanceScoreChips, ResultChip, ResultChips, dedupeMetrics } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
 import { ParamChip } from "@/components/param-value";
@@ -79,10 +79,10 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
   const visible = activeFilter ? events.filter(activeFilter.pred) : events;
 
   const end = events.find((e) => e.type === "run.end");
-  /* one display phase for the whole page: run.end wins; otherwise run.json's
+  /* one display state for the whole page: run.end wins; otherwise run.json's
      heartbeat decides running vs interrupted?; event-derived fallback */
-  const phase = end ? end.phase
-    : meta ? displayPhase(meta)
+  const state = end ? end.state
+    : meta ? displayState(meta)
     : events.some((e) => e.type === "run.status") ? "running" : "provisioning";
   if (!events.length)
     return (
@@ -95,7 +95,7 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
     );
   return (
     <div className="flex h-full flex-col gap-3">
-      <RunHead cid={cid} rid={rid} events={events} phase={phase} />
+      <RunHead cid={cid} rid={rid} events={events} state={state} />
       {filters.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">filter:</span>
@@ -114,7 +114,7 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <EventStream events={visible} phase={phase} cid={cid} rid={rid} />
+        <EventStream events={visible} state={state} cid={cid} rid={rid} />
       </div>
     </div>
   );
@@ -122,8 +122,8 @@ export function RunPage({ cid, rid }: { cid: string; rid: string }) {
 
 /* ---------------- header ---------------- */
 
-function RunHead({ cid, rid, events, phase }: {
-  cid: string; rid: string; events: Ev[]; phase: string;
+function RunHead({ cid, rid, events, state }: {
+  cid: string; rid: string; events: Ev[]; state: string;
 }) {
   const [details, setDetails] = useState(false);
   const start = events.find((e) => e.type === "run.start") ?? {};
@@ -151,7 +151,7 @@ function RunHead({ cid, rid, events, phase }: {
     <div className="space-y-2">
       <h2 className="flex items-center gap-3 text-lg font-semibold">
         {start.experiment ?? "run"}
-        <PhaseBadge phase={phase} />
+        <StateBadge state={state} />
       </h2>
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
         <span className="font-mono text-xs text-muted-foreground">{cid.slice(0, 12)} · {rid}</span>

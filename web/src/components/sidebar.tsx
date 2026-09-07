@@ -29,7 +29,7 @@ export function Sidebar({
      that changes while you're elsewhere. Gated callers (null) just get no badge. */
   const jobs = useJobsPoll();
   const executor = useExecutorPoll();
-  const active = jobs?.filter((j) => !JOB_TERMINAL.has(j.phase)).length ?? 0;
+  const active = jobs?.filter((j) => !JOB_TERMINAL.has(j.state)).length ?? 0;
   return (
     <aside className="flex w-44 shrink-0 flex-col border-r bg-card/50">
       <a href="#/" className="px-4 py-3.5 font-mono text-lg font-bold tracking-widest no-underline">

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { PageLoading, PhaseBadge } from "@/components/bits";
+import { PageLoading, StateBadge } from "@/components/bits";
 import { JobPanel } from "@/components/launcher";
 import type { JobInfo } from "@/shared/types";
 
@@ -43,7 +43,7 @@ function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
     void apiPost("/api/jobs", {
       experiment: j.experiment, sets: j.sets, profiles: j.profiles, replicates: j.replicates,
     }).then(() => setErr(null)).catch((e: Error) => setErr(e.message));
-  const cols = ["job", "experiment", "phase", "runs", "created", ""];
+  const cols = ["job", "experiment", "state", "runs", "created", ""];
   return (
     <section className="space-y-1.5">
       <h3 className="text-sm font-medium text-muted-foreground">jobs</h3>
@@ -64,7 +64,7 @@ function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
               </TableRow>
             )}
             {jobs.map((j) => {
-              const live = !JOB_TERMINAL.has(j.phase);
+              const live = !JOB_TERMINAL.has(j.state);
               const open = expanded[j.id] === true;
               return (
                 <JobRows key={j.id} job={j} live={live} open={open} colSpan={cols.length}
@@ -99,7 +99,7 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabl
             {j.experiment}
           </a>
         </TableCell>
-        <TableCell><PhaseBadge phase={j.phase} /></TableCell>
+        <TableCell><StateBadge state={j.state} /></TableCell>
         <TableCell className="text-xs">
           <span className="flex flex-wrap gap-1.5">
             {j.runs.length === 0 && <span className="text-muted-foreground">—</span>}

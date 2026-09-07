@@ -13,7 +13,7 @@ const source = resolve(process.env.ADB_DOCS_REPLAY_RUN || '');
 if (!process.env.ADB_DOCS_REPLAY_RUN || !process.env.ADB_DOCS_REPLAY_DIR)
   throw new Error('Set ADB_DOCS_REPLAY_RUN and ADB_DOCS_REPLAY_DIR');
 const meta = JSON.parse(readFileSync(join(source, 'run.json'), 'utf8'));
-if (meta.experiment !== experiment || meta.phase !== 'completed')
+if (meta.experiment !== experiment || meta.state !== 'completed')
   throw new Error('Replay must select the captured experiment and a completed run');
 const speed = Number(process.env.ADB_DOCS_REPLAY_SPEED || '1');
 if (!Number.isFinite(speed) || speed <= 0) throw new Error('Replay speed must be positive and finite');

@@ -72,7 +72,7 @@ start_server() {
 drain_jobs() {
   for _ in $(seq 600); do
     curl -sf "http://127.0.0.1:$PORT/api/jobs" \
-      | grep -qE '"phase":"(queued|claimed|building|running)"' || return 0
+      | grep -qE '"state":"(queued|claimed|building|running)"' || return 0
     sleep 1
   done
   echo "jobs still live after 10m — giving up" >&2; return 1

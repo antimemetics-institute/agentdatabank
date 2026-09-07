@@ -27,7 +27,6 @@ let
   };
 
   results = with adb.types; {
-    status = str;
     samples = int;
     completed = int;
     errors = int;

@@ -24,7 +24,7 @@ def contained(root, name):
 
 def load_capture(source):
     metadata = json.loads((source / 'run.json').read_text())
-    if metadata.get('phase') != 'completed':
+    if metadata.get('state') != 'completed':
         raise ValueError('replay requires a completed saved run')
     events = []
     previous_seq = -1

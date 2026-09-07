@@ -9,7 +9,7 @@ interface Job extends JobInfo {
 }
 
 const jobs = new Map<string, Job>();
-const TERMINAL = new Set<JobInfo["phase"]>(["completed", "failed", "stopped", "orphaned", "error"]);
+const TERMINAL = new Set<JobInfo["state"]>(["completed", "failed", "stopped", "orphaned", "error"]);
 const LOG_CAP = 400;      /* narration tail lines kept per job */
 const QUEUE_CAP = 32;     /* refuse a deeper backlog — runaway guard, not a scheduler */
 export const CLAIM_HOLD_MS = 25_000;
@@ -39,8 +39,8 @@ export const flushJobs = (): Promise<void> => writes;
 
 export function interruptJobs(home: string): void {
   for (const job of jobs.values()) {
-    if (!TERMINAL.has(job.phase) && job.phase !== "queued") {
-      job.phase = "orphaned";
+    if (!TERMINAL.has(job.state) && job.state !== "queued") {
+      job.state = "orphaned";
       job.finished_at = now();
       job.log.push("Local executor exited; this job will not be retried automatically.");
       persist(home, job);
@@ -61,8 +61,8 @@ export async function initJobs(home: string): Promise<void> {
   for (const f of files) {
     try {
       const job = JSON.parse(await readFile(join(jobsDir(home), f), "utf8")) as Job;
-      if (!TERMINAL.has(job.phase) && job.phase !== "queued") {
-        job.phase = "orphaned";
+      if (!TERMINAL.has(job.state) && job.state !== "queued") {
+        job.state = "orphaned";
         job.log.push("Local ADB restarted during this job; it will not be retried automatically.");
         persist(home, job);
       }
@@ -89,11 +89,11 @@ let waiters: Waiter[] = [];
 
 const nextQueued = (): Job | undefined =>
   [...jobs.values()]
-    .filter((j) => j.phase === "queued")
+    .filter((j) => j.state === "queued")
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
 
 function assign(home: string, job: Job): void {
-  job.phase = "claimed";
+  job.state = "claimed";
   persist(home, job);
 }
 
@@ -105,7 +105,7 @@ const claimSpec = (job: Job) => ({
 
 export function claim(home: string): { job: Promise<ReturnType<typeof claimSpec> | null> } {
   // One supervised executor, one in-flight job. Duplicate claims cannot start another.
-  if ([...jobs.values()].some((j) => !TERMINAL.has(j.phase) && j.phase !== "queued"))
+  if ([...jobs.values()].some((j) => !TERMINAL.has(j.state) && j.state !== "queued"))
     return { job: Promise.resolve(null) };
   const ready = nextQueued();
   if (ready) {
@@ -132,13 +132,13 @@ export interface JobSpec {
 }
 
 export function submit(home: string, spec: JobSpec): { job: JobInfo } | { error: string } {
-  const backlog = [...jobs.values()].filter((j) => !TERMINAL.has(j.phase)).length;
+  const backlog = [...jobs.values()].filter((j) => !TERMINAL.has(j.state)).length;
   if (backlog >= QUEUE_CAP)
     return { error: `${QUEUE_CAP} jobs already queued or running — wait or stop some` };
   const job: Job = {
     id: newId("j"),
     experiment: spec.experiment,
-    phase: "queued",
+    state: "queued",
     sets: spec.sets,
     profiles: spec.profiles,
     replicates: spec.replicates,
@@ -158,17 +158,17 @@ export function submit(home: string, spec: JobSpec): { job: JobInfo } | { error:
 
 /* ---------------- worker reports (the command channel rides the reply) ---------------- */
 
-const REPORT_PHASES = new Set<JobInfo["phase"]>(["building", "running"]);
+const REPORT_STATES = new Set<JobInfo["state"]>(["building", "running"]);
 
 export function report(
   home: string, id: string,
-  body: { phase?: string; runs?: string[]; log?: string[] },
+  body: { state?: string; runs?: string[]; log?: string[] },
 ): { stop: boolean } | null {
   const job = jobs.get(id);
   if (!job) return null;
-  if (TERMINAL.has(job.phase)) return { stop: true };
-  if (body.phase && REPORT_PHASES.has(body.phase as JobInfo["phase"]))
-    job.phase = body.phase as JobInfo["phase"];
+  if (TERMINAL.has(job.state)) return { stop: true };
+  if (body.state && REPORT_STATES.has(body.state as JobInfo["state"]))
+    job.state = body.state as JobInfo["state"];
   for (const rid of body.runs ?? [])
     if (!job.runs.includes(rid)) job.runs.push(rid);
   if (body.log?.length) pushLog(home, job, body.log);
@@ -176,16 +176,16 @@ export function report(
   return { stop: job.stopRequested === true };
 }
 
-const DONE_PHASES = new Set<JobInfo["phase"]>(["completed", "failed", "stopped", "error"]);
+const DONE_STATES = new Set<JobInfo["state"]>(["completed", "failed", "stopped", "error"]);
 
 export function done(
   home: string, id: string,
-  body: { phase?: string; exit_code?: number },
+  body: { state?: string; exit_code?: number },
 ): boolean {
   const job = jobs.get(id);
   if (!job) return false;
-  job.phase = DONE_PHASES.has(body.phase as JobInfo["phase"])
-    ? (body.phase as JobInfo["phase"]) : "failed";
+  job.state = DONE_STATES.has(body.state as JobInfo["state"])
+    ? (body.state as JobInfo["state"]) : "failed";
   if (typeof body.exit_code === "number") job.exit_code = body.exit_code;
   job.finished_at = now();
   persist(home, job);
@@ -196,9 +196,9 @@ export function done(
    on the worker's next report (its cadence bounds the latency to ~1s) */
 export function stopJob(home: string, id: string): boolean {
   const job = jobs.get(id);
-  if (!job || TERMINAL.has(job.phase)) return false;
-  if (job.phase === "queued") {
-    job.phase = "stopped";
+  if (!job || TERMINAL.has(job.state)) return false;
+  if (job.state === "queued") {
+    job.state = "stopped";
     job.finished_at = now();
     persist(home, job);
     return true;

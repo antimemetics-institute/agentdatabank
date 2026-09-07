@@ -242,8 +242,8 @@ async function runView() {
   const deadline = Date.now() + 120000;
   while (true) {
     const runs = await (await context.request.get(`${BASE_URL}/api/runs`)).json();
-    if (runs.length === 1 && runs[0].phase === "completed") break;
-    if (Date.now() > deadline || runs.some(run => ["failed", "interrupted"].includes(run.phase)))
+    if (runs.length === 1 && runs[0].state === "completed") break;
+    if (Date.now() > deadline || runs.some(run => ["failed", "interrupted"].includes(run.state)))
       throw new Error("replay did not complete before inspection");
     await page.waitForTimeout(250);
   }

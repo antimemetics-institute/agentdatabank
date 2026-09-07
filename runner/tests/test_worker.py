@@ -69,7 +69,7 @@ def test_worker_loop_end_to_end(tmp_path, monkeypatch):
     exp.write_text(f"""#!/bin/sh
 echo "$@" > {tmp_path}/argv
 echo '{{"v":0,"ts":"t","run":"RUN1","seq":0,"event":{{"type":"run.start"}}}}'
-echo '{{"v":0,"ts":"t","run":"RUN1","seq":1,"event":{{"type":"run.end","phase":"completed"}}}}'
+echo '{{"v":0,"ts":"t","run":"RUN1","seq":1,"event":{{"type":"run.end","state":"completed"}}}}'
 echo '{{"v":0,"ts":"t","run":"RUN2","seq":0,"event":{{"type":"run.start"}}}}'
 echo not-json-narration
 echo "runner narration" >&2
@@ -112,9 +112,9 @@ exit 0
     assert any("building the thing" in line for line in logs)
     assert any("runner narration" in line for line in logs)
     assert any("run RUN1 completed" in line for line in logs)
-    phases = [rep["phase"] for rep in seen["reports"] if "phase" in rep]
-    assert phases[:2] == ["building", "running"]
-    assert seen["done"] == {"phase": "completed", "exit_code": 0}
+    states = [rep["state"] for rep in seen["reports"] if "state" in rep]
+    assert states[:2] == ["building", "running"]
+    assert seen["done"] == {"state": "completed", "exit_code": 0}
 
 
 def test_worker_reports_failed_build(tmp_path, monkeypatch):
@@ -134,7 +134,7 @@ def test_worker_reports_failed_build(tmp_path, monkeypatch):
     finally:
         server.shutdown()
     assert code == 0  # a bad job is a job outcome, never a worker crash
-    assert StubQueue.seen["done"]["phase"] == "error"
+    assert StubQueue.seen["done"]["state"] == "error"
     logs = [line for rep in StubQueue.seen["reports"] for line in rep.get("log", [])]
     assert any("no attribute" in line for line in logs)
 
@@ -271,7 +271,7 @@ time.sleep(100)
         deadline = time.monotonic() + 3
         while "done" not in StubQueue.seen and time.monotonic() < deadline:
             time.sleep(.05)
-        assert StubQueue.seen["done"]["phase"] == "stopped"
+        assert StubQueue.seen["done"]["state"] == "stopped"
     finally:
         if supervisor.poll() is None:
             supervisor.kill()
@@ -283,3 +283,56 @@ time.sleep(100)
                 except ProcessLookupError:
                     pass
         server.shutdown()
+
+
+@pytest.mark.parametrize("script,run_state,exit_code,run_count", [
+    ("exit 0", "completed", 0, 2),
+    ("exit 3", "failed", 1, 2),
+    ("exit 124", "failed", 1, 2),  # an experiment's timeout exit
+    ("kill -TERM $$", "interrupted", 130, 1),
+])
+def test_experiment_outcome_reaches_cli_and_queue(
+        tmp_path, monkeypatch, script, run_state, exit_code, run_count):
+    """A real experiment -> runner subprocess -> queue must agree on failure."""
+    import sys
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    experiment = tmp_path / "experiment"
+    experiment.write_text(f"#!/bin/sh\n{script}\n")
+    experiment.chmod(0o755)
+    launcher = tmp_path / "runner"
+    launcher.write_text(f"#!{sys.executable}\nfrom adb_runner.cli import main\nraise SystemExit(main())\n")
+    launcher.chmod(0o755)
+    build = tmp_path / "build"
+    build.write_text(f"#!/bin/sh\nprintf '%s\\n' '{launcher}'\n")
+    build.chmod(0o755)
+    home = tmp_path / "home"
+    for key, value in {
+        "ADB_MANIFEST": manifest, "ADB_EXPERIMENT_BIN": experiment,
+        "ADB_WORKER_BUILD": build, "ADB_EXECUTOR_CAPABILITY": "test",
+        "ADB_DATA_DIR": home, "ADB_CREDENTIALS_FILE": tmp_path / "credentials.toml",
+    }.items():
+        monkeypatch.setenv(key, str(value))
+    monkeypatch.setitem(JOB, "sets", [])
+    monkeypatch.setitem(JOB, "profiles", {})
+    StubQueue.seen = {}
+    server = HTTPServer(("127.0.0.1", 0), StubQueue)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        assert worker_cli(["--server", f"http://127.0.0.1:{server.server_port}",
+                           "--repo", str(tmp_path), "--once"]) == 0
+    finally:
+        server.shutdown()
+    assert StubQueue.seen["done"] == {
+        "state": "completed" if exit_code == 0 else "failed", "exit_code": exit_code}
+    records = list(home.glob("runs/*/*/run.json"))
+    assert len(records) == run_count
+    for path in records:
+        record = json.loads(path.read_text())
+        assert record["state"] == run_state and "phase" not in record
+        events = [json.loads(line)["event"]
+                  for chunk in sorted(path.parent.glob("events-*.jsonl"))
+                  for line in chunk.read_text().splitlines()]
+        assert events[-1]["state"] == run_state
+        assert "phase" not in events[-1]

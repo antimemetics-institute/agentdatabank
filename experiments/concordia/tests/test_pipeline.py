@@ -88,7 +88,7 @@ def test_smoke_mock_run(capsys, tmp_path, monkeypatch):
     # the mock drove real model calls and the run completed with a summary
     assert "llm.call" in types
     metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
-    assert metrics["status"] == "completed"
+    assert "status" not in metrics
     assert metrics["agents"] == 2
     assert metrics["model_calls"] > 0
     # the run uses its full step budget — the dialogic game master cannot end the
@@ -121,3 +121,27 @@ def test_events_conform_to_schema(capsys, tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_RUN_DIR", str(tmp_path))
     run(Params(default_model="mock/model", max_steps=1, seed=7))
     assert assert_conformant(_events(capsys)) > 0
+
+
+def test_simulation_crash_preserves_partial_results_and_fails(capsys, tmp_path, monkeypatch):
+    import importlib
+    from types import SimpleNamespace
+
+    main_module = importlib.import_module("concordia_sim.main")
+
+    class CrashingSimulation:
+        def play(self, **kwargs):
+            kwargs["step_callback"](SimpleNamespace(step=1, acting_entity="Alice", action="Alice: hello"))
+            raise RuntimeError("play crashed")
+
+    monkeypatch.setenv("ADB_RUN_DIR", str(tmp_path))
+    monkeypatch.setattr(main_module, "build_simulation", lambda params: (CrashingSimulation(), []))
+    monkeypatch.setattr(main_module, "version", lambda package: "test")
+    with pytest.raises(RuntimeError, match="play crashed"):
+        main_module.run(Params(default_model="mock/model", max_steps=2, seed=7))
+    events = _events(capsys)
+    metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
+    assert metrics["steps"] == 1
+    assert metrics["world_events"] >= 1
+    assert "status" not in metrics
+    assert any(e["type"] == "log" and e["level"] == "error" for e in events)

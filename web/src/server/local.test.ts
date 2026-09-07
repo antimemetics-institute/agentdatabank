@@ -57,14 +57,14 @@ fs.writeFileSync(process.env.ADB_DATA_DIR + '.executor', JSON.stringify({pid: pr
 const headers = {'content-type':'application/json', 'x-adb-executor':process.env.ADB_EXECUTOR_CAPABILITY};
 let job;
 process.on('SIGTERM', async () => {
-  if (job) await fetch(endpoint+'/api/jobs/'+job.id+'/done', {method:'POST',headers,body:JSON.stringify({phase:'stopped'})});
+  if (job) await fetch(endpoint+'/api/jobs/'+job.id+'/done', {method:'POST',headers,body:JSON.stringify({state:'stopped'})});
   process.exit(0);
 });
 (async () => {
   const r = await fetch(endpoint+'/api/executor/claim', {method:'POST',headers,body:'{}'});
   if (r.status === 200) {
     job = await r.json();
-    await fetch(endpoint+'/api/jobs/'+job.id+'/report', {method:'POST',headers,body:JSON.stringify({phase:'running'})});
+    await fetch(endpoint+'/api/jobs/'+job.id+'/report', {method:'POST',headers,body:JSON.stringify({state:'running'})});
   }
   setInterval(()=>{},1000);
 })();
@@ -109,18 +109,18 @@ process.on('SIGTERM', async () => {
     const submitted = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) });
     assert.equal(submitted.status, 201);
     const job = await submitted.json();
-    await until(async () => (await (await fetch(a.url + "/api/jobs/" + job.id)).json()).phase === "running" || null);
+    await until(async () => (await (await fetch(a.url + "/api/jobs/" + job.id)).json()).state === "running" || null);
     assert.deepEqual(await (await fetch(b.url + "/api/jobs")).json(), []);
     assert.equal((await fetch(a.url + `/api/jobs/${job.id}/done`, { method: "POST" })).status, 403);
     const closed = once(a.child, "close"); a.child.kill("SIGTERM"); await closed;
     const saved = JSON.parse(readFileSync(join(dir, "a", "jobs", job.id + ".json"), "utf8"));
-    assert.equal(saved.phase, "stopped");
+    assert.equal(saved.state, "stopped");
     assert.deepEqual(saved.sets, spec.sets);
     const bJob = await (await fetch(b.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) })).json();
-    await until(async () => (await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).phase === "running" || null);
+    await until(async () => (await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).state === "running" || null);
     process.kill(JSON.parse(readFileSync(join(dir, "b.executor"), "utf8")).pid, "SIGKILL");
     await until(async () => (await (await fetch(b.url + "/api/executor")).json()).error || null);
-    assert.equal((await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).phase, "orphaned");
+    assert.equal((await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).state, "orphaned");
     assert.equal((await fetch(b.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) })).status, 503);
     const readonly = await launch(join(dir, "read-only"), 0, false, false);
     assert.equal(await (await fetch(readonly.url + "/")).text(), "test frontend");

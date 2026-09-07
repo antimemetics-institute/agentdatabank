@@ -125,7 +125,7 @@ export function InstanceScoreChips({ scores }: { scores: Record<string, unknown>
 /* aggregate chips over a set of runs (matrix cells): n, per-boolean pass rates
    (colored by ratio), per-numeric means — same chip language as single results */
 export function AggChips({ runs }: { runs: RunMeta[] }) {
-  const done = runs.filter((r) => r.phase === "completed");
+  const done = runs.filter((r) => r.state === "completed");
   const keys = [...new Set(done.flatMap((r) => Object.keys(r.summary ?? {})))];
   return (
     <span className="inline-flex flex-wrap items-center gap-1">

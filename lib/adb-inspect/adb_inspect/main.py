@@ -5,8 +5,8 @@
 One run = one `inspect_ai.eval(...)` over one task. The adapter merges $ADB_SEED
 into the params and hands us this config; we resolve the task, run the eval into a
 private log dir, translate the EvalLog (translate.py), and deposit the raw `.eval`
-log as an artifact. A plain program: no ADB imports; failure at any stage is data —
-the run finishes with a zeroed summary and exit 0, never crashes.
+log as an artifact. Execution failures preserve available evidence and return
+a nonzero exit code.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from .sandbox_status import sandbox_provisioning_status
 from .translate import (emit_aggregate, emit_live_model_event, emit_provenance,
                         emit_sample)
 
-_ZERO = {"status": "error", "samples": 0, "completed": 0, "errors": 0,
+_ZERO = {"samples": 0, "completed": 0, "errors": 0,
          "score": 0.0, "score_name": "", "tokens_input": 0, "tokens_output": 0}
 
 
@@ -127,7 +127,7 @@ class PrintStream(io.TextIOBase):
         return {}
 
 
-def run(params: Params) -> None:
+def run(params: Params) -> int:
     run_dir = Path(__import__("os").environ.get("ADB_RUN_DIR", "."))
     work = Path.cwd()
     log_dir = work / "inspect-logs"
@@ -203,17 +203,15 @@ def run(params: Params) -> None:
     try:
         with contextlib.redirect_stdout(PrintStream()), sandbox_provisioning_status():
             logs = run_eval(task, **eval_kwargs(params, log_dir))
-    except Exception as exc:  # an eval that won't even start is data, not a crash
+    except Exception as exc:
         log(f"inspect eval failed to run: {exc}", level="error")
-        _emit_zero()
-        return
+        raise
     finally:
         set_output(None)
 
     if not logs:
         log("inspect eval produced no log", level="error")
-        _emit_zero()
-        return
+        raise RuntimeError("inspect eval produced no log")
 
     log_obj = logs[0]
     emit_provenance(log_obj, agent)
@@ -225,8 +223,11 @@ def run(params: Params) -> None:
     deposit_log(log_obj, run_dir)
     if log_obj.error:
         log(f"eval error: {log_obj.error.message}", level="error")
-    status(f"done: status={summary['status']} score={summary['score']} "
+    status(f"done: {log_obj.status} score={summary['score']} "
            f"({summary['completed']}/{summary['samples']} samples)")
+    if log_obj.status != "success":
+        return 1
+    return 0
 
 
 def _emit_zero() -> None:
@@ -255,11 +256,11 @@ def main() -> int:
         traceback.print_exc()
         return 1
     try:
-        run(params)
+        return run(params)
     except Exception:
         traceback.print_exc()
         _emit_zero()
-    return 0
+        return 1
 
 
 if __name__ == "__main__":

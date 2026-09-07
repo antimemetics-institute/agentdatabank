@@ -20,17 +20,17 @@ nix run .#adb-web -- --data-dir /path/to/adb-data
 
 On **Experiments**, search by experiment name or summary. Sort the cards by name, run count or recent activity, then open an experiment to see its runs. **Runs** shows runs across all experiments.
 
-A run row shows its condition, run ID, replicate, phase, results and start time. The parameter column highlights values that vary among that experiment's runs; a dash does not mean the run had no inputs. Open the row to see the full record.
+A run row shows its condition, run ID, replicate, state, results and start time. The parameter column highlights values that vary among that experiment's runs; a dash does not mean the run had no inputs. Open the row to see the full record.
 
 If you launched a run in the terminal, open its printed **watch** link. The link names the run ID and resolves it within the store served by that viewer. If it reports that the run is missing, check that the viewer and runner use the same data directory.
 
 ## What should I check first?
 
-Read the phase and results at the top of the run page. Expand the metrics and parameters control to inspect the inputs and additional results. The header also shows the run seed, replicate number and, when the run has ended, reported model-call and token totals.
+Read the state and results at the top of the run page. Expand the metrics and parameters control to inspect the inputs and additional results. The header also shows the run seed, replicate number and, when the run has ended, reported model-call and token totals.
 
-A **completed** phase means the experiment process exited successfully. It does not establish that every evaluation instance succeeded: an adapter can catch an error and report it as a result. Check error counts, status metrics and logs as well as the process phase. A failed or interrupted run can still contain useful partial evidence.
+A **completed** state means the experiment process exited successfully. It does not establish that every evaluation instance succeeded: an adapter can catch an error and report it as a result. Check error counts and logs as well as the process state. A failed or interrupted run can still contain useful partial evidence.
 
-An **interrupted?** display means the saved run still says it is active but its heartbeat is stale. It is an inference about liveness, not a newly recorded outcome. See [run phases](../reference/layout.md#what-do-the-phases-mean).
+An **interrupted?** display means the saved run still says it is active but its heartbeat is stale. It is an inference about liveness, not a newly recorded outcome. See [run states](../reference/layout.md#what-do-the-states-mean).
 
 ## How do I inspect the evidence?
 
@@ -50,7 +50,7 @@ The [event reference](../reference/events.md) defines fields and conventions. [R
 
 ## How do I read the files without a browser?
 
-Start with the **store** path printed by the runner. To locate an older run, look under `runs/CONDITION_ID/RUN_ID/` in your [data directory](../reference/layout.md#where-are-runs-saved). Its `run.json` identifies the experiment, condition, source reference and phase. The corresponding `conditions/CONDITION_ID.json` contains the input configuration.
+Start with the **store** path printed by the runner. To locate an older run, look under `runs/CONDITION_ID/RUN_ID/` in your [data directory](../reference/layout.md#where-are-runs-saved). Its `run.json` identifies the experiment, condition, source reference and state. The corresponding `conditions/CONDITION_ID.json` contains the input configuration.
 
 With Python 3, this example prints the metadata and reads metric and completion events. Replace `/path/to/run` with that run's directory:
 

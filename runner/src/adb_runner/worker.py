@@ -17,9 +17,12 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from typing import IO
+from typing import IO, Literal
 
 from adb_events import Json
+
+
+JobState = Literal["queued", "building", "running", "completed", "failed", "stopped", "error"]
 
 
 CLAIM_HOLD_S = 25          # server holds a claim open this long; timeout adds margin
@@ -115,7 +118,7 @@ def plan_build(source: str, experiment: str, build_cmd: str) -> list[str]:
 
 class Reporter:
     """Batched progress: lines and run ids accumulate, one POST per cadence tick
-    (or on demand for a phase change). The reply's {stop: true} is how the stop
+    (or on demand for a state change). The reply's {stop: true} is how the stop
     button reaches a job — reporting IS the command channel, no second socket."""
 
     def __init__(self, client: Client, job_id: str):
@@ -134,13 +137,13 @@ class Reporter:
         if rid not in self.runs:
             self.runs.append(rid)
 
-    def flush(self, phase: str | None = None, force: bool = False) -> bool:
+    def flush(self, state: JobState | None = None, force: bool = False) -> bool:
         now = time.monotonic()
-        if not force and phase is None and now - self.last < REPORT_EVERY_S:
+        if not force and state is None and now - self.last < REPORT_EVERY_S:
             return self.stop
         payload: dict[str, Json] = {}
-        if phase:
-            payload["phase"] = phase
+        if state:
+            payload["state"] = state
         if self.lines:
             payload["log"] = list(self.lines)
             self.lines = []
@@ -176,7 +179,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     # step 1 — resolve the experiment to its executable, the same derivation the
     # user's oneliner would build, from the configured local source
     argv = plan_build(repo, str(job["experiment"]), build_cmd)
-    report.flush(phase="building", force=True)
+    report.flush(state="building", force=True)
     global _active
     build = subprocess.Popen(
         argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -196,13 +199,13 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     for t in threads:
         t.join(timeout=5)
     if report.stop:
-        client.call("POST", f"/api/jobs/{job_id}/done", {"phase": "stopped"})
+        client.call("POST", f"/api/jobs/{job_id}/done", {"state": "stopped"})
         return
     if build.returncode != 0 or not (out_lines and out_lines[-1].startswith("/")):
         report.line(f"build failed (exit {build.returncode})")
         report.flush(force=True)
         client.call("POST", f"/api/jobs/{job_id}/done",
-                    {"phase": "error", "exit_code": build.returncode})
+                    {"state": "error", "exit_code": build.returncode})
         return
     bin_path = out_lines[-1]
 
@@ -215,7 +218,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         env={**os.environ, "ADB_DATA_DIR": os.environ.get(
             "ADB_DATA_DIR", os.path.expanduser("~/.local/share/adb"))})
     _active = child
-    report.flush(phase="running", force=True)
+    report.flush(state="running", force=True)
 
     def on_stdout(line: str) -> None:
         try:
@@ -231,7 +234,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         if event.get("type") == "run.start":
             report.run_id(run)
         elif event.get("type") == "run.end":
-            report.line(f"run {run} {event.get('phase', 'ended')}")
+            report.line(f"run {run} {event.get('state', 'ended')}")
 
     threads = [
         threading.Thread(target=_stream_lines, args=(child.stdout, on_stdout), daemon=True),
@@ -249,10 +252,10 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         t.join(timeout=5)
     _active = None
     report.flush(force=True)
-    phase = "stopped" if stopped else "completed" if child.returncode == 0 else "failed"
+    state = "stopped" if stopped else "completed" if child.returncode == 0 else "failed"
     client.call("POST", f"/api/jobs/{job_id}/done",
-                {"phase": phase, "exit_code": child.returncode})
-    _log(f"job {job_id}: {phase}")
+                {"state": state, "exit_code": child.returncode})
+    _log(f"job {job_id}: {state}")
 
 
 def worker_cli(argv: list[str]) -> int:
@@ -292,7 +295,7 @@ def worker_cli(argv: list[str]) -> int:
                 except OSError as exc:
                     _interrupt_active()
                     client.call("POST", f"/api/jobs/{current}/report", {"log": [str(exc)]})
-                    client.call("POST", f"/api/jobs/{current}/done", {"phase": "error"})
+                    client.call("POST", f"/api/jobs/{current}/done", {"state": "error"})
                 current = None
                 if args.once:
                     return 0
@@ -304,7 +307,7 @@ def worker_cli(argv: list[str]) -> int:
         _interrupt_active()
         if current:
             try:
-                client.call("POST", f"/api/jobs/{current}/done", {"phase": "stopped"}, timeout=1)
+                client.call("POST", f"/api/jobs/{current}/done", {"state": "stopped"}, timeout=1)
             except OSError:
                 pass
         return 0

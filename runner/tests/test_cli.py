@@ -58,3 +58,28 @@ def test_seed_spreads_across_the_range():
     seeds = _sweep()
     assert any(s > UINT32_MAX // 2 for s in seeds)
     assert any(s < UINT32_MAX // 2 for s in seeds)
+
+
+def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch):
+    import json
+    import sys
+    from adb_runner import cli
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    marker = tmp_path / "first-run"
+    experiment = tmp_path / "experiment"
+    experiment.write_text(
+        f"#!/bin/sh\nif [ -e '{marker}' ]; then exit 0; fi\n"
+        f"touch '{marker}'\nexit 3\n")
+    experiment.chmod(0o755)
+    home = tmp_path / "home"
+    monkeypatch.setenv("ADB_MANIFEST", str(manifest))
+    monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--json", "--replicates", "2",
+                                     "--out", str(home)])
+    assert cli.main() == 1
+    states = [json.loads(path.read_text())["state"]
+              for path in home.glob("runs/*/*/run.json")]
+    assert sorted(states) == ["completed", "failed"]

@@ -8,11 +8,15 @@
 export type Ev = Record<string, any>;
 
 /* run.json as written by the runner */
+export type RunState = "provisioning" | "running" | "completed" | "failed" | "interrupted";
+export type JobState = "queued" | "claimed" | "building" | "running"
+  | "completed" | "failed" | "stopped" | "orphaned" | "error";
+
 export interface RunMeta {
   run: string;
   condition: string;
   experiment: string;
-  phase: string;
+  state: RunState;
   replicate: number;
   seed?: number;
   started_at?: string;
@@ -125,8 +129,7 @@ export interface CredsInfo {
 export interface JobInfo {
   id: string;
   experiment: string;
-  phase: "queued" | "claimed" | "building" | "running"
-       | "completed" | "failed" | "stopped" | "orphaned" | "error";
+  state: JobState;
   sets: string[];                     /* the exact --set k=v args (no secrets ever) */
   profiles: Record<string, string>;   /* credential set -> profile NAME */
   replicates: number;
