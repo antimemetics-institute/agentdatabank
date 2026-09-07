@@ -29,23 +29,24 @@ export function highlightJson(src: string): string {
   return out.join("");
 }
 
-export function md(src: unknown): string {
+export function md(src: unknown, imageBase?: string): string {
   const s = String(src ?? "");
   const fence = /```(\w*)\n?([\s\S]*?)```/g;
   const out: string[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = fence.exec(s))) {
-    out.push(mdBlocks(s.slice(last, m.index)));
+    out.push(mdBlocks(s.slice(last, m.index), imageBase));
     const code = m[1]!.toLowerCase() === "json" ? highlightJson(m[2]!) : esc(m[2]);
     out.push(`<pre class="code"><code>${code}</code></pre>`);
     last = m.index + m[0].length;
   }
-  out.push(mdBlocks(s.slice(last)));
+  out.push(mdBlocks(s.slice(last), imageBase));
   return out.join("");
 }
 
-function mdBlocks(s: string): string {
+function mdBlocks(s: string, imageBase?: string): string {
+  const rawLines = s.split("\n");
   const lines = esc(s).split("\n");
   const out: string[] = [];
   let para: string[] = [];   // open paragraph: source lines, soft-wrapped (joined by space)
@@ -66,6 +67,19 @@ function mdBlocks(s: string): string {
     l.trim().replace(/^\||\|$/g, "").split("|").map((c) => mdInline(c.trim()));
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
+    // README images are local catalog assets, displayed as images (never inline SVG).
+    const img = rawLines[i]!.match(/^\s*!\[([^\]]*)\]\(([^\s)]+)\)\s*$/);
+    if (img && imageBase) {
+      flushPara(); flushList(); blanks = 0;
+      const path = img[2]!.replace(/^\.\//, "");
+      const parts = path.split("/");
+      const safe = parts.every((p) => p && p !== "." && p !== "..")
+        && !/[\\:%?#]/.test(path) && /\.(svg|png|jpe?g|gif|webp)$/.test(path);
+      out.push(safe
+        ? `<p><img src="${esc(imageBase + parts.map(encodeURIComponent).join("/"))}" alt="${esc(img[1])}" loading="lazy" /></p>`
+        : `<p>${esc(img[1])}</p>`);
+      continue;
+    }
     // pipe table: a |…| row whose next line is the |---|---| separator
     if (isRow(line) && i + 1 < lines.length && isSep(lines[i + 1]!)) {
       flushPara(); flushList();

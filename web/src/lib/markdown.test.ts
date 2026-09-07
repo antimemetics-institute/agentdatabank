@@ -5,6 +5,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { esc, highlightJson, md } from "./markdown.ts";
 
+test("README images resolve locally, escape alt text, and reject unsafe paths", () => {
+  const base = "/api/experiments/govsim/assets/";
+  assert.match(md('![Fish & "agents"](./overview.svg)', base),
+    /<img src="\/api\/experiments\/govsim\/assets\/overview.svg" alt="Fish &amp; &quot;agents&quot;"/);
+  assert.match(md('![Fish](figures/lake.png)', base), /assets\/figures\/lake.png/);
+  for (const path of ["../private.svg", "/private.svg", "https://example.com/a.svg", "javascript:alert", "%2e%2e/a.svg"])
+    assert.ok(!md(`![Fish](${path})`, base).includes("<img"));
+  assert.ok(!md('![Fish](./overview.svg)').includes("<img"));
+  assert.ok(!md('```md\n![Fish](./overview.svg)\n```', base).includes("<img"));
+});
+
 test("esc escapes all five HTML-significant characters", () => {
   assert.equal(esc(`<a href="x" & 'y'>`), "&lt;a href=&quot;x&quot; &amp; &#39;y&#39;&gt;");
   assert.equal(esc(null), "");

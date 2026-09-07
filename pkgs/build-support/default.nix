@@ -213,6 +213,10 @@ in
       # generated from a wrapped package's own declared metadata where it exists
       # (inspect_evals' listing), hand-written in the wrapper otherwise.
     , links ? [ ]
+      # Plain Markdown catalog text, supplied from the package directory by the
+      # registry. This field does not alter the experiment's declared `src`.
+    , readme ? null
+    , readmeAssets ? null
     , program
     , src           # the experiment's OWN identity sources: a path (usually `./.`) or a
                     # list of paths. See identity note below. Identity is strictly
@@ -239,11 +243,11 @@ in
 
       # `origin` identifies the packaging repository in catalog metadata; it is
       # not part of `src` and is distinct from the pinned fetchRef
-      manifest = pkgs.writeText "adb-manifest-${name}.json" (builtins.toJSON {
+      manifest = pkgs.writeText "adb-manifest-${name}.json" (builtins.toJSON ({
         schema_version = 0;
         params = withLlmHints params;
         inherit name summary results env origin links;
-      });
+      } // lib.optionalAttrs (readme != null) { inherit readme; }));
       app = pkgs.writeShellApplication {
         name = "adb-${name}";
         runtimeInputs = [ adb-runner ];
@@ -256,5 +260,5 @@ in
         '';
       };
     in
-    { inherit app manifest name; };
+    { inherit app manifest name readmeAssets; };
 }

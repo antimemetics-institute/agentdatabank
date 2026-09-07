@@ -298,7 +298,7 @@ test("required blanks retain defaults and missing-value validation", () => {
    forgetting that loud. */
 
 const MANIFEST_KEYS = new Set(["name", "params", "schema_version", "summary",
-  "origin", "results", "env", "links"]);
+  "origin", "results", "env", "links", "readme"]);
 const DECL_KEYS = new Set(["type", "initial", "description", "nullable", "order",
   "group", "suggestions", "minLen", "maxLen", "fields", "depends_on", "variants"]);
 const TYPE_KEYS = new Set(["kind", "values", "of", "fields"]);
@@ -336,6 +336,7 @@ test("every shipped manifest uses only declared keys", (t) => {
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
     const doc = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>;
     checkSubset(doc, MANIFEST_KEYS, f);
+    if ("readme" in doc) assert.equal(typeof doc.readme, "string", `${f}:readme`);
     for (const [name, decl] of Object.entries(doc.params as Record<string, Record<string, unknown>>))
       checkDecl(decl, `${f}:params.${name}`);
   }

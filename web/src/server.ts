@@ -28,6 +28,7 @@ import { join, extname, normalize, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { promisify } from "node:util";
 import { LocalExecutor } from "./server/executor";
+import { readReadmeAsset } from "./server/readme-assets";
 import { parseArgs } from "node:util";
 import type { Ev, Manifest, RunMeta } from "./shared/types";
 import {
@@ -75,8 +76,7 @@ const HOME = resolve(
   join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? ".", ".local", "share"), "adb"));
 const STATIC = args["static-dir"] ?? null;
 /* dir of <name>.json experiment manifests (the nix adb-web wrapper points this at the
-   manifests linkFarm); drives the run-config builder. Absent in bare `dev.sh` → the
-   builder degrades to a note. */
+   manifests linkFarm); drives the run-config builder. Local mode builds it at startup. */
 let MANIFESTS = args.catalog ?? null;
 const PORT = Number(args.port ?? "8340");
 /* bind address. Default loopback — this serves your local run data; opt into other
@@ -454,6 +454,17 @@ const server = createServer(async (req, res) => {
       if (parts[1] === "experiments" && parts.length === 2) {
         /* manifests are per-build-immutable; no-cache is fine (tiny, rarely fetched) */
         return json(req, res, 200, await readManifests(), { "cache-control": "no-cache" });
+      }
+      if (parts[1] === "experiments" && parts[3] === "assets" && parts.length >= 5) {
+        const asset = await readReadmeAsset(MANIFESTS, [parts[2]!, ...parts.slice(4)]);
+        if (!asset) return json(req, res, 404, { error: "no such README image" });
+        res.writeHead(200, {
+          "content-type": asset.type,
+          "cache-control": "no-cache",
+          "x-content-type-options": "nosniff",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        });
+        return res.end(asset.body);
       }
       if (parts[1] === "credentials") {
         /* the whole credential surface — reads too — is the machine-owner's: even a

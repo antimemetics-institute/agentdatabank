@@ -112,11 +112,26 @@ def test_walker_rejects_wrong_types():
     """The walker itself must catch value-type drift, not just keys."""
     good = {"name": "x", "params": {"p": {"type": {"kind": "int"}, "order": 1}}}
     _check(good, Manifest, "good")
+    _check({**good, "readme": "# Experiment\n\nDocumentation."}, Manifest, "readme")
     for bad, why in [
         ({**good, "name": 1}, "name must be str"),
+        ({**good, "readme": 1}, "readme must be str when present"),
         ({**good, "params": {"p": {"type": {"kind": "int"}, "order": "1"}}}, "order must be int"),
         ({**good, "params": {"p": {"type": {"kind": "enum", "values": "ab"}}}}, "values must be a list"),
         ({**good, "params": {"p": {"kind": "int"}}}, "decl missing required 'type'"),
     ]:
         with pytest.raises(AssertionError):
             _check(bad, Manifest, why)
+
+
+def test_shipped_readme_is_embedded_in_catalog():
+    manifests_dir = os.environ.get("ADB_TEST_MANIFESTS")
+    if not manifests_dir:
+        pytest.skip("ADB_TEST_MANIFESTS unset (run via `task test:python`)")
+    root = Path(__file__).resolve().parents[2]
+    catalog = Path(manifests_dir)
+    govsim = json.loads((catalog / "govsim.json").read_text())
+    assert govsim["readme"] == (root / "experiments/govsim/README.md").read_text()
+    # An experiment directory without a README stays valid and omits the field.
+    if not (root / "experiments/inspect_evals/README.md").exists():
+        assert "readme" not in json.loads((catalog / "inspect-hello.json").read_text())

@@ -10,8 +10,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    // keeps every .ts runnable by node's built-in type stripping — dev.sh runs
-    // src/server.ts directly with `node --watch`, no build step
+    // Pure TypeScript syntax also supports Node-based unit tests.
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "types": ["node", "vite/client"],

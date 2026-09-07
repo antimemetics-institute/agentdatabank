@@ -36,7 +36,9 @@ export function Segmented({ options, value, onChange }: {
 
 /* markdown with a rendered|source toggle (source = escaped monospace). Used by the
    param modal and every markdown-rendering stream payload (gap reports included). */
-export function MdView({ src, className }: { src: string; className?: string }) {
+export function MdView({ src, className, imageBase, showSourceToggle = true }: {
+  src: string; className?: string; imageBase?: string; showSourceToggle?: boolean;
+}) {
   const [mode, setMode] = useState("rendered");
   /* empty content: don't offer a toggle that flips between two blank panes (the
      "toggle does nothing" trap on tool-only model turns) — say it's empty instead */
@@ -44,11 +46,11 @@ export function MdView({ src, className }: { src: string; className?: string }) 
     return <span className={cn("text-xs italic text-muted-foreground", className)}>(empty)</span>;
   return (
     <div className={className}>
-      <div className="mb-1 flex justify-end">
+      {showSourceToggle && <div className="mb-1 flex justify-end">
         <Segmented options={["rendered", "source"]} value={mode} onChange={setMode} />
-      </div>
-      {mode === "rendered" ? (
-        <div className="md text-sm" dangerouslySetInnerHTML={{ __html: md(src) }} />
+      </div>}
+      {!showSourceToggle || mode === "rendered" ? (
+        <div className="md text-sm" dangerouslySetInnerHTML={{ __html: md(src, imageBase) }} />
       ) : (
         <pre className="whitespace-pre-wrap font-mono text-xs [overflow-wrap:anywhere]">{src}</pre>
       )}

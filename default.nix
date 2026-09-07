@@ -42,10 +42,7 @@ in
 runnables
 // {
   inherit pkgs;
-  manifests = pkgs.linkFarm "adb-manifests"
-    (lib.mapAttrsToList
-      (name: exp: { name = "${name}.json"; path = exp.manifest; })
-      adbPkgs.experiments);
+  manifests = adbPkgs.manifests;
 
 
   # `exec.<name>`: the classic mirror of the flake's APP namespace — bare names for

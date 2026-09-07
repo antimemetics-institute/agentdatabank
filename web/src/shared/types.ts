@@ -149,6 +149,7 @@ export interface ExecutorInfo {
 export interface Manifest {
   name: string;
   summary?: string;
+  readme?: string; /* package-directory README Markdown; presentation only */
   links?: ExtLink[];
   schema_version?: number;
   /* Packaging repository, independent of experiment content identity. */

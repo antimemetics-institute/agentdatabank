@@ -57,10 +57,7 @@
         in
         {
           inherit (adbPkgs) adb-runner;
-          manifests = pkgs.linkFarm "adb-manifests"
-            (nixpkgs.lib.mapAttrsToList
-              (name: exp: { name = "${name}.json"; path = exp.manifest; })
-              adbPkgs.experiments);
+          manifests = adbPkgs.manifests;
         }
         // nixpkgs.lib.optionalAttrs (adbPkgs ? adb-web) {
           inherit (adbPkgs) adb-web adb-local;

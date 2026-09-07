@@ -109,6 +109,35 @@
 }
 .md pre.code code { background: none; border: none; padding: 0; font-size: inherit; }
 
+/* README typography follows GitHub's document layout. The renderer maps Markdown
+   h1–h4 to h3–h6 to nest beneath the experiment page heading. */
+.experiment-readme .md { font-size: 1rem; line-height: 1.5; }
+.experiment-readme .md img { display: block; max-width: 100%; height: auto; margin: 1rem auto; }
+.experiment-readme .md p,
+.experiment-readme .md ul,
+.experiment-readme .md .md-table { margin: 0 0 1rem; }
+.experiment-readme .md ul { padding-left: 2em; }
+.experiment-readme .md li { margin: 0.25em 0; }
+.experiment-readme .md h3,
+.experiment-readme .md h4,
+.experiment-readme .md h5,
+.experiment-readme .md h6 { margin: 1.5rem 0 1rem; font-weight: 600; line-height: 1.25; }
+.experiment-readme .md h3 { font-size: 2em; }
+.experiment-readme .md h4 { font-size: 1.5em; }
+.experiment-readme .md h5 { font-size: 1.25em; }
+.experiment-readme .md h6 { font-size: 1em; }
+.experiment-readme .md h3,
+.experiment-readme .md h4 { padding-bottom: 0.3em; border-bottom: 1px solid var(--color-border); }
+.experiment-readme .md > :first-child { margin-top: 0; }
+.experiment-readme .md > :last-child { margin-bottom: 0; }
+.experiment-readme .md code { border: 0; padding: 0.2em 0.4em; }
+.experiment-readme .md pre.code { margin: 0 0 1rem; padding: 1rem; border: 0; font-size: 0.85em; line-height: 1.45; }
+.experiment-readme .md pre.code code { padding: 0; }
+.experiment-readme .md .md-table { font-size: inherit; }
+.experiment-readme .md .md-table th,
+.experiment-readme .md .md-table td { padding: 0.375rem 0.8125rem; }
+.experiment-readme .md .md-table tbody tr:nth-child(even) { background: var(--color-muted); }
+
 /* loading affordances: indeterminate bar slide + pulsating glow ring on the element
    that triggered a navigation (lib/nav.ts adds/removes .nav-glow) */
 @keyframes adb-slide {

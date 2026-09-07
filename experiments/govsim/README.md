@@ -1,81 +1,55 @@
 # GovSim
 
-In-tree port of the GovSim adapter at commit
-`f3b028b14bce693c69936544685bf199f9f4f71d`.
-The original external ADB development scaffold is replaced by this repository's
-Python libraries and automatic experiment registration. The local Python package
-`govsim_adapter/` contains the ADB integration; the upstream GovSim checkout is
-fetched separately at the pinned revision below. The experiment and command
-remain named `govsim`.
+Can a group of AI agents share a resource without exhausting it?
 
-The scientific source is [GovSim](https://github.com/giorgiopiatti/GovSim),
-*Cooperate or Collapse: Emergence of Sustainable Cooperation in a Society of LLM
-Agents* (Piatti et al., NeurIPS 2024, https://arxiv.org/abs/2404.16698).
-GovSim runs verbatim at `1d11adf047b24fa2ba0d44a1d4931015ea2e5210`, with
-PathFinder at `69b8d646ad3e618380dd0d47ec4d1e8d2d4c930e`. All 17 upstream
-fishing, sheep, and pollution configurations are exposed, including baseline,
-universalization, no-language, outsider, and fishing paraphrase treatments.
+![Five agents discuss catch limits around a shared lake. Leaving enough fish allows recovery; taking too many depletes the stock.](overview.svg)
 
-Run the keyless integration path from the repository root:
+GovSim puts language-model agents in a small society where each agent benefits
+from taking a shared resource, but taking too much threatens everyone's future.
+In the fishing scenario, for example, agents decide how many fish to catch from
+a lake. They can discuss their catches and agree on limits, but each agent still
+chooses its own actions.
 
-```sh
-$(nix-build --no-out-link -A exec.govsim) \
-  --set experiment=fish_baseline_concurrent --set max_rounds=1 \
-  --set model=mock/model --set embedder=hash \
-  --set temperature=0.0 --set top_p=1.0 --set max_tokens=8000 \
-  --set reasoning_effort=null
-```
+The experiment comes from [Cooperate or Collapse](https://arxiv.org/abs/2404.16698)
+(Piatti et al., NeurIPS 2024). The [GovSim source](https://github.com/giorgiopiatti/GovSim)
+contains the original simulation.
 
-`max_rounds=0` keeps upstream's cap (12 or 15). Live provider/model IDs use
-ADB's credential routing through `adb_experiment.ChatClient`; no credentials
-are parameters or saved in configuration. `top_p` is forwarded, temperature
-is applied uniformly, and `max_tokens` caps each completion. The original
-upstream parsing/default-value fallback remains intact.
+## What happens in a run?
 
-Set `temperature=null` and `top_p=null` to omit sampling fields from every
-request, including upstream operations that substitute their own defaults.
-`reasoning_effort` accepts `low`, `medium`, `high`, `xhigh`, or `max`; `null`
-omits it and keeps the provider default. For Astra, use both sampling fields
-as `null` and `reasoning_effort=low`, following the
-[official model guide](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6-astra).
-These choices are recorded in the effective configuration and provenance.
+Each round represents a month. Agents harvest, observe what others did, discuss
+how to manage the resource, and reflect on their experience. The resource can
+recover between rounds if enough remains.
 
-The mock uses scripted modest harvests; it validates the actual upstream
-simulation and adapter, and is not a scientific model result. The default
-`hash` embedder is artificial: semantic relevance becomes hash noise. `mxbai`
-uses upstream's `mixedbread-ai/mxbai-embed-large-v1` CPU embedder and may download
-roughly 1.3 GB. Upstream does not pin its HuggingFace revision, so those weights
-remain mutable. Neither path is claimed as a paper reproduction. Dependencies
-are CPU-only Torch, Transformers, Sentence Transformers, Hydra, pandas,
-PettingZoo, WandB (disabled), and PathFinder, locked in `uv.lock`.
+The scenarios cover fishing, sheep grazing, and pollution. Variants test what
+changes when agents cannot discuss their actions, when a profit-seeking outsider
+joins, or when agents are prompted to consider what would happen if everyone
+acted as they did. Fishing also has variants with reworded prompts.
 
-Each run emits instrumented model calls, live resource state and pool metrics,
-and a conversation transcript replayed after completion (timestamps are replay
-time). Artifacts include the upstream `log_env.json`, effective `config.yaml`,
-and `provenance.json` recording source revisions, effective model/generation
-parameters, embedder choice, and the derived 32-bit seed. NumPy requires the
-runner's replicate seed to be reduced to 32 bits.
+## What to look for
 
-Survival, gains, and equality follow the source analysis formulas with a
-zero-sum Gini guard. `over_usage` is the adapter's reconstruction: the fraction
-of actions wanting more than `(pool_before // 2) // harvesters_that_round`.
-For outsider treatments this differs from upstream's internally fixed agent
-count. Scientific interpretation must account for this difference.
+Watch whether agents agree on limits, follow those agreements, and leave enough
+resource for later rounds. Model calls and resource updates appear during the
+run; the group conversation is added after the simulation finishes.
 
-Tests: `cd experiments/govsim && uv run -q pytest -q`. Integration tests use
-`GOVSIM_UPSTREAM` to point to the pinned checkout; unit tests need no downloads
-or API calls after installing the locked dependencies.
+**Resource collapse is a simulation outcome, not an execution failure.**
+`collapsed = false` means no collapse was recorded during the run. A short run
+without collapse does not establish that cooperation would last.
 
-Treatments use the upstream prompts and scheduling unchanged:
+Results describe how long the resource survived, how much agents collected,
+how evenly they shared it, and how much remained. Equality alone is not success:
+agents who all collect nothing are also equal.
 
-- Baseline: concurrent harvests, observation of others' catches, group discussion,
-  then reflection, normally for 12 rounds.
-- Universalization: an extra memory asks agents to consider everyone acting alike.
-- Paraphrase 1/2: fishing baseline with reworded system prompts.
-- No language: removes group discussion and observation of others' catches.
-- Outsider: four initial agents; a profit maximizer joins at round 3, with a
-  15-round cap. An additional variant applies universalization as well.
+## Choosing settings
 
-Upstream's MIT license is retained in `UPSTREAM_LICENSE`; the fetched checkout
-also retains its original license. The metrics implementation attributes the
-source analysis formulas in `govsim_adapter/metrics.py`.
+Use a real model and the `mxbai` memory embedder to explore model behavior.
+`mock/model` gives scripted replies, and `hash` gives artificial memory
+similarities; both are for testing the workflow.
+
+A one-round run is a quick demonstration. Set `max_rounds` to `0` to use the
+scenario's full length: normally 12 months, or 15 for outsider scenarios.
+
+These runs are not automatically reproductions of the paper's results. In
+particular, `mxbai` downloads model weights whose revision is not pinned.
+The `over_usage` result measures how often agents request more than their
+sustainable share; its calculation uses the current number of harvesters, which
+differs from the original simulation's fixed count when an outsider joins.

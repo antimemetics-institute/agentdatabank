@@ -11,6 +11,5 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  // dev.sh runs the real API server on 8340; the vite dev server proxies to it
-  server: { proxy: { "/api": "http://127.0.0.1:8340" } },
+  // dev.mjs supplies the API proxy after the local server binds a free port.
 });

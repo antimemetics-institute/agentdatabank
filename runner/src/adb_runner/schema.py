@@ -83,6 +83,7 @@ class Manifest(TypedDict):
     params: dict[str, ParamDecl]
     schema_version: NotRequired[int]
     summary: NotRequired[str]
+    readme: NotRequired[str]  # package-directory README Markdown; presentation only
     origin: NotRequired[str]
     results: NotRequired[dict[str, Json]]
     env: NotRequired[dict[str, Json]]

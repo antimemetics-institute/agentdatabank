@@ -97,10 +97,7 @@ let
 
       # experiment manifests (schema) the GUI's run-config builder reads via
       # /api/experiments — one <name>.json per registered experiment
-      adb-web-manifests = pkgs.linkFarm "adb-web-manifests"
-        (lib.mapAttrsToList
-          (name: exp: { name = "${name}.json"; path = exp.manifest; })
-          registry);
+      adb-web-manifests = catalog;
 
       # the user-facing entrypoint: node runs the bundled server, which serves the
       # bundled frontend from the same dist. Read-only unless adb-local enables
@@ -126,7 +123,25 @@ let
     # experiments/<dir>/package.nix → { <experiment-name> = mkExperiment …; }
     // lib.mapAttrs'
       (name: _: lib.nameValuePair "experiments-${name}"
-        (final.callPackage (experimentsDir + "/${name}/package.nix") { }))
+        (final.callPackage (experimentsDir + "/${name}/package.nix") {
+          # A directory can declare several experiments; they share its README.
+          # Embed the text in each manifest so packaged viewers need no checkout.
+          adb = final.adb // {
+            mkExperiment = args: final.adb.mkExperiment ({
+              readme = let path = experimentsDir + "/${name}/README.md";
+                in if builtins.pathExists path then builtins.readFile path else null;
+              # Package committed images; illustration tools are never build inputs.
+              readmeAssets = lib.cleanSourceWith {
+                src = experimentsDir + "/${name}";
+                name = "adb-readme-assets-${name}";
+                filter = path: type: (type == "directory"
+                  && !(lib.hasPrefix "." (baseNameOf path))
+                  && !(builtins.elem (baseNameOf path) [ "node_modules" "__pycache__" ])) ||
+                  (type == "regular" && builtins.match ".*\\.(svg|png|jpg|jpeg|gif|webp)" path != null);
+              };
+            } // args);
+          };
+        }))
       (lib.genAttrs dirNames (_: null)));
 
   # flatten the per-directory sets into the experiment registry, refusing name
@@ -142,9 +157,17 @@ let
       else acc // set)
     { }
     (map (name: scope."experiments-${name}") dirNames);
+  catalog = pkgs.linkFarm "adb-manifests"
+    (lib.concatLists (lib.mapAttrsToList
+      (name: exp: [{ name = "${name}.json"; path = exp.manifest; }]
+        ++ lib.optional (exp.readmeAssets != null) {
+          name = "assets/${name}"; path = exp.readmeAssets;
+        }) registry));
+
 in
 {
   experiments = registry;
+  manifests = catalog;
   inherit (scope) adb-runner;
 }
 // lib.optionalAttrs (builtins.pathExists ../../web) {
