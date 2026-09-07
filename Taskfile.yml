@@ -22,18 +22,19 @@ tasks:
       - nix run .#impossiblebench-livecodebench -- --describe | jq .
 
   test:
-    desc: run python unit tests (runner, the event emitters, the shared inspect wrapper, concordia) via uv, then the web suite
+    desc: run Python unit tests via uv, then the web suite
     cmds:
       - task: test:python
       - task: web:test
 
   test:python:
-    desc: the python unit tests alone (runner, the event emitters, the shared inspect wrapper, concordia) via uv; the runner suite gets the nix-built manifests for its conformance sweep (same wiring as web:test)
+    desc: run Python unit tests, checking the runner against the Nix-built experiment manifests
     cmds:
       - cd runner && ADB_TEST_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
       - cd experiments/concordia && uv run -q pytest -q
+      - cd experiments/govsim && uv run -q pytest -q
 
   typecheck:
     desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first. The policy script gates the escapes pyright can't police (ignore-rule + cast allowlists).

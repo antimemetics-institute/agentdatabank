@@ -1,0 +1,50 @@
+[project]
+name = "govsim"
+version = "0.1.0"
+description = "GovSim (Cooperate or Collapse, NeurIPS 2024) as an ADB experiment."
+requires-python = ">=3.13"
+# The run-path closure is declared HERE, not inherited from upstream's
+# requirements.txt (its pins predate Python 3.13). Upstream's analysis stack
+# (dash, lifelines, statsmodels, ...) is never imported by the run path and is
+# dropped. torch is imported by pathfinder/transformers but undeclared by
+# pathfinder, so it is declared explicitly.
+dependencies = [
+    "adb-events",
+    "adb-experiment[llm]",
+    "pydantic>=2",
+    "pathfinder",                  # brings openai, backoff, pygtrie, transformers, ...
+    "hydra-core>=1.3.2,<1.4",
+    "numpy",
+    "pandas",
+    "pettingzoo==1.24.2",          # upstream's pin; 1.24.4+ renames agent_selector -> AgentSelector
+    "wandb>=0.19,<0.22",           # simulation.utils.logger imports wandb.sdk.data_types.trace_tree
+    "torch",
+    "transformers>=4.44,<5",       # pathfinder/model.py imports 4.x-era generation classes
+    "sentence-transformers",       # hard import via simulation.persona (construction is lazy)
+]
+
+# In-tree ADB libraries are shared with the runner.
+[tool.uv.sources]
+adb-events = { path = "../../lib/adb-events" }
+adb-experiment = { path = "../../lib/adb-experiment" }
+pathfinder = { git = "https://github.com/giorgiopiatti/PathFinder", rev = "69b8d646ad3e618380dd0d47ec4d1e8d2d4c930e" }
+torch = { index = "pytorch-cpu" }
+
+# keep the closure CPU-only: the default PyPI torch wheel drags the CUDA stack
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[project.scripts]
+govsim = "govsim_adapter.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["govsim_adapter"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
