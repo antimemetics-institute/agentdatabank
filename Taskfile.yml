@@ -32,6 +32,7 @@ tasks:
     cmds:
       - cd runner && ADB_TEST_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
+      - cd lib/adb-experiment && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
       - cd experiments/concordia && uv run -q pytest -q
       - cd experiments/govsim && uv run -q pytest -q
