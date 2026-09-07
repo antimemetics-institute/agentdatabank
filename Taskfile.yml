@@ -99,9 +99,9 @@ tasks:
       - bash scripts/docs-screenshots.sh
 
   docs:clips:
-    desc: re-record the GUI video clips the docs embed (playwright-scripted, light + dark), into docs/book/src/images
+    desc: re-record light/dark GUI clips; pass -- --replay-run PATH to select a saved run
     cmds:
-      - bash scripts/docs-clips.sh
+      - bash scripts/docs-clips.sh {{.CLI_ARGS}}
 
   docker:up:
     desc: sudo-start the docker daemon on the default socket (inspect's docker sandbox needs one; a dev shell can't provide a system service, so the devshell ships the engine and this starts it)

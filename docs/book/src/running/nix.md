@@ -1,80 +1,81 @@
 # Working with Nix
 
-[Getting started](getting-started.md) gave you commands that just work. This chapter is for making them nicer — shorter, pinned for a paper, or pointed at a local checkout. None of it is required.
+If you do not have Nix yet, follow the [official installation instructions](https://nixos.org/download/) for your operating system. The default ADB commands do not require flakes to be enabled.
 
-<div class="warning">
+ADB supports classic Nix and flakes. Both entry points build the same package set and read the same `flake.lock` pin for Nixpkgs. ADB declares Linux and macOS packages for x86-64 and ARM64; individual experiments can have additional platform or service requirements.
 
-**The [⚙ command settings](#adb-cmd-settings) do all of this for you.** Pick where you're running **from** (GitHub or a local checkout) and what you're running **with** — the `nix-build` (default), `flakes`, or `nix-run` tab — and every command in this guide rewrites itself to match your setup. The web GUI's bottom-left settings menu offers the same choices, stored in the same place. This chapter explains what each choice changes.
+## How do I make commands match my setup?
 
-</div>
+Open [command settings](#adb-cmd-settings) using the toolbar gear. Choose:
 
-## The command forms
+- **From GitHub** to fetch ADB without cloning, or **local checkout (.)** to use your current checkout.
+- **nix-build** for stock Nix, **flakes** for `nix run`, or **nix-run** for the separate classic runner utility.
+- The relevant installed/enabled options for your selected mode.
 
-The same run has several spellings. They differ only in ceremony, not in what they do — and **condition identity always uses the resolved git revision the runner records**, never the ref you typed, so the pretty and pinned forms bucket identically.
+Commands throughout the book adapt to those choices. Authoring examples always target the local checkout. Preferences persist in this browser.
 
-| Form | Looks like | When |
-|---|---|---|
-| **Local checkout** | `nix run .#inspect-hello -- …` | you cloned the repo and are inside it |
-| **GitHub, full** | `nix run github:{{repo}}#inspect-hello -- …` | you don't have the repo — works with nothing else set up |
-| **GitHub, registered** | `nix run adb#inspect-hello -- …` | you added `adb` to your flake registry (below) |
-| **Pinned** | `nix run github:{{repo}}/<rev>#inspect-hello -- …` | reproducibility — this is what you paste into a paper's appendix |
+For GitHub sources, **always fetch latest** makes commands recheck the moving source using `--tarball-ttl 0` or `--refresh`. This is useful during development; a pinned revision is more appropriate when repeating an earlier source version.
 
-## Making them shorter: the flake registry
+## What does each mode execute?
 
-Registering `adb` once lets you write `adb#…` instead of the full GitHub URL — the same way `nixpkgs` is already registered for you:
+In **nix-build** mode, ADB builds an `exec.NAME` output that points directly to the executable, then invokes it. It needs neither flakes nor a globally installed ADB command.
 
-```bash
-nix registry add adb github:{{repo}}
+```sh
+$(nix-build --no-out-link -A exec.inspect-hello) --describe
 ```
 
-The registry ref floats to the latest commit, which is fine: the runner records the *resolved* revision, so your run is still exactly identified.
+In **flakes** mode, experiment names are app names. If flakes are not enabled globally, command settings add `--extra-experimental-features 'nix-command flakes'` to each command.
 
-## Always fetching the latest
+For example: `nix run .#inspect-hello -- --describe`.
 
-Nix caches downloads: once it has fetched `main` (as a tarball or a flake ref), it reuses that copy for a while rather than asking GitHub again — so a rerun can silently execute code that's a few commits behind. The "always fetch latest" checkbox in the [⚙ command settings](#adb-cmd-settings) (on by default, GitHub source only) makes every command re-check: `--tarball-ttl 0` on `nix-build`, `--refresh` on `nix run`, `--option tarball-ttl 0` on `nix-run`. If nothing changed upstream, the check is a cheap no-op — nothing is re-downloaded or rebuilt. Untick it to save the round-trip, or when you're running from a local checkout (where there's no download to go stale and the checkbox doesn't apply). Pinned `…/<rev>` commands don't need it either — a pin resolves the same way every time.
+In **nix-run** mode, the separate `nix-run` utility resolves a package's executable. Experiment package attributes use the `experiment-` prefix; tools use their `adb-` names. If the utility is not installed globally, command settings wrap it in `nix-shell -p nix-run --run ...`.
 
-## The experimental-features flag
+With the utility installed: `nix-run . -A experiment-inspect-hello -- --describe`.
 
-`nix run` needs two experimental features, `nix-command` and `flakes`. The commands in this guide **opt in explicitly, per command** — nothing global to configure, works on a stock install:
+Otherwise:
 
-```bash
-nix run github:{{repo}}#adb-web --extra-experimental-features 'nix-command flakes'
+```sh
+nix-shell -p nix-run --run 'nix-run . -A experiment-inspect-hello -- --describe'
 ```
 
-(The flag rides with the `nix run` invocation, before the `--` that separates the experiment's own arguments.)
+## How do I use the flake registry alias?
 
-If you use flakes regularly you can enable the features permanently and drop the flag. How depends on your setup — a NixOS or nix-darwin configuration, Home Manager, or a plain `nix.conf` — see the official wiki's [Flakes page](https://wiki.nixos.org/wiki/Flakes) for each. Once enabled, tick "flakes enabled globally" in the [⚙ command settings](#adb-cmd-settings) and every command in the guide sheds the flag.
+Register `adb` once if you prefer it to the full repository reference:
 
-## Running without flakes
-
-If you'd rather not enable flakes at all, the repo's `default.nix` is a plain classic entrypoint — no flakes anywhere in the path, pinned to the same nixpkgs, building exactly the closure the flake builds. Two ways to run through it, each a "running with" tab in the [⚙ command settings](#adb-cmd-settings): pick `nix-run` or `nix-build` and every command in the guide rewrites to that form.
-
-**Via [`nix-run`](https://tangled.org/weethet.eurosky.social/nix-run)** (in nixpkgs) — a classic-Nix runner that, like `nix run`, resolves a package's `meta.mainProgram` and passes program arguments after `--`. Point it at a tarball of the repo (or `.` inside a checkout):
-
-```bash
-nix-run https://github.com/{{repo}}/archive/main.tar.gz \
-    -A experiment-inspect-hello -- \
-  --set model=mockllm/model \
-  --set limit=0 \
-  --set epochs=1 \
-  --set 'generate_args={}'
+```sh
+nix registry add adb github:antimemetics-institute/agentdatabank \
+  --extra-experimental-features 'nix-command flakes'
 ```
 
-Experiments are `-A experiment-<name>`; the tools are `-A adb-runner` and `-A adb-web`. Don't have `nix-run` installed? Run it from a throwaway shell — wrap the whole command (the `nix-run` tab's "installed globally" checkbox picks between these):
+Select **adb registry added** in command settings. The alias is a convenience for the GitHub flake source; classic Nix uses the tarball URL directly.
 
-```bash
-nix-shell -p nix-run --run "nix-run … -A experiment-inspect-hello -- …"
+## How do I pin a source version?
+
+For flakes, a GitHub reference accepts a commit after the repository name. Replace `REV` below with the recorded commit:
+
+```sh
+nix run github:antimemetics-institute/agentdatabank/REV#inspect-hello \
+  --extra-experimental-features 'nix-command flakes' -- --describe
 ```
 
-**Via stock `nix-build`** — nothing installed beyond Nix itself. The `exec.<name>` attributes (bare app names, same names `nix run` uses) have outputs that *are* the executables, resolved through `meta.mainProgram`, so it's a one-liner with no `./result` litter and no binary-name knowledge:
+For classic Nix, use the archive for that commit:
 
-```bash
-$(nix-build --no-out-link https://github.com/{{repo}}/archive/main.tar.gz \
-    -A exec.inspect-hello) \
-  --set model=mockllm/model \
-  --set limit=0 \
-  --set epochs=1 \
-  --set 'generate_args={}'
+```sh
+$(nix-build --no-out-link \
+  https://github.com/antimemetics-institute/agentdatabank/archive/REV.tar.gz \
+  -A exec.inspect-hello) --describe
 ```
 
-One honest caveat for both: classic Nix has no evaluation cache, so every flakeless invocation re-evaluates the whole tree (tens of seconds) where flake commands are instant after the first run. Flakes are the happy path; this door exists so nobody is locked out.
+Git-generated archives carry a revision stamp used for the run's fetch reference. An ordinary classic-Nix working-tree build has no expanded archive stamp and records a `dirty:` reference unless an `adbRev` is explicitly supplied to the package import. This is separate from the experiment content hash used for conditions.
+
+## How do I build or develop locally?
+
+From the repository root, build all manifests without running experiments:
+
+```sh
+nix-build --no-out-link -A manifests
+```
+
+Enter the development shell with `nix-shell`, or `nix develop` if you use flakes. Both supply the project's development tools. Package-specific Python dependencies come from their `pyproject.toml` and `uv.lock` through `uv run`.
+
+A Git flake includes tracked files. Stage newly added source files before evaluating your new experiment through a local flake. Keep run data outside the checkout, and use [the authoring guide](../authoring/experiments.md) for the contribution workflow.

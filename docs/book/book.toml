@@ -1,7 +1,7 @@
 [book]
 title = "ADB — Agent Databank User Guide"
 authors = ["Antimemetics Institute"]
-description = "How the Agent Databank MVP works and how to use it: running inspect evals, setting secrets, and browsing runs in the web GUI."
+description = "Run, inspect and author agent experiments with Agent Databank."
 language = "en"
 src = "src"
 

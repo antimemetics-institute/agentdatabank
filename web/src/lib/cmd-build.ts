@@ -29,6 +29,12 @@ export const defaultStr = (decl: ParamDecl): string => {
   return decl.type.values?.[0] ?? "";
 };
 
+/* Drafts contain edits only: undefined is untouched, while an explicit blank
+   clears a nullable param. Share this resolution with the form so its displayed
+   value agrees with both launch transports. Required blanks still use defaults. */
+export const effectiveStr = (decl: ParamDecl, value: string | undefined): string =>
+  decl.nullable ? value ?? defaultStr(decl) : value || defaultStr(decl);
+
 /* presentation order: task-level params (low `order`) above harness/generation
    ones; ties break by name. Used by the form and the oneliner alike so they agree. */
 export const orderedParams = (params: Record<string, ParamDecl>): [string, ParamDecl][] =>
@@ -129,7 +135,7 @@ function materialize(
   const args: string[] = [];
   const missing: string[] = [];
   for (const [k, decl] of orderedParams(params)) {
-    const cur = vals[k] || defaultStr(decl);
+    const cur = effectiveStr(decl, vals[k]);
     if (cur === "") {
       if (decl.nullable) args.push(nullForm(k));
       else missing.push(k);

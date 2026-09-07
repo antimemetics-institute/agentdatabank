@@ -1,219 +1,62 @@
-# Credentials
+# Configure model credentials
 
-Real models need API keys and endpoints. You don't configure them up front: the first run that needs a credential asks for it, and offers to save it. Keys stay off your command lines, out of your params, and out of the condition hash.
+ADB stores model credentials and endpoints in named profiles on your machine. A run selects the credential sets referenced by its model inputs and passes the selected values to the experiment process. Exporting an API key in your shell does not configure an ADB run.
 
-## The first run asks
+## How do I configure a provider?
 
-A model id's prefix (`anthropic/…` → `anthropic`) names a **credential set**. The first interactive run that needs a set you don't have asks at the gate, before anything launches:
+In `adb-local`, choose a model in the experiment form and open the **run** tab. Use the credential controls to enter the endpoint and key, save a profile, and select it for the job.
 
-```text
-adb: this run needs credential set 'anthropic' — setting it up now
-ANTHROPIC_API_KEY [unset]: ****
-ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
-save 'anthropic' for future runs? [Y/n]:
-name this profile [default]:
-adb: [258b80e5323e r1] run 01KYS…H3 started
-adb:   ▸ watch  http://127.0.0.1:8340/#/runs/01KYS…H3
-adb:   ▸ store  ~/.local/share/adb/runs/258b80e5323e…/01KYS…H3
+From the terminal, start the equivalent setup prompt:
+
+```sh
+nix run .#adb-runner -- credentials set openai
 ```
 
-The gate is the last thing before the run moves, so the link to watch it live is the last thing printed — click it (if the viewer isn't up yet, the line above it says so, and how to start it).
+Enter the requested values and profile name. Secret input is hidden. A bare set name offers `default` as the profile name; use an explicit name to edit or create a specific profile:
 
-- Secret prompts are hidden — never echoed, and never on the command line. (There is deliberately no `KEY=VALUE` argv form: argv shows up in `ps` and shell history.)
-- `Enter` accepts a shown `[default: …]`.
-- `save? [Y/n]` — `Y` stores the set for every future run; `n` uses it for this run only and forgets it.
-- The profile name is for keeping several credentials for the same provider — `Enter` is the right answer until you need that (see [Profiles](#profiles)).
-- Headless runs never hang on a prompt: with piped stdin or `--json`, a missing set refuses the run and prints the `credentials set` command to run instead.
-
-## A name is a condition, a key is environment
-
-```
-model NAME  →  the condition   (a model param, e.g. openai/qwen3.5-9b)
-endpoint    →  environment     (not a condition)
-API key     →  environment     (not a condition)
+```sh
+nix run .#adb-runner -- credentials set openai.research
 ```
 
-Two researchers each running their own local `qwen3.5-9b` server should land in the same condition bucket — the science is "what does qwen3.5-9b do", not "what does it do at my URL with my key". So endpoints and keys are never experiment params, and changing them never changes a condition. See [Experiments, conditions, runs](model.md).
+The endpoint prompt offers the provider's configured default where one exists. Use the endpoint expected by the adapter and provider, including its scheme and API path. An OpenAI-compatible local server may use an address such as `http://127.0.0.1:8000/v1` and may require no key.
 
-## Setting and managing them yourself
+List saved sets and locate the file with:
 
-The same prompts, standalone — for setting up in advance or rotating a key:
-
-```bash
-nix run .#adb-runner -- \
-  credentials set anthropic
+```sh
+nix run .#adb-runner -- credentials list
+nix run .#adb-runner -- credentials path
 ```
 
-```bash
-nix run .#adb-runner -- \
-  credentials list
+The store is normally `~/.config/adb/credentials.toml`, or `$XDG_CONFIG_HOME/adb/credentials.toml`. `ADB_CREDENTIALS_FILE` overrides that path. ADB writes the file with mode `0600` and refuses regular credential files readable by group or others. The file contains plaintext credentials; keep it outside the run store and repository.
+
+## Which profile will a run use?
+
+Add `--profile openai=research` to an experiment command to select that profile explicitly. Repeat the flag for runs using several credential sets. The selected set must be used by this run, and the profile must exist.
+
+Without an explicit selection, the runner uses a remembered choice for this experiment and set, then a lone default profile. In an interactive terminal it offers a picker when there are other profiles, and offers first-use setup for an unconfigured built-in provider. With `--json` or noninteractive input it never prompts: it uses the remembered choice or default profile, and fails if a required selection is unavailable.
+
+You can save a preference explicitly:
+
+```sh
+nix run .#adb-runner -- credentials remember inspect-hello openai research
 ```
 
-Also `credentials remove <name>` and `credentials path`. `credentials set` re-prompts with your current values as defaults, so changing one field is Enter-past-the-rest; to script it, pipe one line per prompt on stdin — values still never touch argv. What the dialogue asks, per built-in name:
+Preferences are stored separately in `$XDG_CONFIG_HOME/adb/preferences.toml`, defaulting to `~/.config/adb/preferences.toml`. An explicit `--profile` overrides them. Profiles are selected as a whole; missing fields are not filled from another profile.
 
-<div class="adb-tabs">
-  <input type="radio" name="adb-provider-tab" id="ptab-anthropic" checked>
-  <input type="radio" name="adb-provider-tab" id="ptab-openai">
-  <input type="radio" name="adb-provider-tab" id="ptab-google">
-  <input type="radio" name="adb-provider-tab" id="ptab-groq">
-  <input type="radio" name="adb-provider-tab" id="ptab-moonshotai">
-  <input type="radio" name="adb-provider-tab" id="ptab-openrouter">
-  <input type="radio" name="adb-provider-tab" id="ptab-azureai">
-  <input type="radio" name="adb-provider-tab" id="ptab-local">
-  <div class="adb-tab-labels">
-    <label for="ptab-anthropic">anthropic</label>
-    <label for="ptab-openai">openai</label>
-    <label for="ptab-google">google</label>
-    <label for="ptab-groq">groq</label>
-    <label for="ptab-moonshotai">moonshotai</label>
-    <label for="ptab-openrouter">openrouter</label>
-    <label for="ptab-azureai">azure</label>
-    <label for="ptab-local">local server</label>
-  </div>
-  <div class="adb-tab-panels">
-  <div>
+## How do model IDs select credential sets?
 
-> ```text
-> ANTHROPIC_API_KEY [unset]: ****
-> ANTHROPIC_BASE_URL [default: https://api.anthropic.com]:
-> save 'anthropic' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `anthropic/…`, e.g. `anthropic/claude-sonnet-4-5-20250929`.
+Usually the part before the first slash is the set: `openai/MODEL` uses `openai`. Inspect-style IDs of the form `openai-api/SERVICE/MODEL` use `SERVICE` instead. For example, configure a named compatible service with:
 
-  </div>
-  <div>
-
-> ```text
-> OPENAI_API_KEY [unset]: ****
-> OPENAI_BASE_URL [default: https://api.openai.com/v1]:
-> save 'openai' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `openai/…`, e.g. `openai/gpt-4o-2024-11-20`.
-
-  </div>
-  <div>
-
-> ```text
-> GOOGLE_API_KEY [unset]: ****
-> GOOGLE_BASE_URL [default: https://generativelanguage.googleapis.com/v1beta/openai]:
-> save 'google' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `google/…`, e.g. `google/gemini-2.5-pro`.
-
-  </div>
-  <div>
-
-> ```text
-> GROQ_API_KEY [unset]: ****
-> GROQ_BASE_URL [default: https://api.groq.com/openai/v1]:
-> save 'groq' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `groq/…`, e.g. `groq/llama-3.3-70b-versatile`.
-
-  </div>
-  <div>
-
-> ```text
-> MOONSHOTAI_API_KEY [unset]: ****
-> MOONSHOTAI_BASE_URL [default: https://api.moonshot.ai/v1]:
-> save 'moonshotai' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `moonshotai/…`, e.g. `moonshotai/kimi-k3` — Moonshot's own API. The same models served through OpenRouter are `openrouter/moonshotai/…` ids: a different provider, so a different condition.
-
-  </div>
-  <div>
-
-> ```text
-> OPENROUTER_API_KEY [unset]: ****
-> OPENROUTER_BASE_URL [default: https://openrouter.ai/api/v1]:
-> save 'openrouter' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `openrouter/…`, e.g. `openrouter/deepseek/deepseek-r1`.
-
-  </div>
-  <div>
-
-> ```text
-> AZUREAI_API_KEY [unset]: ****
-> AZUREAI_BASE_URL [unset]: https://my-endpoint.eastus.models.ai.azure.com
-> save 'azureai' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> The base URL is your Azure endpoint (no universal default). Model ids: `azureai/…` — the model part is your deployment name.
-
-  </div>
-  <div>
-
-> A llama.cpp / ollama / vLLM server speaks the OpenAI API — at the base-URL prompt, type your server's full URL (scheme, port, and its `/v1` prefix). The key can be anything if your server ignores it:
->
-> ```text
-> OPENAI_API_KEY [unset]: ****
-> OPENAI_BASE_URL [default: https://api.openai.com/v1]: http://localhost:11434/v1
-> save 'openai' for future runs? [Y/n]:
-> name this profile [default]:
-> ```
->
-> Model ids: `openai/<served-model-name>` — where the model is served is your environment, never part of the condition, so your runs bucket with everyone else's runs of that model.
-
-  </div>
-  </div>
-</div>
-
-<details>
-<summary><b>Custom set names</b> — a vendor key and a self-hosted server at the same time</summary>
-
-> The built-in names are just prompt templates — the ADB knows which field is secret and what a sensible default base URL is, nothing more. `credentials set` with *any* name creates a named set with the conventional fields (`<NAME>_API_KEY`, `<NAME>_BASE_URL`), and model ids of the form `openai-api/<name>/<model>` (inspect's OpenAI-compatible services) route to the set of that name. That's how a real OpenAI key and a self-hosted server coexist.
->
-> One caveat: the service name is part of the model id, so it enters the condition. The plain `openai/<model>` form avoids that service-name distinction, but matching condition IDs alone does not establish comparability.
-
-</details>
-
-## Profiles
-
-A credential set can hold several **profiles** — a work key and a personal key for the same provider, a proxy endpoint next to the direct one. The `default` profile is what every run uses silently; the moment a set has named profiles, interactive runs ask:
-
-```text
-which 'openai' credentials? [default] work personal new:
-always use 'work' for 'concordia'? [y/N]:
+```sh
+nix run .#adb-runner -- credentials set llama
 ```
 
-- `Enter` takes the bracketed default; typing a name takes that profile; `new` creates one on the spot (same prompts as setup, then a name).
-- `always use …? [y/N]` — `y` remembers the choice **per experiment**, so this experiment never asks again. Remembered choices live in `~/.config/adb/preferences.toml` — profile *names* only, never values, so it isn't secret; edit or delete lines freely to forget.
-- Create and edit profiles directly with `credentials set openai.work`; delete one with `credentials remove openai.work`.
-- Headless runs never see the picker: a remembered choice wins, else the `default` profile, else the run is refused with the fix.
-- Profiles are atomic — a profile missing a field never borrows it from another profile.
-- The profile choice is environment, never identity: runs of the same model under different profiles land in the same condition bucket.
+That prompt uses `LLAMA_API_KEY` and `LLAMA_BASE_URL`; an adapter supporting Inspect's service syntax can use them through `openai-api/llama/MODEL`. Which model-ID forms are accepted depends on the experiment's adapter. An unknown prefix does not itself add provider support. Mock prefixes `mock` and `mockllm` require no credential set.
 
-## The store
+ADB discovers model IDs in `llm`-typed inputs, including nested lists and structures. It does not infer credentials from arbitrary string fields or free-form JSON objects.
 
-```
-~/.config/adb/credentials.toml      # mode 0600, one [<set>.<profile>] section each
-~/.config/adb/preferences.toml      # remembered per-experiment choices (names only)
-```
+## How do I update, remove or script profiles?
 
-The path honors `$XDG_CONFIG_HOME`; `$ADB_CREDENTIALS_FILE` overrides it entirely. That variable is also the CI story: your pipeline materializes this file from its own secret manager and points the variable at it — `chmod 600` it as you do, because a store readable by group or others is refused outright (with the `chmod` to run), the same way ssh treats a leaky private key. Base URLs are validated as you type them (an `http(s)://` scheme is required), so a typo is one retype instead of a cryptic client error mid-run.
+Run `credentials set SET.PROFILE` again to edit a profile. Remove one profile or an entire set with `credentials remove SET.PROFILE` or `credentials remove SET`.
 
-The file is yours to edit by hand — `credentials set` is a convenience, not a gatekeeper. A set is a free-form field map: any env var you add to a section is injected into every run that routes to it, including vars the dialogue never asks about (an org id, an API version, extra vendor knobs). The dialogue only knows the common shape; the store carries whatever you put in it.
-
-## How credentials reach the experiment
-
-The runner forwards only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR`, and `DOCKER_HOST` from the host, then overlays routed credential fields and `ADB_RUN_ID`, `ADB_RUN_DIR`, and `ADB_SEED`. Other exported shell variables are not forwarded. This is environment filtering, not filesystem or process isolation.
-
-The runner constructs the child environment, but does not yet record a complete inventory of injected variable names, credential-profile choices, or endpoint values. Improving that provenance without recording secrets is part of the [publication roadmap](../introduction.md#roadmap).
-
-## The trust caveat
-
-Running third-party code with your keys is a real trust decision: an experiment process receives the credentials routed to it and could misuse them. Today's mitigations: experiments in the monorepo are reviewed (nixpkgs-style), a run receives only the sets it routes to — never your whole keyring — and the inherited environment is restricted. VM-isolated execution with a recording proxy, where the raw key never enters the experiment process at all, is a possible later direction on the [roadmap](../introduction.md#roadmap), not a current isolation guarantee.
+For automation, `credentials set SET.PROFILE --json` reads one JSON object from standard input. Each key is an environment-variable name and each value is a string; `null` removes an existing field. Empty strings and omitted fields retain existing values. Feed that input from your secret-management system rather than putting secret values in command arguments. `credentials list --json` returns masked inventory for tools. See [command reference](../reference/cli.md#credential-commands).

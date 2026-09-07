@@ -4,19 +4,10 @@
      BASE_URL      — the running adb-web
      OUT_DIR       — where the PNG frames + fps.txt land
      DARK=1        — record the dark-theme variant
-     SCENARIO      — which clip: "builder" | "run-view"
+     SCENARIO      — "choose" | "model-credentials" | "launch" | "run-view"
 
-   Scenarios (selectors ride the STABLE ids in hrefs/data attributes, so page
-   redesigns don't break them as long as routes and run ids survive):
-     builder  — overview → type `hello` into the experiments search (the catalog
-                is ~180 cards now) → click the inspect-hello card → type a model →
-                press ▶ run on the run tab (docs-clips.sh has a live worker
-                attached, the adb-local shape) → watch the job claim/build/run
-                until the run link appears
-     run-view — replays the builder flow off-camera (fast, no capture) so a live
-                job panel exists, then records: click the job's run link straight
-                into the run view → linger on the transcript → filter chips →
-                scroll back through the earlier events
+   Each scenario records one guide step. Later steps prepare the preceding UI
+   state off-camera. Only launch and run-view enqueue saved-event replay jobs.
 
    Quality note: playwright's recordVideo pipes lossy JPEG screencast frames into
    VP8 — mushy text no re-encode can fix. So this captures LOSSLESS PNG frames in a
@@ -29,15 +20,41 @@ import { writeFileSync } from "node:fs";
 import { chromium } from "playwright-core";
 
 const { BASE_URL, OUT_DIR, DARK, SCENARIO } = process.env;
-// the model the ▶ run press actually executes against — docs-clips.sh picks it
-// by what's reachable (the local llama server, else the mock)
-const MODEL = process.env.RUN_MODEL || "mockllm/model";
+// Recording-only replay: original GovSim events, with no provider execution.
+const MODEL = "openai/gpt-6-astra";
+const EXAMPLE_KEY = "sk-example-not-a-real-api-key";
+let replayJobs = 0;
 
 const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-gpu"] });
 const context = await browser.newContext({
   viewport: { width: 1024, height: 800 },
   colorScheme: DARK ? "dark" : "light",
   permissions: ["clipboard-read", "clipboard-write"],
+});
+
+// The isolated server uses the saved-event replay build hook.
+await context.route("**/*", async (route) => {
+  const request = route.request();
+  const url = new URL(request.url());
+  if (url.origin !== new URL(BASE_URL).origin) {
+    throw new Error(`unexpected external browser request: ${url.origin}`);
+  }
+  if (url.pathname === "/api/jobs" && request.method() === "POST") {
+    const job = request.postDataJSON();
+    if (job.experiment !== "govsim" || !job.sets.includes(`model=${MODEL}`))
+      throw new Error("unexpected recording job");
+    if (!job.sets.includes("temperature=null") || !job.sets.includes("top_p=null"))
+      throw new Error("recording must submit the visible null generation settings");
+    replayJobs++;
+    await route.continue({ postData: JSON.stringify(job) });
+    return;
+  }
+  if (url.pathname === "/api/credentials" && request.method() === "POST") {
+    const body = request.postDataJSON();
+    if (body.set !== "openai" || body.values.OPENAI_API_KEY !== EXAMPLE_KEY || Object.keys(body.values).length !== 1)
+      throw new Error("recording must save only its fake example key");
+  }
+  await route.continue();
 });
 
 // the fake cursor: rides real mousemove/mousedown events, so page.mouse.* drives it
@@ -53,6 +70,9 @@ await context.addInitScript(() => {
       '<path d="M4 2 L4 19 L8.5 15.5 L11.5 22 L14 21 L11 14.5 L17 14 Z" ' +
       'fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     document.body.appendChild(c);
+    const style = document.createElement("style");
+    style.textContent = 'span:has(> a[href="#/jobs"]) { display: none !important; }';
+    document.head.appendChild(style);
     const svg = c.firstElementChild;
     svg.style.transformOrigin = "4px 2px"; // press scales around the arrow tip
     svg.style.transition = "transform 0.1s";
@@ -65,6 +85,10 @@ await context.addInitScript(() => {
 });
 
 const page = await context.newPage();
+page.setDefaultTimeout(30000);
+const initialCreds = await (await context.request.get(`${BASE_URL}/api/credentials`)).json();
+if (Object.keys(initialCreds.store).length || Object.keys(initialCreds.prefs).length)
+  throw new Error("recording requires empty credential and preference stores");
 
 // lossless capture loop: as fast as screenshots come (~15-25/s); fps measured
 let frames = 0;
@@ -84,6 +108,7 @@ const startCapture = () => {
 };
 
 const glideTo = async (locator) => {
+  await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
   const x = box.x + Math.min(box.width / 2, 120);
   const y = box.y + box.height / 2;
@@ -111,60 +136,117 @@ const smoothScroll = async (totalDy, ms = 2200) => {
   }
 };
 
-async function builder() {
+async function saveExampleProfile(visible = false) {
+  const key = page.locator('input[type="password"]');
+  await key.waitFor();
+  if (visible) {
+    await key.scrollIntoViewIfNeeded();
+    await glideClick(key);
+    // Paste a clearly fake key, just as a reader pastes their own provider key.
+    await page.evaluate((value) => navigator.clipboard.writeText(value), EXAMPLE_KEY);
+    await page.keyboard.press("ControlOrMeta+v");
+    await page.waitForTimeout(1000);
+    await glideClick(page.getByRole("button", { name: "save", exact: true }));
+  } else {
+    await key.fill(EXAMPLE_KEY);
+    await page.getByRole("button", { name: "save", exact: true }).click();
+  }
+  await page.locator('select option[value="default"]').waitFor({ state: "attached" });
+  await key.waitFor({ state: "detached" });
+  if (visible) {
+    await page.getByRole("button", { name: "remember", exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1300);
+    await glideClick(page.getByRole("button", { name: "remember", exact: true }));
+    await page.getByText("remembered — the CLI honors it too", { exact: true }).waitFor();
+    await page.waitForTimeout(1400);
+  }
+}
+
+async function openExperiment() {
+  await page.goto(`${BASE_URL}/#/experiments/govsim`);
+  await page.waitForSelector('[data-param="model"] input');
+  await page.mouse.move(700, 60);
+}
+
+async function choose() {
   await page.goto(`${BASE_URL}/#/`);
-  await page.waitForSelector('a[href$="/experiments/inspect-hello"]');
+  await page.waitForSelector('a[href$="/experiments/govsim"]');
   await page.mouse.move(700, 60);
   startCapture();
-  await page.waitForTimeout(400);
-
-  // the overview is the full ~180-task catalog: search narrows it to hello first
+  await page.waitForTimeout(700);
   await glideClick(page.locator('input[type="search"]'));
-  await page.keyboard.type("hello", { delay: 130 });
-  await page.waitForTimeout(900);
-
-  // click the inspect-hello card (by its route id, not its looks)
-  await glideClick(page.locator('a[href$="/experiments/inspect-hello"]'));
+  await page.keyboard.type("govsim", { delay: 130 });
+  await page.waitForTimeout(1200);
+  await glideClick(page.locator('a[href$="/experiments/govsim"]'));
   await page.waitForSelector('[data-param="model"] input');
-  await page.waitForTimeout(700);
+  await page.locator('[data-param="max_rounds"] input').fill("1");
+  await page.waitForTimeout(5500);
+}
 
-  // the model field: the dropdown opens with ALL suggestions
-  await glideClick(page.locator('[data-param="model"] input'));
-  await page.waitForSelector('[data-param="model"] li');
-  await page.waitForTimeout(800);
-
-  // type the model this machine can actually serve (free-text combobox: the
-  // dropdown narrows away, the typed value binds)
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(MODEL, { delay: 90 });
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(700);
-
-  // the run tab (default when a worker is connected — clicked anyway so the
-  // clip shows the choice), then ▶ run once the worker's presence enables it
-  await glideClick(page.locator('button[role="tab"]', { hasText: "run" }));
+async function configure(visible = false) {
+  await page.locator('[data-param="max_rounds"] input').fill("1");
+  await page.locator('[data-param="embedder"] select').selectOption("mxbai");
+  await page.locator('[data-param="temperature"] input').fill("");
+  await page.locator('[data-param="top_p"] input').fill("");
+  await page.locator('[data-param="reasoning_effort"] select').selectOption("low");
+  const model = page.locator('[data-param="model"] input');
+  if (visible) {
+    await model.scrollIntoViewIfNeeded();
+    await glideClick(model);
+    await page.waitForSelector('[data-param="model"] li');
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("openai/gpt-6", { delay: 100 });
+    await page.waitForTimeout(1200);
+    await glideClick(page.locator('[data-param="model"] li').filter({ hasText: MODEL }).first());
+    await page.waitForTimeout(700);
+    await glideClick(page.locator('button[role="tab"]', { hasText: "run" }));
+  } else {
+    await model.fill(MODEL);
+    await page.locator('button[role="tab"]', { hasText: "run" }).click();
+  }
+  await saveExampleProfile(visible);
   await page.waitForSelector("[data-launch]:not([disabled])", { timeout: 30000 });
-  await page.waitForTimeout(600);
-  await glideClick(page.locator("[data-launch]"));
+}
 
-  // the job narrates queued → claimed → building → running; hold until the
-  // worker's first run report links the run id, then take that in
-  await page.waitForSelector('[data-job] a[href^="#/runs/"]', { timeout: 180000 });
-  await page.waitForTimeout(2500);
+async function modelCredentials() {
+  await openExperiment();
+  startCapture();
+  await page.waitForTimeout(700);
+  await configure(true);
+  await page.waitForTimeout(1200);
+}
+
+async function launchJob(visible = false) {
+  if (visible) await glideClick(page.locator("[data-launch]"));
+  else await page.locator("[data-launch]").click();
+  const link = page.locator('[data-job] a[href^="#/runs/"]').first();
+  await link.waitFor({ timeout: 180000 });
+}
+
+async function launch() {
+  await openExperiment();
+  await configure();
+  startCapture();
+  await page.waitForTimeout(1200);
+  await launchJob(true);
+  await glideClick(page.locator('[data-job] a[href^="#/runs/"]').first());
+  await page.waitForSelector('[data-filter="llm-calls"]');
+  await glideClick(page.locator('[data-filter="llm-calls"]'));
+  await page.waitForTimeout(10000);
 }
 
 async function runView() {
-  // replay the builder's ending off-camera: same experiment, same model, ▶ run —
-  // so the clip opens exactly where the builder clip left the reader, with a
-  // fresh job's run link waiting in the job panel
-  await page.goto(`${BASE_URL}/#/experiments/inspect-hello`);
-  await page.waitForSelector('[data-param="model"] input');
-  await page.locator('[data-param="model"] input').fill(MODEL);
-  await page.locator('button[role="tab"]', { hasText: "run" }).click();
-  await page.waitForSelector("[data-launch]:not([disabled])", { timeout: 30000 });
-  await page.locator("[data-launch]").click();
-  await page.waitForSelector('[data-job] a[href^="#/runs/"]', { timeout: 180000 });
-
+  await openExperiment();
+  await configure();
+  await launchJob();
+  const deadline = Date.now() + 120000;
+  while (true) {
+    const runs = await (await context.request.get(`${BASE_URL}/api/runs`)).json();
+    if (runs.length === 1 && runs[0].phase === "completed") break;
+    if (Date.now() > deadline || runs.some(run => ["failed", "interrupted"].includes(run.phase)))
+      throw new Error("replay did not complete before inspection");
+    await page.waitForTimeout(250);
+  }
   await page.mouse.move(700, 60);
   startCapture();
   await page.waitForTimeout(800);
@@ -177,7 +259,9 @@ async function runView() {
   // narrow the feed with the filter chips: just the conversation, then just the
   // model calls, then everything again
   await glideClick(page.locator('[data-filter="messages"]'));
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(1000);
+  await glideClick(page.locator('summary[title^="message"]').filter({ hasText: "Mayor" }).first());
+  await page.waitForTimeout(2300);
   await glideClick(page.locator('[data-filter="llm-calls"]'));
   await page.waitForTimeout(1600);
   await glideClick(page.locator('[data-filter="all"]'));
@@ -189,13 +273,33 @@ async function runView() {
   await page.waitForTimeout(1400);
 }
 
-await (SCENARIO === "run-view" ? runView() : builder());
+const scenarios = { choose, "model-credentials": modelCredentials, launch, "run-view": runView };
+if (!scenarios[SCENARIO]) throw new Error(`unknown scenario: ${SCENARIO}`);
+await scenarios[SCENARIO]();
 
 // render-quality tripwire: the clips exercise the real UI on real run data, so any
 // coercion leak ("[object Object]") anywhere on the final page fails the recording
 const leaked = await page.evaluate(() => document.body.innerText.includes("[object Object]"));
 if (leaked) throw new Error("rendered page contains '[object Object]' — a display coercion leak");
 
+const expectedJobs = ["launch", "run-view"].includes(SCENARIO) ? 1 : 0;
+if (replayJobs !== expectedJobs) throw new Error(`expected ${expectedJobs} replay jobs, got ${replayJobs}`);
+const jobs = await (await context.request.get(`${BASE_URL}/api/jobs`)).json();
+if (jobs.length !== expectedJobs || jobs.some(job => job.experiment !== "govsim" || !job.sets.includes(`model=${MODEL}`)))
+  throw new Error("server received an unexpected replay job");
+if (expectedJobs) {
+  const runs = await (await context.request.get(`${BASE_URL}/api/runs`)).json();
+  if (runs.length !== 1) throw new Error("expected one replay run");
+  const { condition, run } = runs[0];
+  const events = await (await context.request.get(`${BASE_URL}/api/runs/${condition}/${run}/events`)).json();
+  const saved = JSON.stringify(events);
+  if (!saved.includes("dirty:docs-recording-replay") || !saved.includes(MODEL))
+    throw new Error("saved run lacks replay provenance or original model");
+  if (!saved.includes('llm.call')) throw new Error("replay did not show live model calls");
+  if (SCENARIO === "run-view" && (!saved.includes('message') || !saved.includes('total_harvest')))
+    throw new Error("completed replay lacks conversations or simulation results");
+}
+console.log(`verified ${SCENARIO}: empty initial stores; ${expectedJobs} saved-event replay jobs`);
 recording = false;
 await capture;
 writeFileSync(`${OUT_DIR}/fps.txt`, (frames / ((Date.now() - started) / 1000)).toFixed(2));

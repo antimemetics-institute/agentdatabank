@@ -1,29 +1,31 @@
 # Summary
 
-[Introduction](introduction.md)
+# Start
 
-# Using the platform
+- [What is ADB?](introduction.md)
+- [Run your first local experiment](running/getting-started.md)
+- [Roadmap](start/roadmap.md)
 
-- [Getting started](running/getting-started.md)
-- [Experiments, conditions, runs](running/model.md)
-- [Running experiments](running/cli.md)
-- [Credentials](running/secrets.md)
-- [The web GUI](running/web.md)
-- [Running from the GUI](running/workers.md)
+# Browse results
+
+- [Find and read a run](browsing/runs.md)
+
+# Run experiments
+
+- [Choose inputs and run](running/experiments.md)
+- [Configure model credentials](running/secrets.md)
+- [Repeat and compare runs](running/model.md)
 - [Working with Nix](running/nix.md)
 
-# Experiment catalog
+# Add or change experiments
 
-- [inspect_evals tasks](catalog/inspect-evals.md)
-- [ImpossibleBench](catalog/impossiblebench.md)
-- [Concordia](catalog/concordia.md)
-
-# Writing experiments
-
-- [Adding and updating experiments](writing/experiments.md)
+- [Add or change an experiment](authoring/experiments.md)
 
 # Reference
 
-- [CLI reference](reference/cli.md)
-- [Experiment protocol and events](reference/events.md)
-- [Run directory layout](reference/layout.md)
+- [Commands and settings](reference/cli.md)
+- [Local tools and run storage](reference/local.md)
+- [Experiment manifest](reference/manifest.md)
+- [Run files and identity](reference/layout.md)
+- [Experiment process protocol](reference/protocol.md)
+- [Events](reference/events.md)

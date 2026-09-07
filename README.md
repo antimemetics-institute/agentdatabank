@@ -1,33 +1,40 @@
-# Agent Data Bank
+# Agent Databank
 
 [![docs](https://img.shields.io/badge/docs-book-blue)](https://antimemetics-institute.github.io/agentdatabank/)
 
-A registry of multi-agent AI safety experiments and results.
+Agent Databank (ADB) packages agent experiments, runs them on your machine, and saves their inputs, results and execution records together. Use it to study multi-agent behavior, repeat experiments, and inspect the conversations, model calls and scores behind a result.
 
-Multi-agent research observes emergent behavior, and nothing agentic is deterministic — you can't draw conclusions from one run, and published setups routinely under-specify their environment. The ADB curates well-specified experiments, pinned down to the environment, makes them one command to run, and collates the results.
+## Run an experiment
 
-## Try it
+With [Nix installed](https://nixos.org/download/) on Linux or macOS, start ADB without cloning the repository:
 
-With [nix installed](https://nixos.org/download/) on macOS or Linux:
-
-```bash
-git clone https://github.com/antimemetics-institute/agentdatabank
-cd agentdatabank
-nix run .#adb-local
+```sh
+$(nix-build --no-out-link --tarball-ttl 0 \
+  https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz \
+  -A exec.adb-local)
 ```
 
-That one command is the whole local setup: the catalog opens in your browser, with a worker attached for this machine. Pick an experiment, compose a run — every parameter is explicit — and press ▶ run:
+The first build can take time. Leave the terminal running; ADB opens your browser when ready, or prints a URL you can open yourself.
 
-![Composing and launching a run in the builder](docs/readme/builder-form.gif)
+Choose an experiment, set its inputs, and save any credentials needed by your model. The [first-run guide](https://antimemetics-institute.github.io/agentdatabank/running/getting-started.html) walks through a short GovSim simulation and includes a mock option that needs no model credentials.
 
-Follow the transcript live as the worker runs it:
+![Selecting a model and saving its credential profile](docs/readme/model-credentials.gif)
 
-![Following a run's transcript](docs/readme/run-view.gif)
+Press **run**, follow the job's run link, and inspect the conversation, model calls and results. Saved runs remain available under **Runs** after you restart ADB.
 
-The builder's other tab provides a copy-paste command for running the configuration from a terminal. Check its selected source: a command targeting upstream may differ from an edited local checkout. The local GUI runs experiments on the same machine and shows progress in Jobs: see [runs from the browser](https://antimemetics-institute.github.io/agentdatabank/running/workers.html).
+![Inspecting a run's conversation and results](docs/readme/run-view.gif)
 
-## Learn more
+## What would you like to do next?
 
-The [roadmap](https://antimemetics-institute.github.io/agentdatabank/introduction.html#roadmap) distinguishes working local features from future public data publication and other possible additions.
+- **[Run from a terminal](https://antimemetics-institute.github.io/agentdatabank/running/experiments.html#how-do-i-use-the-command-line):** copy the form's **oneliner**, or inspect an experiment's inputs and build a command yourself.
+- **[Browse saved results](https://antimemetics-institute.github.io/agentdatabank/browsing/runs.html):** use the viewer or read the stored JSON and event files directly.
+- **[Repeat and compare runs](https://antimemetics-institute.github.io/agentdatabank/running/model.html):** keep track of source versions, inputs and seeds, and check the evidence behind differences.
+- **[Add or change an experiment](https://antimemetics-institute.github.io/agentdatabank/authoring/experiments.html):** clone the repository, edit and test locally, then contribute the code through a pull request.
 
-**[The book](https://antimemetics-institute.github.io/agentdatabank/)** covers getting started, the experiment catalog, and [adding and updating experiments](https://antimemetics-institute.github.io/agentdatabank/writing/experiments.html).
+The [book](https://antimemetics-institute.github.io/agentdatabank/) also covers credentials, Nix command options, and reference details for commands, manifests, run files and events.
+
+## Roadmap
+
+ADB currently runs and displays data locally. A public databank is coming soon.
+
+See the [Roadmap](https://antimemetics-institute.github.io/agentdatabank/start/roadmap.html) for working features, publication requirements and possible later work.

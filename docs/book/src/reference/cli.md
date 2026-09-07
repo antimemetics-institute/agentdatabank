@@ -1,61 +1,86 @@
-# CLI reference
+# Commands and settings
 
-A single lookup page for every command surface. See [Running experiments](../running/cli.md) for prose.
+Run an experiment through its named app. ADB's tools use `adb-` names. Commands below follow the book's [Nix settings](../running/nix.md).
 
-## Flake apps & packages
+## Experiment options
 
-| Invocation | Kind | What |
-|---|---|---|
-| `nix run .#<experiment> -- …` | app | Run an experiment (`inspect-hello`, `inspect-gsm8k`, `inspect-gpqa-diamond`, `impossiblebench-livecodebench`, `impossiblebench-swebench`). |
-| `nix run .#adb-runner -- credentials …` | app | Manage local credential sets. |
-| `nix run .#adb-web -- [--host ADDR] [--port N] [--data-dir DIR] [--no-open]` | app | The local web GUI (default `127.0.0.1:8340`). Read-only; executes nothing. |
-| `nix run .#adb-local` | app | Local viewer with managed execution. Accepts `--repo DIR`, `--data-dir DIR`, `--port N`, and `--no-open`. |
-| `.#manifests` | package | All experiment schema JSONs, aggregated (drives the GUI's builder). |
-
-## `adb-runner` (the experiment wrapper)
-
-```
-nix run .#<experiment> -- [options]
+```sh
+nix run .#inspect-hello -- --help
 ```
 
-| Flag | Meaning |
-|---|---|
-| `--set KEY=VALUE` | Bind a param (JSON, string, or `@file`). Repeatable. **Every param must be bound** — experiments have no defaults; a bare invocation exits 2 and prints the suggested fully-bound command (from the manifest's `initial` values). |
-| `--replicates N` | Runs to draw from this condition (default 1). |
-| `--seed N` | Base seed (random if omitted; always recorded). |
-| `--out DIR` | Override `$ADB_DATA_DIR`. |
-| `--json` | Stream raw event JSONL to stdout (headless). |
-| `--dry-run` | Print the resolved condition + hash; run nothing. |
-| `--describe` | Print the manifest JSON and exit. |
+All experiment apps accept these runner options:
 
-Exit: `0` completed invocation (individual run failures counted, not fatal) · `2` usage/schema error · `Ctrl-C` → in-flight runs marked `interrupted`.
+| Option | Meaning |
+| --- | --- |
+| `--set KEY=VALUE` | Bind an experiment parameter. Repeat for every declared parameter. A later binding of the same key wins. |
+| `--replicates N` | Number of runs in this invocation; default `1`. Use a positive integer. Runs execute sequentially. |
+| `--seed INTEGER` | Base seed used to derive per-run seeds. A random 32-bit base seed is chosen when omitted. |
+| `--profile SET=PROFILE` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
+| `--out DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
+| `--json` | Stream event envelopes as JSON lines to stdout and disable credential prompts. Runner diagnostics remain on stderr. |
+| `--dry-run` | Print resolved inputs, condition ID, base seed and replicate count; do not execute or resolve credentials. Checks parameter names and types; list-length bounds are checked when executing. |
+| `--describe` | Print the experiment manifest as JSON and exit without requiring parameter bindings. |
+| `-h`, `--help` | Print usage. |
 
-## `adb-runner credentials`
+The runner returns status `2` for input or credential-resolution errors handled before execution. After executing runs it reports phase counts and normally returns `0`, including when individual runs failed or were interrupted. For automation, inspect `run.end` or saved `run.json` phases rather than treating a zero runner exit code as proof that every experiment succeeded.
 
+## How are parameter values read?
+
+The value after `=` is parsed as JSON if possible, otherwise as a string. `@path` reads the file and applies the same JSON-or-text rule. Text-file contents are kept as the string value. A malformed value or file beginning with `[` or `{` is rejected rather than treated as a string.
+
+| Argument | Bound value |
+| --- | --- |
+| `--set count=3` | Integer `3` |
+| `--set enabled=true` | Boolean `true` |
+| `--set label=trial` | String `"trial"` |
+| `--set 'label="3"'` | String `"3"` |
+| `--set 'names=["Ada","Lin"]'` | JSON array |
+| `--set 'options={"temperature":0.2}'` | JSON object |
+| `--set optional=null` | Null; accepted only if the declaration is nullable |
+| `--set options=@options.json` | JSON or text read from the named file |
+
+These are syntax examples; the keys must exist in the selected experiment. Unknown keys, omitted parameters and type mismatches are errors. Shell quoting is separate from JSON syntax: quote arguments containing spaces, braces or other shell punctuation.
+
+## Credential commands
+
+Use the runner's standalone management command:
+
+```sh
+nix run .#adb-runner -- credentials --help
 ```
-nix run .#adb-runner -- credentials <list|set|remove|path>
-```
 
-| Command | What |
-|---|---|
-| `list` | Show configured credential sets, one line per profile (secrets masked). |
-| `set <name>[.<profile>]` | Add/update a set — every value is prompted, then a profile name (`Enter` = `default`); the dotted form targets a profile directly. Secrets hidden; there is no `KEY=VALUE` argv form: argv leaks into `ps`/history. Scripts pipe one line per prompt on stdin. |
-| `remove <name>[.<profile>]` | Delete a set, or one profile of it. |
-| `path` | Print the store file path. |
+| Subcommand | Meaning |
+| --- | --- |
+| `list` | Show configured sets and profiles with secrets masked. |
+| `list --json` | Return machine-readable inventory, templates and masked profile contents; secret presence is represented by `true`. |
+| `set SET[.PROFILE]` | Prompt for values and save a profile; an undotted set prompts for the profile name. |
+| `set SET[.PROFILE] --json` | Read one environment-variable-to-value JSON object on stdin. Strings set fields; empty/absent values keep existing fields; null deletes a field. Defaults to profile `default` if omitted. |
+| `remove SET[.PROFILE]` | Delete a whole set or one profile. |
+| `remember EXPERIMENT SET PROFILE` | Save the existing profile as that experiment's choice for this set. |
+| `path` | Print the credential store path. |
 
-File: `~/.config/adb/credentials.toml` (0600); override with `$ADB_CREDENTIALS_FILE` (also the CI interface — materialize it from your pipeline's secret manager). Built-in names (`openai`, `anthropic`, `google`, `groq`, `mistral`, `grok`, `moonshotai`, `openrouter`, `azureai`) are prompt templates only; any other name is a named set (`<NAME>_API_KEY`/`<NAME>_BASE_URL`, reached by `openai-api/<name>/<model>` ids). An interactive run that needs an unconfigured set prompts for it inline. See [Credentials](../running/secrets.md).
+Profile names start with a lowercase letter or digit and continue with lowercase letters, digits, `_` or `-`. `new` is reserved. See [credential setup](../running/secrets.md) for selection order and model-ID routing.
 
-Host, port, and browser opening are controlled by `--host`, `--port`, and
-`--no-open`. Launchers supply the frontend, catalog, and execution paths internally.
-Remembered credential-profile choices live in `$XDG_CONFIG_HOME/adb/preferences.toml`
-(default `~/.config/adb/preferences.toml`).
+## Data and configuration settings
 
-## Environment variables
+| Setting | Effect |
+| --- | --- |
+| `ADB_DATA_DIR` | Default root for run data; overridden by runner `--out` or server `--data-dir`. |
+| `XDG_DATA_HOME` | When `ADB_DATA_DIR` is absent, data lives under this directory's `adb/`; default `~/.local/share`. |
+| `ADB_CREDENTIALS_FILE` | Override the credential TOML path. |
+| `XDG_CONFIG_HOME` | Base for `adb/credentials.toml` and `adb/preferences.toml`; default `~/.config`. The credential-file override does not relocate preferences. |
+| `NO_COLOR` | Disable runner terminal color. Nonterminal stderr and `TERM=dumb` also disable it. |
+| `DOCKER_HOST` | Forwarded to the experiment for Docker-backed tasks. The required daemon must be available separately. |
 
-| Var | Used by | Meaning |
-|---|---|---|
-| `ADB_DATA_DIR` | runner, web | Run store root (default `~/.local/share/adb`). |
-| `ADB_CREDENTIALS_FILE` | runner | Override the credential store path (CI materializes this file). |
-| `ADB_RUN_ID` / `ADB_RUN_DIR` / `ADB_SEED` | experiment | Set by the runner in the child env. |
+Provider keys and endpoints come from the credential store. The runner does not forward arbitrary environment variables. [Process protocol](protocol.md) lists the variables passed to an experiment; [local server reference](local.md) covers server flags and operation.
 
-There is **no env passthrough** into experiments: a run's environment is constructed — system basics (`PATH`, `HOME`, locale), [deliberately injected credentials](../running/secrets.md#how-credentials-reach-the-experiment), and the `ADB_*` run vars — and recorded per run with credential values ablated.
+## Package attributes
+
+| Entry point | Experiment | Tool |
+| --- | --- | --- |
+| Flake app | `NAME` | `adb-local`, `adb-web`, `adb-runner` |
+| Flake package | `experiment-NAME` | The same tool names |
+| Classic package | `experiment-NAME` | The same tool names |
+| Classic executable output | `exec.NAME` | `exec.adb-local`, `exec.adb-web`, `exec.adb-runner` |
+
+`manifests` builds a directory containing one manifest JSON file per registered experiment. [Working with Nix](../running/nix.md) explains fetching, registry aliases and revision pinning.

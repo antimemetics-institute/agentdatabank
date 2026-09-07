@@ -1,34 +1,79 @@
-# Run directory layout
+# Run files and identity
 
-The runner writes everything under `$ADB_DATA_DIR` (default `$XDG_DATA_HOME/adb`, else `~/.local/share/adb`).
+The local store keeps conditions, run metadata, event chunks and artifacts as ordinary files.
 
-```
-$ADB_DATA_DIR/
+## Where are runs saved?
+
+The runner uses `--out DIR`, then `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`, with `XDG_DATA_HOME` defaulting to `~/.local/share`. The viewer uses the same default and accepts `--data-dir DIR`.
+
+```text
+DATA_DIR/
   conditions/
-    <condition_id>.json        # the spec as written, one per condition (write-once)
+    CONDITION_ID.json
   runs/
-    <condition_id>/            # runs grouped under their condition
-      <run_id>/                # run_id is a ULID
-        run.json               # the run record; rewritten atomically on transitions;
-                               #   its mtime is the ~10s liveness heartbeat
-        events-00001.jsonl     # event stream, chunked at ~1,000,000 bytes
-        events-00002.jsonl     #   (events-NNNNN.jsonl, 5-digit, zero-padded, from 1)
-        artifacts/             # files the experiment declared via `artifact` events
-        workspace/             # the run's working directory (cwd for the experiment)
+    CONDITION_ID/
+      RUN_ID/
+        run.json
+        events-00001.jsonl
+        events-00002.jsonl
+        artifacts/
+        workspace/
 ```
 
-## Notes
+| Path | Contents |
+| --- | --- |
+| `conditions/CONDITION_ID.json` | `{experiment, source, params}` for the condition, written once. |
+| `run.json` | Current or final run metadata. Replaced atomically as the run changes phase. |
+| `events-NNNNN.jsonl` | Event envelopes, one JSON object per line, in ascending sequence order. Chunks rotate at roughly one million characters. |
+| `artifacts/` | Files deliberately retained by the experiment; artifact events point to run-relative paths. |
+| `workspace/` | Fresh working directory used to execute the experiment. |
 
-- **`conditions/<cid>.json`** is written **once** per condition (skipped if it exists) and holds the spec *as written*. It is stored at the top level, not inside each run.
-- **`run.json`** is written atomically (temp file + replace, `indent=2, sort_keys=True`). It holds the params, `source` (content identity), `fetch_ref` (reproducibility rev) + `dirty`, runner version/platform metadata, seed, and status. Its **mtime is touched every ~10s while the run is alive** — the heartbeat the GUI uses to distinguish a live `running` run from an `interrupted?` one.
-- **`events-NNNNN.jsonl`** roll to a new chunk when the next line would exceed ~1 MB. One compact JSON [event envelope](events.md#transport) per line.
-- **`artifacts/`** holds whatever the experiment writes and declares. Chat / llm-call views are never written here (or anywhere in the run tree) — they are **projections of the stream**, rendered on demand by the GUI.
-- **`workspace/`** is the experiment's cwd; the GUI never reads it.
+Read event files in numeric filename order. The runner flushes each event line, so another process can inspect a live run. Files from failed and interrupted runs remain in the store.
 
-## Finding a run by id
+## How is a condition ID calculated?
 
-Run ULIDs are globally unique but stored under their condition, so the GUI's bare-id route (`#/runs/<rid>`) resolves by globbing `runs/*/<run_id>`.
+```text
+condition_id = sha256(JCS({experiment, source, params}))
+```
 
-## What the GUI reads
+JCS is RFC 8785 JSON canonicalization. IDs are full lowercase hexadecimal SHA-256 hashes; the interface usually displays the first 12 characters. The hash uses values, not shell quoting or JSON object-key order.
 
-The web server reads only `run.json`, `events-*.jsonl`, and `conditions/<cid>.json`, and derives params from conditions. Bulky event fields (`request.messages`, `response.raw`, strings over ~4 KB) are served as elided markers with the disk record left untouched — the full value is fetched on demand via per-event endpoints.
+`source` has the form `content:sha256:HASH`. Packaging computes it from the experiment's declared `src` path or ordered list of paths, imported into the Nix store after filtering development artifacts. The filtered names are `.venv`, `__pycache__`, `node_modules`, `dist`, `.direnv`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `result` and names beginning `result-`.
+
+The identity excludes source paths not declared by that experiment, including shared runner code unless explicitly included. It also excludes the fetch reference, platform, seed, replicate, credentials and endpoints. See [repeat and compare runs](../running/model.md) for the consequences.
+
+A run ID is a newly generated ULID. Replicates of a condition share its condition ID and have separate run directories.
+
+## What is in `run.json`?
+
+| Field | Meaning |
+| --- | --- |
+| `run` | ULID identifying this execution. |
+| `condition` | Full condition hash. |
+| `experiment` | Experiment name. |
+| `source` | Declared experiment content identity. |
+| `fetch_ref` | Repository reference for fetching source, or a `dirty:` reference when no fetchable revision is recorded. |
+| `dirty` | Whether `fetch_ref` starts with `dirty:`. |
+| `seed` | Derived run seed, not the CLI base seed. |
+| `replicate` | One-based replicate number within this invocation. |
+| `phase` | Current or terminal process phase. |
+| `started_at` | UTC timestamp written when the run begins. |
+| `finished_at` | UTC completion timestamp; added at termination. |
+| `duration_s` | Elapsed run duration in seconds; added at termination. |
+| `summary` | Last emitted metric values for names declared in manifest `results`; added at termination. |
+| `usage_totals` | `llm_calls`, `input_tokens`, `output_tokens` accumulated from `llm.call` events; added at termination. |
+| `realized_params` | Parameters passed to the process; added at termination. Also present in `run.start`. |
+
+Token totals use the usage the adapter reports; absent token counts contribute zero. `llm_calls` counts emitted call events, including calls with errors. These are recorded-event totals, not an independently verified provider bill.
+
+## What do the phases mean?
+
+| Phase | Meaning |
+| --- | --- |
+| `provisioning` | Run metadata has been created; the experiment has not yet reached the running phase. |
+| `running` | Experiment process has started. |
+| `completed` | Experiment process exited with code zero. |
+| `failed` | Experiment process exited with a nonzero code. |
+| `interrupted` | Runner handled an interrupt, or the experiment exited due to a signal. |
+
+While active, the runner touches `run.json` approximately every ten seconds without changing its contents. The viewer uses that file modification time as a heartbeat. Its **interrupted?** label for stale active runs is display state; it is not written back as a terminal phase. A hard crash can leave partial files and no `run.end`.

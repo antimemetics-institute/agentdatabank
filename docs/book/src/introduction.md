@@ -1,47 +1,23 @@
-# Introduction
+# What is ADB?
 
-The **ADB (Agent Databank)** is a registry of multi-agent AI safety experiments and results.
+Agent Databank (ADB) packages agent experiments, runs them on your machine, and saves their inputs, results and execution records together. You can inspect the records in a browser or read the files directly.
 
-## Motivation
+## What would you like to do?
 
-Multi-agent research is expensive, and fundamentally observes emergent behavior. Nothing agentic is deterministic: you can't draw reliable conclusions from a single run. 
+| I want to… | Start here |
+| --- | --- |
+| Run an experiment without cloning the repository | [Run your first local experiment](running/getting-started.md): launch ADB, choose inputs, save credentials, run and inspect the result. |
+| Run from a terminal or use a copied command | [Choose inputs and run](running/experiments.md#how-do-i-use-the-command-line): inspect the parameter schema, supply inputs and check the outcome. |
+| Explore saved results | [Find and read a run](browsing/runs.md): browse the evidence or [read the files directly](browsing/runs.md#how-do-i-read-the-files-without-a-browser). |
+| Repeat a run or try different inputs | [Repeat and compare runs](running/model.md): keep the source and inputs, choose seeds and assess differences. |
+| Add an experiment or change its code | [Add or change an experiment](authoring/experiments.md): clone ADB, edit, test locally and submit a pull request. |
 
-It should be easy to re-run a published result, pause it halfway through, change something, and triplicate both branches. However, today, everyone configures a slightly-different setup, and even when published research includes code, it commonly under-specifies the environment and experimental setup. 
+ADB currently runs and displays data locally. A public databank is coming soon. See the [Roadmap](start/roadmap.md).
 
-The ADB curates a registry of well-specified experiments, makes it easy to run them, and collates the results.
+## How are experiments and results organized?
 
-## Roadmap
+For example, choosing a model and dataset limit sets inputs for an evaluation. Running that configuration twice saves two separate records. Changing the model lets you compare another configuration. A run's record can include messages, model requests and responses, scores, logs and files; the experiment determines what it emits.
 
-The current platform supports local execution and browsing. Public data publication is the next milestone; the unchecked items below are directions to explore, not shipped features or a fixed delivery schedule.
+An **experiment** defines a program and its inputs. A **condition** groups runs with the same experiment name, declared source content and complete set of input values. A **run** is one execution of a condition. Repeating a condition creates another run with its own ID and record.
 
-Available now:
-
-- [x] the local loop: a catalog of Nix-packaged experiments, one-command runs, and a browsable run store — with or without cloning the repository, using flakes or classic Nix
-- [x] the web GUI: parameter forms, live transcripts, and [Run/Stop with a local job queue](running/workers.md) through `adb-local`
-- [x] viewer-only browsing of a local store through `adb-web`
-- [x] [credential profiles](running/secrets.md) — ask-once setup, multiple endpoints per provider
-- [x] [adding and updating experiments](writing/experiments.md) through ordinary repository pull requests, for humans and coding agents
-
-Before publishing our experimental data:
-
-- [ ] strengthen and test execution provenance: source, resolved environment, inputs, model settings, and historical experiment declarations
-- [ ] define and validate a versioned publication format, with downloadable data and instructions for repeating runs and reproducing our analyses
-- [ ] publish our own runs and a read-only website for exploring them; Hugging Face hosting and CC-BY-4.0 licensing are proposals, with the format and release terms still to be settled
-
-Possible later work:
-
-- [ ] named parameter presets and opening an existing run in the composer
-- [ ] analysis and run comparison, with revisable comparability annotations; this may belong in a separate analysis tool
-- [ ] third-party data deposits, with attribution and review (ORCID and operator attribution for agents are possibilities)
-- [ ] dedicated experiment-authoring guidance packaged as an agent skill, and sandboxed agent tests of the guide
-- [ ] dynamic credential acquisition and explicit non-model credential requirements
-- [ ] stronger execution isolation and credential delivery through a recording proxy
-- [ ] pausing an experiment and branching its execution to explore alternatives
-
-## How this guide is organized
-
-Top to bottom, by how deep you're going:
-
-- **[Using the platform](running/getting-started.md)** — running experiments and browsing the results. Start at [Getting started](running/getting-started.md); the first loop takes a few minutes with any model credential (or runs keyless against a mock).
-- **[Experiment catalog](catalog/inspect-evals.md)** — what you can run today, with exact commands.
-- **[Reference](reference/cli.md)** — the CLI surface and the on-disk layout.
+For precise field and option definitions, use the references for [commands](reference/cli.md), [manifests](reference/manifest.md), [stored files](reference/layout.md) and [events](reference/events.md).

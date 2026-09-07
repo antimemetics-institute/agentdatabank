@@ -3,7 +3,7 @@
 Everything the Inspect run needs arrives as explicit values: which task, which
 model, task/model args, and the usual sample/generation limits. This program is
 repo-unaware — it maps these onto `inspect_ai.eval(...)` and translates the
-resulting EvalLog into ADB events (docs/book/src/catalog/inspect-evals.md).
+resulting EvalLog into ADB events (docs/book/src/reference/events.md).
 """
 
 from __future__ import annotations

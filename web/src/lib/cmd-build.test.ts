@@ -13,7 +13,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildCmd, defaultStr } from "./cmd-build.ts";
+import { buildCmd, defaultStr, effectiveStr } from "./cmd-build.ts";
+import { clearDraft, loadDraft, saveDraft } from "./run-draft.ts";
 import type { ParamDecl } from "../shared/types.ts";
 
 /* no test input contains a literal `<`, so any `<…>` in the output is invented */
@@ -243,6 +244,50 @@ test("buildCmd and buildArgs materialize identically", () => {
   assert.ok(sets.includes("model=openai/gpt"));
   assert.ok(sets.includes("agent_type=minimal")); /* defaults materialized in BOTH faces */
   assert.ok(sets.includes("reasoning_tokens=null")); /* empty nullable binds null */
+});
+
+test("nullable numeric defaults survive untouched but clearing binds null across form, command, and argv", () => {
+  const params: Record<string, ParamDecl> = {
+    temperature: { type: { kind: "float" }, nullable: true, initial: 0 },
+    top_p: { type: { kind: "float" }, nullable: true, initial: 1 },
+  };
+  for (const [vals, expected] of [
+    [{}, { temperature: 0, top_p: 1 }],
+    [{ temperature: "", top_p: "" }, { temperature: null, top_p: null }],
+    [{ temperature: "0.5", top_p: "0" }, { temperature: 0.5, top_p: 0 }],
+    [{ temperature: "" }, { temperature: null, top_p: 1 }],
+  ] as [Record<string, string>, Record<string, number | null>][]) {
+    const { cmd, missing } = buildCmd("govsim", params, vals);
+    const argv = buildArgs(params, vals);
+    assert.deepEqual(missing, []);
+    assert.deepEqual(argv.missing, []);
+    assert.deepEqual(setArgs(cmd), expected);
+    assert.deepEqual(argv.sets, Object.entries(expected).map(([k, v]) => `${k}=${v}`));
+    for (const [k, decl] of Object.entries(params))
+      assert.equal(effectiveStr(decl, vals[k]), expected[k] === null ? "" : String(expected[k]));
+  }
+
+  saveDraft("nullable-numeric-test", { temperature: "", top_p: "" });
+  assert.deepEqual(buildArgs(params, loadDraft("nullable-numeric-test")).sets,
+    ["temperature=null", "top_p=null"]);
+  clearDraft("nullable-numeric-test");
+  assert.deepEqual(buildArgs(params, loadDraft("nullable-numeric-test")).sets,
+    ["temperature=0", "top_p=1"]);
+});
+
+test("required blanks retain defaults and missing-value validation", () => {
+  const params: Record<string, ParamDecl> = {
+    count: { type: { kind: "int" }, initial: 0 },
+    model: { type: { kind: "llm" } },
+  };
+  for (const vals of [{}, { count: "", model: "" }] as Record<string, string>[]) {
+    const { cmd, missing } = buildCmd("x", params, vals);
+    assert.deepEqual(missing, ["model"]);
+    assert.deepEqual(setArgs(cmd), { count: 0 });
+    assert.deepEqual(buildArgs(params, vals), { sets: ["count=0"], missing: ["model"] });
+    assert.equal(effectiveStr(params.count!, vals.count), "0");
+    assert.equal(effectiveStr(params.model!, vals.model), "");
+  }
 });
 
 /* -- manifest key census (the TS half of the conformance sweep; the python half is

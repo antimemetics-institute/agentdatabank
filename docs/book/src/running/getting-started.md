@@ -1,94 +1,56 @@
-# Getting started
+# Run your first local experiment
 
-The smallest path from nothing to a finished run you can look at.
+Use `adb-local` to open Agent Databank (ADB), run a one-round GovSim fishing simulation, and read the resulting conversation and metrics. You need [Nix installed](https://nixos.org/download/), a browser, and an internet connection for the initial downloads and builds. For a live model, you also need access to that model and any credentials its provider requires. GovSim’s paper embedder downloads about 1.3 GB on first use.
 
-## 1. Install nix
+## Start ADB
 
-The ADB relies on nix, a metalanguage for pinning dependencies and running commands.
-
-**Follow the instructions** at <https://nixos.org/download/>, and validate your install by running:
-
-```bash
-nix --version
-```
-
-The commands in this guide work on a stock install by default. If you're running from a local checkout, or you've configured a [custom nix setup](nix.md), check the [⚙ command settings](#adb-cmd-settings) in the toolbar.
-
-## 2. Start the local ADB
+The command below follows your [Nix command settings](#adb-cmd-settings). The default downloads ADB without a checkout or requiring flakes; choose **local checkout** if you want to use code on your machine.
 
 ```bash
 nix run .#adb-local
 ```
 
-This starts the WebUI together with a worker for this machine — compose *and* run experiments without leaving the browser. Your browser should open <http://127.0.0.1:8340>.
+Leave the terminal running. The first build can take time; once ready, ADB opens your browser. If it does not, open the URL printed in the terminal, normally `http://127.0.0.1:8340`. You should see the experiment catalog.
 
-> Want just a read-only viewer? `nix run .#adb-web` starts the WebUI without execution. See [Running from the GUI](workers.md) for local execution and SSH forwarding.
+<img class="only-light" src="../images/overview-light.png" alt="ADB's experiment catalog, with a search field above the experiment cards">
+<img class="only-dark" src="../images/overview-dark.png" alt="ADB's experiment catalog, with a search field above the experiment cards">
 
-<details>
-<summary><b>WebUI doesn't open?</b> (e.g., running on a remote machine)</summary>
+## Choose an experiment
 
-> By default the server binds `127.0.0.1`, reachable only from the machine it runs on. If ADB runs on a remote box (a lab server, a VM), either:
->
-> **SSH port forward** (recommended):
->
-> ```bash
-> ssh -L 8340:127.0.0.1:8340 you@remote-box
-> ```
->
-> Then open <http://127.0.0.1:8340> in your **local** browser; the tunnel carries it to the remote server.
->
-> **Bind all interfaces**:
->
-> ```bash
-> nix run .#adb-local -- \
->   --host 0.0.0.0
-> ```
->
-> Then open `http://<remote-box>:8340`. Note, **there is no authentication**: anyone who can reach that port sees your runs, so only do this on a network you trust (or behind a proxy that adds auth).
->
-> **Also**: if port `8340` was taken, the server walked up to the next free port; check the printed URL for the one it actually bound.
+Search for `govsim`, open **govsim**, and expand **configure a run**. Choose **fish_baseline_concurrent** and set **max_rounds** to `1`.
 
-</details>
+<video class="only-light" autoplay loop muted playsinline src="../images/choose-light.webm" aria-label="Find and open the GovSim experiment"></video>
+<video class="only-dark" autoplay loop muted playsinline src="../images/choose-dark.webm" aria-label="Find and open the GovSim experiment"></video>
 
-<br/>
-<img class="only-light" src="../images/overview-light.png" alt="The overview — one card per experiment in the catalog, no runs yet">
-<img class="only-dark" src="../images/overview-dark.png" alt="The overview — one card per experiment in the catalog, no runs yet">
+## Pick a model and save credentials
 
-## 3. Run your first experiment
+Choose a **model** you have access to, using the provider prefix shown in the suggestions. If your provider supports a model that is absent from the suggestions, you can type its model ID. Set **embedder** to `mxbai` and leave **max_tokens** at `8000`. The recorded run uses `openai/gpt-6-astra`, **reasoning_effort** `low`, and empty (null) **temperature** and **top_p** fields. For another model, use generation settings that its provider supports.
 
-In the WebUI, click into [inspect-hello](http://127.0.0.1:8340/#/experiments/inspect-hello): the run-config builder is prefilled — pick your model (e.g. `anthropic/claude-sonnet-4-5-20250929`) and press **▶ run**:
+Select the **run** tab and enter the credentials ADB asks for. The fields and defaults depend on the selected provider; these may include an API key and endpoint. Choose a profile name, such as **default**, and press **save**. The form changes to a profile selector. Press **remember** to reuse that profile for this experiment. If you already have a saved profile, select it instead. See [credentials](secrets.md) for storage and provider details.
 
-<video class="only-light" autoplay loop muted playsinline src="../images/builder-form-light.webm"></video>
-<video class="only-dark" autoplay loop muted playsinline src="../images/builder-form-dark.webm"></video>
+For a credential-free local test, use `mock/model` with the `hash` embedder. This produces synthetic behavior without calling a provider or downloading embedding weights.
 
-The first run against a real model asks for that provider's credentials right in the run tab — a key entered once, saved to the same store the CLI uses (see [Credentials](secrets.md)).
+<video class="only-light" autoplay loop muted playsinline src="../images/model-credentials-light.webm" aria-label="Select a model and save its credential profile"></video>
+<video class="only-dark" autoplay loop muted playsinline src="../images/model-credentials-dark.webm" aria-label="Select a model and save its credential profile"></video>
 
-> **No key at hand?** `model=mockllm/model` runs the same task against a mock response and needs no credentials.
+The animations show an illustrative, accelerated replay of a historical GovSim run, with its original model calls and messages. The saved key is an example; use your own credentials for a live run.
 
-The job reports in place — queued, building (the first build takes a little longer than thereafter), running — and links the run as soon as it starts. Click through to follow the transcript live:
+## Launch the experiment
 
-<video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm"></video>
-<video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm"></video>
+Leave **replicates** at `1` and press **▶ run**. A replicate is one execution of the experiment; this one simulates one fishing round. The job panel shows build and execution progress, then a link to the run. The first experiment build may take longer than the test itself.
 
-That's the loop: **compose → run → look**. Try **inspect-gsm8k** with `limit=10` next.
+<video class="only-light" autoplay loop muted playsinline src="../images/launch-light.webm" aria-label="Launch the configured experiment and follow its progress"></video>
+<video class="only-dark" autoplay loop muted playsinline src="../images/launch-dark.webm" aria-label="Launch the configured experiment and follow its progress"></video>
 
-### Prefer the terminal?
+If the **run** tab is missing, check that you started `adb-local` and opened its local URL. If the button is disabled, read the explanation beside it; the local executor may still be starting.
 
-The builder's **oneliner** tab composes the exact same condition as a copy-paste command:
+## Inspect the run
 
-```bash
-nix run .#inspect-hello -- \
-  --set model=anthropic/claude-sonnet-4-5-20250929 \
-  --set limit=0 \
-  --set epochs=1 \
-  --set 'generate_args={}'
-```
+Follow the run link in the job panel. The **results** card at the top shows simulation metrics such as rounds, total harvest, and remaining resources. The recorded run completed one round with a total harvest of `50` and final resource of `50`; live-model behavior can vary. Model calls appear as the simulation runs, while GovSim’s conversation messages arrive at the end. Use **messages** to read the prompts and replies, **llm calls** to inspect model calls, and **all** to show all recorded events. Scroll upward to see earlier events.
 
-Pasted anywhere, it reproduces the same condition — that command *is* the run's complete spec. On first use it prompts for credentials in the terminal, then prints the link to watch the run in the WebUI. See [Running experiments](cli.md) for the full CLI story.
+<video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm" aria-label="Inspect the conversation and results of a run"></video>
+<video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm" aria-label="Inspect the conversation and results of a run"></video>
 
-## Where to go next
+You can find the run again under **Runs**. Press Ctrl-C in the launch terminal when finished; the saved run remains available next time you start ADB with the same data directory. Stopping ADB also stops its executor and any active execution.
 
-- **[Experiments, conditions, runs](model.md)** — what that condition hash was about, and why every run is a sample in a shared bucket. The one piece of theory worth reading.
-- **[Running experiments](cli.md)** — `--describe`, `--dry-run`, `--replicates`, and how the no-defaults rule works.
-- **[Credentials](secrets.md)** — the full story: the ask-and-save flow, manual setup per provider, local model servers, multiple endpoints at once, and the trust model.
-- **[The experiment catalog](../catalog/impossiblebench.md)** — everything you can run today, starting with ImpossibleBench.
+When you want to edit an experiment, use an ADB checkout and start `adb-local` from it, or pass `--repo /path/to/agentdatabank`. Restart after changing experiment declarations. See the [local tools reference](../reference/local.md) for checkout commands, storage locations, the read-only viewer, and terminal execution.

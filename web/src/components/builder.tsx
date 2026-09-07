@@ -10,7 +10,7 @@
    Degrades to a note when the server has no manifests dir (bare dev.sh). */
 
 import { Fragment, useMemo, useState } from "react";
-import { buildCmd, defaultStr, initialStr, orderedParams } from "@/lib/cmd-build";
+import { buildCmd, defaultStr, effectiveStr, initialStr, orderedParams } from "@/lib/cmd-build";
 import { useCmdPrefs } from "@/lib/cmd-prefs";
 import {
   clearDraft, getComposerTab, getLastLlm, loadDraft, saveDraft, setComposerTab, setLastLlm,
@@ -479,14 +479,9 @@ function BuilderForm({ name }: { name: string }) {
 
   /* what the form shows = what the command carries: the user's value, else the
      param's declared default (initial / first suggestion / first enum member) —
-     so a fresh form is already a complete, runnable condition. Nullable params
-     stay blank instead: empty means bound-to-null, not defaulted. */
-  const eff = (k: string): string => {
-    const decl = params[k]!;
-    const v = seeded[k] ?? "";
-    if (v !== "") return v;
-    return decl.nullable ? "" : defaultStr(decl);
-  };
+     so a fresh form is already a complete, runnable condition. Explicitly cleared
+     nullable params stay blank and bind null, including after loading a draft. */
+  const eff = (k: string): string => effectiveStr(params[k]!, seeded[k]);
   const set = (k: string, v: string) => {
     const next: Record<string, string> = { ...vals, [k]: v };
     // a variant object's fields depend on this param — clear it so it re-derives
