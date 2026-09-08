@@ -61,6 +61,7 @@ A run ID is a newly generated ULID. Replicates of a condition share its conditio
 | `finished_at` | UTC completion timestamp; added at termination. |
 | `duration_s` | Elapsed run duration in seconds; added at termination. |
 | `summary` | Last emitted metric values for names declared in manifest `results`; added at termination. |
+| `result_definitions` | Snapshot of normalized manifest result declarations, including supplied labels, descriptions, details and units. Also saved in `run.start`; older runs may omit it. |
 | `usage_totals` | `llm_calls`, `input_tokens`, `output_tokens` accumulated from `llm.call` events; added at termination. |
 | `realized_params` | Parameters passed to the process; added at termination. Also present in `run.start`. |
 

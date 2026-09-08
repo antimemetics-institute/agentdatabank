@@ -23,6 +23,7 @@ export interface RunMeta {
   finished_at?: string;
   duration_s?: number;
   summary?: Record<string, unknown>;
+  result_definitions?: Record<string, ResultDecl>;
   usage_totals?: Record<string, number>;
   /* NOT in run.json — server-enriched: run.json's mtime. The runner heartbeats by
      touching the file every 10s while alive; a stale heartbeat on a `running` run
@@ -149,6 +150,14 @@ export interface ExecutorInfo {
   error: string | null;
 }
 
+export interface ResultDecl {
+  type: ParamType;
+  details?: string;
+  label?: string;
+  description?: string;
+  unit?: string;
+}
+
 export interface Manifest {
   name: string;
   summary?: string;
@@ -158,6 +167,6 @@ export interface Manifest {
   /* Packaging repository, independent of experiment content identity. */
   origin?: string;
   params: Record<string, ParamDecl>;
-  results?: Record<string, unknown>;
+  results?: Record<string, ResultDecl>;
   env?: Record<string, unknown>;
 }

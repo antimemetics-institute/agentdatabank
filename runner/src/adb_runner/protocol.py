@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any, Literal
 
 from . import __version__
@@ -107,6 +108,7 @@ def execute_run(
     start = time.monotonic()
     seq = 0
     metrics: dict[str, Any] = {}
+    result_definitions = deepcopy(manifest.get("results", {}))
     usage = {"input_tokens": 0, "output_tokens": 0, "llm_calls": 0}
     events_q: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
@@ -133,6 +135,7 @@ def execute_run(
         "run": run_id,
         "condition": condition_id,
         "experiment": manifest["name"],
+        "result_definitions": result_definitions,
         "source": source,
         "fetch_ref": fetch_ref,
         "dirty": dirty,
@@ -145,6 +148,7 @@ def execute_run(
 
     emit({
         "type": "run.start",
+        "result_definitions": result_definitions,
         "condition": condition_id,
         "experiment": manifest["name"],
         "source": source,
@@ -276,8 +280,9 @@ def execute_run(
     # rendered from the stream on demand (deposit irreducibles, never derivables;
     # docs/book/src/reference/events.md#transport)
 
-    results: dict[str, Any] = manifest.get("results") or {}
-    summary = {name: metrics[name] for name in results if name in metrics}
+    # Declarations describe outputs; every observed metric belongs in the summary,
+    # including undeclared metrics. Missing declared outputs stay absent.
+    summary = dict(metrics)
     emit({
         "type": "run.end",
         "state": state,

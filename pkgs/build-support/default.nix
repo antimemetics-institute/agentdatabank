@@ -246,7 +246,11 @@ in
       manifest = pkgs.writeText "adb-manifest-${name}.json" (builtins.toJSON ({
         schema_version = 0;
         params = withLlmHints params;
-        inherit name summary results env origin links;
+        # Authors may use a bare type as shorthand; consumers always receive a
+        # declaration, with optional presentation metadata preserved verbatim.
+        results = lib.mapAttrs (_: result:
+          if result ? kind then { type = result; } else result) results;
+        inherit name summary env origin links;
       } // lib.optionalAttrs (readme != null) { inherit readme; }));
       app = pkgs.writeShellApplication {
         name = "adb-${name}";

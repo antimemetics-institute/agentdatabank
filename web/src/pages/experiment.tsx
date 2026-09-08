@@ -5,6 +5,7 @@ import { displayState, useManifests, useRunsPoll } from "@/lib/data";
 import { ExtLinks, MdView, PageLoading, STATES, stateText } from "@/components/bits";
 import { Builder } from "@/components/builder";
 import { RunsTable } from "@/pages/runs";
+import { ExperimentResults } from "@/components/results";
 
 export function ExperimentReadme({ readme, name }: { readme?: string; name?: string }) {
   if (!readme?.trim()) return null;
@@ -37,6 +38,7 @@ export function ExperimentPage({ name }: { name: string }) {
       </div>
 
       <ExperimentReadme readme={manifest?.readme} name={name} />
+      <ExperimentResults definitions={manifest?.results} />
       <Builder name={name} />
 
       {runs === null ? <PageLoading /> : rs.length ? (

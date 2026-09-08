@@ -48,12 +48,23 @@ in
         initial = 3;
       };
     };
-    results = { count = adb.types.int; };
+    results = {
+      count = {
+        type = adb.types.int;
+        label = "Recorded count";
+        description = "The supplied count echoed by the program.";
+        details = "This checks the integration, not model performance.";
+      };
+    };
   };
 }
 ```
 
-`params` supplies both validation and the local form. `initial` prefills the form and suggested command; users must still bind the parameter explicitly when running from the CLI. `results` selects emitted metric names for the run summary. See [manifest reference](../reference/manifest.md) for other types and presentation fields.
+`params` supplies both validation and the local form. `initial` prefills the form and suggested command; users must still bind the parameter explicitly when running from the CLI. `results` declares possible summary metrics and explains their meaning. See [manifest reference](../reference/manifest.md#result-declarations) for the result fields and bare-type shorthand.
+
+Give each result a readable `label` and a short, plain-language `description` explaining what the value means. Use optional `details` for the calculation, aggregation and interpretation caveats. Add `unit` when useful. Explain what a boolean means in the experiment; the viewer shows neutral Yes/No values, not automatic success or failure. Distinguish observed progress from configured limits, and explain special cases such as an equality score of 1 when every agent gained zero.
+
+These definitions appear in the collapsible **Results this experiment records** section before launch. On a run, each Results row shows its value and short description; expand the row to read its details. They describe possible outputs, not required outputs: an absent metric is missing, not zero. Undeclared emitted metrics remain visible with neutral formatting. The runner saves the definitions in `run.json` and `run.start` as `result_definitions`, so readers retain the explanation used when the run began.
 
 `src` declares the experiment's identity sources. Include code, configuration and dependency locks that determine this experiment's behavior. A path is usual; use a list when the experiment depends on several source trees. Changes anywhere in those declared inputs can change the condition identity, including a README inside a declared directory. Development artifacts such as `.venv` are filtered out. The [identity reference](../reference/layout.md#how-is-a-condition-id-calculated) gives the exact rule.
 

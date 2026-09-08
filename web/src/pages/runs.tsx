@@ -103,7 +103,7 @@ export function RunsTable({ runs, hideExperiment = false }: { runs: RunMeta[]; h
                 <TableCell><StateBadge state={displayState(r)} /></TableCell>
                 <TableCell>
                   <span className="flex flex-wrap gap-1">
-                    <ResultChips summary={r.summary} />
+                    <ResultChips summary={r.summary} definitions={r.result_definitions} />
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">

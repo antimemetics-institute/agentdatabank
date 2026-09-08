@@ -11,7 +11,10 @@ from adb_runner.protocol import execute_run
 from adb_runner.store import RunStore
 
 MANIFEST = {"name": "t", "params": {"x": {"type": {"kind": "int"}, "default": 1}},
-            "results": {"m": {"kind": "int"}}}
+            "results": {"m": {"type": {"kind": "int"}, "label": "Measurement",
+                              "description": "The measured count.", "unit": "items",
+                              "details": "Count recorded by the fixture."},
+                        "missing": {"type": {"kind": "float"}}}}
 
 FIXTURE = r"""#!/bin/sh
 read -r params
@@ -31,16 +34,16 @@ exit 0
 """
 
 
-def run_fixture(tmp_path, script=FIXTURE, params=None):
+def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=None):
     prog = tmp_path / "exp.sh"
     prog.write_text(script)
     prog.chmod(prog.stat().st_mode | stat.S_IEXEC)
     store = RunStore(tmp_path / "home", "cid", "rid")
     result = execute_run(
-        program=str(prog), manifest=MANIFEST,
+        program=str(prog), manifest=MANIFEST if manifest is None else manifest,
         spec_params={"x": 1}, realized_params=params or {"x": 1},
         condition_id="cid", source="dirty:test", seed=7, replicate=1,
-        store=store, run_id="rid",
+        store=store, run_id="rid", on_event=on_event,
     )
     envelopes = [json.loads(line)
                  for f in sorted(store.dir.glob("events-*.jsonl"))
@@ -67,10 +70,14 @@ def test_protocol_end_to_end(tmp_path):
     assert start["type"] == "run.start"
     assert start["spec_params"] == {"x": 1} and start["realized_params"] == {"x": 1}
     assert start["dirty"] is True
+    assert start["result_definitions"] == MANIFEST["results"]
+    assert record["result_definitions"] == MANIFEST["results"]
 
     end = payloads[-1]
     assert end["type"] == "run.end" and "fake" not in end  # the runner's own, last
-    assert end["summary"] == {"m": 42}  # only declared results; 'undeclared' excluded
+    assert end["summary"] == {"m": 42, "undeclared": 1}
+    assert record["summary"] == result.summary == end["summary"]
+    assert "missing" not in end["summary"]
     assert end["usage_totals"] == {"input_tokens": 3, "output_tokens": 5, "llm_calls": 1}
 
     by_type = {}
@@ -95,6 +102,39 @@ def test_protocol_end_to_end(tmp_path):
     assert not (store.artifacts / "chat.jsonl").exists()
     assert not (store.artifacts / "llm_calls.jsonl").exists()
     assert "artifact" not in by_type
+
+
+@pytest.mark.parametrize("results", [None, {}])
+def test_no_declarations_still_captures_metrics(tmp_path, results):
+    manifest = {"name": "t", "params": MANIFEST["params"]}
+    if results is not None:
+        manifest["results"] = results
+    result, envelopes, store = run_fixture(tmp_path, manifest=manifest)
+    assert result.summary == {"m": 42, "undeclared": 1}
+    assert envelopes[0]["event"]["result_definitions"] == {}
+    assert json.loads((store.dir / "run.json").read_text())["result_definitions"] == {}
+
+
+def test_declarations_are_snapshotted_and_do_not_validate_values(tmp_path):
+    from copy import deepcopy
+
+    manifest = deepcopy(MANIFEST)
+    expected = deepcopy(manifest["results"])
+
+    def change_catalog(envelope):
+        if envelope["event"].get("type") == "run.start":
+            manifest["results"]["m"]["label"] = "Changed during run"
+            manifest["results"]["m"]["details"] = "Changed calculation explanation"
+            manifest["results"]["added"] = {"type": {"kind": "bool"}}
+
+    script = "#!/bin/sh\necho '{\"type\":\"metric\",\"name\":\"m\",\"value\":\"unavailable\"}'\n"
+    result, envelopes, store = run_fixture(
+        tmp_path, script=script, manifest=manifest, on_event=change_catalog,
+    )
+    assert result.state == "completed"
+    assert result.summary == {"m": "unavailable"}
+    assert envelopes[0]["event"]["result_definitions"] == expected
+    assert json.loads((store.dir / "run.json").read_text())["result_definitions"] == expected
 
 
 def test_nonzero_exit_is_failed(tmp_path):

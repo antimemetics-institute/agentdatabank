@@ -122,7 +122,21 @@ process.on('SIGTERM', async () => {
     await until(async () => (await (await fetch(b.url + "/api/executor")).json()).error || null);
     assert.equal((await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).state, "orphaned");
     assert.equal((await fetch(b.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) })).status, 503);
+    const runDir = join(dir, "read-only", "runs", "condition", "run");
+    mkdirSync(runDir, { recursive: true });
+    const definitions = { value: { type: { kind: "int" }, label: "Recorded value", description: "Explanation. ".repeat(400) } };
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({
+      run: "run", condition: "condition", experiment: "hello", state: "completed",
+      result_definitions: definitions, summary: { value: 1 },
+    }));
+    writeFileSync(join(runDir, "events-00001.jsonl"), JSON.stringify({
+      seq: 0, event: { type: "run.start", result_definitions: definitions },
+    }) + "\n");
     const readonly = await launch(join(dir, "read-only"), 0, false, false);
+    const rows = await (await fetch(readonly.url + "/api/runs")).json();
+    assert.deepEqual(rows[0].result_definitions, definitions);
+    const stream = await (await fetch(readonly.url + "/api/runs/condition/run/events")).json();
+    assert.deepEqual(stream[0].event.result_definitions, definitions);
     assert.equal(await (await fetch(readonly.url + "/")).text(), "test frontend");
     assert.equal((await (await fetch(readonly.url + "/api/experiments")).json())[0].name, "hello");
     assert.equal((await fetch(readonly.url + "/api/jobs", { method: "POST" })).status, 403);

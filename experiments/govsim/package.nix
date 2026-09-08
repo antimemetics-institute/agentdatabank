@@ -131,16 +131,66 @@ in
       };
     };
     results = with adb.types; {
-      rounds = int;            # months actually simulated
-      collapsed = bool;        # pool dropped below 5 before the round cap
-      survival_months = int;   # paper metric (plots.py formula): collapse round + 1, else the cap
-      total_harvest = int;     # sum of resource_collected over agents and rounds
-      gain_per_agent = float;  # mean per-agent total — the paper's "total gain" (get_payoffs)
-      final_resource = int;    # pool after the last logged round's harvest
-      equality = float;        # 1 - gini(per-agent total harvest), gini per plots.py
-      over_usage = float;      # REIMPLEMENTATION (no upstream code): share of harvest
-                               # actions with wanted > (pool_before // 2) // num_agents
-      model_calls = int;       # completions actually requested (ChatClient.n_calls)
+      rounds = {
+        type = int;
+        label = "Rounds simulated";
+        description = "Months reached by the simulation.";
+        details = "Last recorded harvest round plus one, since round numbering starts at zero. Zero if no harvesting was recorded. Actual progress may be shorter than the configured run length.";
+        unit = "months";
+      };
+      collapsed = {
+        type = bool;
+        label = "Resource collapsed";
+        description = "Whether the shared resource was recorded as depleted.";
+        details = "Collapse means a round's recorded post-harvest resource pool fell below 5 or was missing (NaN). The calculation uses the last non-missing pool value in each round, or NaN if all are missing. No also covers runs with no recorded harvesting. Collapse is a simulation outcome, not an execution failure.";
+      };
+      survival_months = {
+        type = int;
+        label = "Survival duration";
+        description = "Month of collapse, or the configured run length if none was recorded.";
+        details = "Uses the first collapse round plus one, or the configured run length if no collapse was recorded, following the paper's formula. This can exceed actual recorded progress. Zero if no harvesting was recorded.";
+        unit = "months";
+      };
+      total_harvest = {
+        type = int;
+        label = "Total resource collected";
+        description = "Resource collected by all agents over the whole run.";
+        details = "Sum of resource_collected across all logged harvest actions, agents and rounds. Resource meaning depends on the fish, sheep or pollution scenario.";
+        unit = "resource units";
+      };
+      gain_per_agent = {
+        type = float;
+        label = "Mean gain per agent";
+        description = "Average resource collected per harvesting agent over the whole run.";
+        details = "Average total resource collected per agent over the whole run, not per month. Includes only agents with recorded harvesting activity. This is the paper's total gain metric.";
+        unit = "resource units per agent";
+      };
+      final_resource = {
+        type = int;
+        label = "Final resource pool";
+        description = "Resource left after the last recorded harvest.";
+        details = "Uses the last non-missing post-harvest pool value in the final recorded harvest round, before any subsequent regeneration. Zero if no harvest actions were logged.";
+        unit = "resource units";
+      };
+      equality = {
+        type = float;
+        label = "Harvest equality";
+        description = "How evenly agents shared the collected resource; higher is more equal.";
+        details = "One minus the Gini coefficient of total resource collected per logged harvester; higher values mean more equal gains. All-zero gains score 1, so equality alone does not establish productive cooperation. No harvest actions yields 0.";
+      };
+      over_usage = {
+        type = float;
+        label = "Requests above sustainable share";
+        description = "Share of harvest requests above the estimated sustainable allowance.";
+        details = "Fraction of harvest actions requesting more than (pre-harvest pool // 2) // distinct harvesters in that round; // is integer division. This adapter reconstruction counts requests, not allocations, and can differ from upstream's fixed agent count and reset-time threshold, especially when outsiders join. No harvest actions yields 0.";
+      };
+      model_calls = {
+        type = int;
+        label = "Model calls requested";
+        description = "Number of completion requests made across all agents.";
+        details = "Completion requests counted by the adapter's ChatClient across all agents. This measures model activity, not tokens, cost or cooperation.";
+        unit = "calls";
+      };
     };
     env.network = true; # hosted models and optional HuggingFace embedder downloads
     program = program;

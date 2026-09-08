@@ -26,7 +26,7 @@ If you launched a run in the terminal, open its printed **watch** link. The link
 
 ## What should I check first?
 
-Read the state and results at the top of the run page. Expand the metrics and parameters control to inspect the inputs and additional results. The header also shows the run seed, replicate number and, when the run has ended, reported model-call and token totals.
+Read the state and Results list at the top of the run page. Each result shows its value and short explanation; expand a row for calculation details and caveats. Expand the parameters control to inspect the inputs. The header also shows the run seed, replicate number and, when the run has ended, reported model-call and token totals.
 
 A **completed** state means the experiment process exited successfully. It does not establish that every evaluation instance succeeded: an adapter can catch an error and report it as a result. Check error counts and logs as well as the process state. A failed or interrupted run can still contain useful partial evidence.
 

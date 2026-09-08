@@ -104,7 +104,7 @@ def test_every_shipped_manifest_conforms():
     for f in files:
         doc = json.loads(f.read_text())
         _check(doc, Manifest, f.name)
-        unknown_kinds = set(_kinds(doc["params"])) - KINDS
+        unknown_kinds = set(_kinds([doc["params"], doc.get("results", {})])) - KINDS
         assert not unknown_kinds, f"{f.name}: unknown kinds {sorted(unknown_kinds)}"
 
 
@@ -113,12 +113,22 @@ def test_walker_rejects_wrong_types():
     good = {"name": "x", "params": {"p": {"type": {"kind": "int"}, "order": 1}}}
     _check(good, Manifest, "good")
     _check({**good, "readme": "# Experiment\n\nDocumentation."}, Manifest, "readme")
+    _check({**good, "results": {"score": {
+        "type": {"kind": "float"}, "label": "Score",
+        "description": "Mean score over rounds.", "unit": "points",
+        "details": "Each recorded round has equal weight.",
+    }}}, Manifest, "results")
     for bad, why in [
         ({**good, "name": 1}, "name must be str"),
         ({**good, "readme": 1}, "readme must be str when present"),
         ({**good, "params": {"p": {"type": {"kind": "int"}, "order": "1"}}}, "order must be int"),
         ({**good, "params": {"p": {"type": {"kind": "enum", "values": "ab"}}}}, "values must be a list"),
         ({**good, "params": {"p": {"kind": "int"}}}, "decl missing required 'type'"),
+        ({**good, "results": {"score": {"kind": "float"}}}, "result must be wrapped"),
+        ({**good, "results": {"score": {"type": {"kind": "float"}, "label": 1}}}, "label must be str"),
+        ({**good, "results": {"score": {"type": {"kind": "float"}, "description": []}}}, "description must be str"),
+        ({**good, "results": {"score": {"type": {"kind": "float"}, "details": []}}}, "details must be str"),
+        ({**good, "results": {"score": {"type": {"kind": "float"}, "unit": False}}}, "unit must be str"),
     ]:
         with pytest.raises(AssertionError):
             _check(bad, Manifest, why)

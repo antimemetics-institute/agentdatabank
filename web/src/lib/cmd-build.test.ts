@@ -339,5 +339,12 @@ test("every shipped manifest uses only declared keys", (t) => {
     if ("readme" in doc) assert.equal(typeof doc.readme, "string", `${f}:readme`);
     for (const [name, decl] of Object.entries(doc.params as Record<string, Record<string, unknown>>))
       checkDecl(decl, `${f}:params.${name}`);
+    for (const [name, decl] of Object.entries((doc.results ?? {}) as Record<string, Record<string, unknown>>)) {
+      const path = `${f}:results.${name}`;
+      checkSubset(decl, new Set(["type", "label", "description", "details", "unit"]), path);
+      checkType(decl.type as Record<string, unknown>, `${path}.type`);
+      for (const field of ["label", "description", "details", "unit"])
+        if (field in decl) assert.equal(typeof decl[field], "string", `${path}.${field}`);
+    }
   }
 });

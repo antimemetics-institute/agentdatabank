@@ -183,6 +183,7 @@ async function scanRuns(): Promise<RunsScan> {
           finished_at: full.finished_at,
           duration_s: full.duration_s,
           summary: full.summary,
+          result_definitions: full.result_definitions,
         };
         /* server-enriched liveness signal: the runner heartbeats by touching
            run.json's mtime every 10s while alive (events spec, Ordering &
@@ -272,6 +273,10 @@ function elideEvent(e: Ev): Ev {
     changed = true;
   }
   const walked = walk(out) as Ev;
+  // Result explanations are presentation metadata used directly by the run header.
+  // Keep their strings intact rather than replacing them with elision objects.
+  if (body.type === "run.start" && body.result_definitions)
+    (walked.event ?? walked).result_definitions = body.result_definitions;
   return changed ? walked : e;
 }
 

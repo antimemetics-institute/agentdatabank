@@ -166,3 +166,20 @@
 .dark .tok-str { color: #86efac; }
 .dark .tok-num { color: #fcd34d; }
 .dark .tok-bool { color: #c4b5fd; }
+
+/* Keep result labels and values close to a shared divider. Stack on phones. */
+@media (min-width: 640px) {
+  .result-value-rows > div { grid-template-columns: minmax(0, 16rem) minmax(0, 1fr); }
+  .result-value-rows > div::before {
+    content: "";
+    position: absolute;
+    left: 16rem;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--color-border);
+  }
+  .result-value-rows .result-label { grid-column: 1; grid-row: 1; text-align: right; padding-right: 1rem; }
+  .result-value-rows .result-value { grid-column: 2; grid-row: 1; padding-left: 1rem; }
+  .result-value-rows .result-description,
+  .result-value-rows .result-details { grid-column: 2; padding-left: 1rem; }
+}

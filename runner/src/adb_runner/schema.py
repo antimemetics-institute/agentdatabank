@@ -73,6 +73,15 @@ class ParamDecl(TypedDict):
     variants: NotRequired[dict[str, dict[str, "ParamDecl"]]]
 
 
+class ResultDecl(TypedDict):
+    """Presentation metadata for an output, not a runtime value constraint."""
+    type: ParamType
+    label: NotRequired[str]
+    description: NotRequired[str]
+    details: NotRequired[str]
+    unit: NotRequired[str]
+
+
 class ExtLink(TypedDict):
     label: str
     url: str
@@ -85,7 +94,7 @@ class Manifest(TypedDict):
     summary: NotRequired[str]
     readme: NotRequired[str]  # package-directory README Markdown; presentation only
     origin: NotRequired[str]
-    results: NotRequired[dict[str, Json]]
+    results: NotRequired[dict[str, ResultDecl]]
     env: NotRequired[dict[str, Json]]
     links: NotRequired[list[ExtLink]]
 
