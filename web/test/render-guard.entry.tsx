@@ -18,6 +18,7 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
+import { LLMCallFailures } from "../src/components/llm-call-failures";
 import { EventStream } from "../src/components/event-stream";
 import { ExperimentReadme } from "../src/pages/experiment";
 import { ResultChips, ResultRows, ExperimentResults, InstanceScoreChips } from "../src/components/results";
@@ -43,6 +44,22 @@ if (events.length < 10) {
   process.exit(1);
 }
 console.log(`render guard ok — ${events.length} real events, ${html.length} chars of markup, no coercion leaks`);
+
+// Failure warnings derive solely from recorded call events, including live
+// streams without run.end. Other diagnostics are not failed model calls.
+const callEvents: Ev[] = [
+  { type: "llm.call", error: { kind: "ConnectionError", message: "offline" } },
+  { type: "llm.call", error: null },
+  { type: "llm.call", error: { kind: "RateLimitError", message: "busy" } },
+  { type: "log", level: "error", message: "unrelated diagnostic" },
+];
+for (const ending of [[], [{ type: "run.end", state: "completed" }]]) {
+  const warning = renderToStaticMarkup(<LLMCallFailures events={[...callEvents, ...ending]} />);
+  assert.match(warning, /2\/3 model calls failed/);
+}
+for (const healthy of [[], [{ type: "llm.call" }], [{ type: "llm.call", error: null }]]) {
+  assert.equal(renderToStaticMarkup(<LLMCallFailures events={healthy} />), "");
+}
 
 // Optional catalog documentation uses the real safe renderer, including in old
 // manifests that predate the field. Raw HTML must remain inert.

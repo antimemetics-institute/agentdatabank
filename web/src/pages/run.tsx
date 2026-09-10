@@ -11,6 +11,7 @@ import type { RunMeta } from "@/shared/types";
 import { Chip, ExitBadge, ExtLinks, LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
 import { ResultRows } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
+import { LLMCallFailures } from "@/components/llm-call-failures";
 import { ParamChip } from "@/components/param-value";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +152,7 @@ function RunHead({ cid, rid, events, state }: {
       <h2 className="flex items-center gap-3 text-lg font-semibold">
         {start.experiment ?? "run"}
         <StateBadge state={state} />
+        <LLMCallFailures events={events} />
       </h2>
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
         <span className="font-mono text-xs text-muted-foreground">{cid.slice(0, 12)} · {rid}</span>
