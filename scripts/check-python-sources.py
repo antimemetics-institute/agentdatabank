@@ -52,8 +52,15 @@ adb-experiment = { path = "../libs/experiment" }
 { repo, fixture }:
 let
   pkgs = (import (builtins.toPath repo + "/default.nix") {}).pkgs;
+  sources = import (builtins.toPath repo + "/pkgs/locked-sources.nix") {};
+  pyproject-nix = import sources.pyproject-nix { inherit (pkgs) lib; };
+  uv2nix = import sources.uv2nix { inherit (pkgs) lib; inherit pyproject-nix; };
+  pyproject-build-systems = import sources.pyproject-build-systems {
+    inherit (pkgs) lib;
+    inherit pyproject-nix uv2nix;
+  };
   adb = import (builtins.toPath repo + "/pkgs/build-support") {
-    inherit pkgs;
+    inherit pkgs pyproject-nix uv2nix pyproject-build-systems;
     origin = "fixture";
     adb-runner = null;
   };

@@ -13,7 +13,7 @@
 # experiments/ holds experiment code only; everything ADB-specific (this wiring,
 # build-support, tool packaging) lives under pkgs/ and the tools' own source trees
 # (runner/, web/).
-{ pkgs, rev ? null, narHash ? null }:
+{ pkgs, pyproject-nix, uv2nix, pyproject-build-systems, rev ? null, narHash ? null }:
 
 let
   inherit (pkgs) lib;
@@ -32,6 +32,13 @@ let
 
   scope = lib.makeScope pkgs.newScope (final:
     {
+      pyproject-nix = import pyproject-nix { inherit lib; };
+      uv2nix = import uv2nix { inherit lib; inherit (final) pyproject-nix; };
+      pyproject-build-systems = import pyproject-build-systems {
+        inherit lib;
+        inherit (final) pyproject-nix uv2nix;
+      };
+
       # build support — the `adb` attrset experiment declarations take as an argument.
       adb = final.callPackage ../build-support {
         inherit origin rev narHash;

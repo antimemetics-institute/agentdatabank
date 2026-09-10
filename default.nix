@@ -1,6 +1,6 @@
 # Classic entrypoint — plain Nix, nixpkgs-style: no flakes, no flake-compat. The
 # flake and this file are two doors into the same pkgs/top-level; nixpkgs is pinned
-# to the SAME revision by reading flake.lock (one lock, two entrypoints).
+# to the SAME revision by reading the authoritative flake.lock.
 #
 #   nix-build -A experiment-inspect-hello && ./result/bin/adb-inspect-hello …
 #   nix-build https://github.com/antimemetics-institute/agentdatabank/archive/main.tar.gz \
@@ -12,24 +12,23 @@
 # unexpanded and runs record `dirty:` — correct, a working tree has no rev. The
 # `adbRev` argument overrides the stamp (the fetchGit flow states its own rev).
 let
-  lock = builtins.fromJSON (builtins.readFile ./flake.lock);
-  locked = lock.nodes.nixpkgs.locked;
-  nixpkgsSrc = fetchTarball {
-    url = locked.url;
-    sha256 = locked.narHash;
-  };
+  lockedSources = import ./pkgs/locked-sources.nix { };
   stampRev =
     let m = builtins.match "([0-9a-f]{40})[[:space:]]*" (builtins.readFile ./.git-revision);
     in if m == null then null else builtins.head m;
 in
 { system ? builtins.currentSystem
-, pkgs ? import nixpkgsSrc { inherit system; }
+, nixpkgs ? lockedSources.nixpkgs
+, uv2nix ? lockedSources.uv2nix
+, pyproject-nix ? lockedSources.pyproject-nix
+, pyproject-build-systems ? lockedSources.pyproject-build-systems
+, pkgs ? import nixpkgs { inherit system; }
 , adbRev ? null
 }:
 let
   inherit (pkgs) lib;
   adbPkgs = import ./pkgs/top-level {
-    inherit pkgs;
+    inherit pkgs uv2nix pyproject-nix pyproject-build-systems;
     rev = if adbRev != null then adbRev else stampRev;
   };
 

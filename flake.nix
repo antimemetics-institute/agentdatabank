@@ -7,7 +7,11 @@
   # NixOS releases (~6 months), not on every channel advance.
   inputs.nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.xz";
 
-  outputs = { self, nixpkgs }:
+  inputs.pyproject-nix = { url = "github:pyproject-nix/pyproject.nix"; flake = false; };
+  inputs.uv2nix = { url = "github:pyproject-nix/uv2nix"; flake = false; };
+  inputs.pyproject-build-systems = { url = "github:pyproject-nix/build-system-pkgs"; flake = false; };
+
+  outputs = { self, nixpkgs, pyproject-nix, uv2nix, pyproject-build-systems }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system:
@@ -21,7 +25,7 @@
       # in nixpkgs.
       apps = forAllSystems (pkgs:
         let
-          adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
+          adbPkgs = import ./pkgs/top-level { inherit pkgs pyproject-nix uv2nix pyproject-build-systems; rev = self.rev or null; narHash = self.narHash or null; };
         in
         builtins.mapAttrs
           (name: exp: {
@@ -53,7 +57,7 @@
 
       packages = forAllSystems (pkgs:
         let
-          adbPkgs = import ./pkgs/top-level { inherit pkgs; rev = self.rev or null; narHash = self.narHash or null; };
+          adbPkgs = import ./pkgs/top-level { inherit pkgs pyproject-nix uv2nix pyproject-build-systems; rev = self.rev or null; narHash = self.narHash or null; };
         in
         {
           inherit (adbPkgs) adb-runner;

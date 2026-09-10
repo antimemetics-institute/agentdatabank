@@ -200,6 +200,6 @@ tasks:
       - task: lock:check
 
   update-deps:
-    desc: update the flake.lock pin (tracks the nixos-26.05 channel tarball; bump the channel in flake.nix at each NixOS release)
+    desc: update the shared nixpkgs and Python build-toolchain pins in flake.lock
     cmds:
       - nix flake update

@@ -8,7 +8,9 @@
 # a rev — a source cannot know its own URL, so it is stated once at the call site.
 # `adb-runner` arrives by argument, so overriding the runner reaches every
 # experiment.
-{ pkgs, origin, adb-runner, rev ? null, narHash ? null }:
+{ pkgs, origin, adb-runner, pyproject-nix, uv2nix, pyproject-build-systems
+, rev ? null, narHash ? null
+}:
 
 let
   inherit (pkgs) lib;
@@ -97,8 +99,7 @@ in
     param = type: attrs: { inherit type; } // attrs;
   };
 
-  # mkPythonEnv: the uv2nix boilerplate as ONE helper. The toolchain is pinned here by
-  # rev (flake eval is pure, so revs are mandatory); bump the three revs together.
+  # mkPythonEnv: shared uv2nix setup using the toolchain supplied by the entrypoint.
   # Python sources come from uv.lock; local sources are filtered without
   # changing which directory or revision the lock selects.
   mkPythonEnv =
@@ -113,24 +114,6 @@ in
     , overrides ? (_final: _prev: { })
     }:
     let
-      pyproject-nix = import
-        (builtins.fetchGit {
-          url = "https://github.com/pyproject-nix/pyproject.nix.git";
-          rev = "7af23cfe91064865ecf2e835da28b45b3c6f49fd";
-        })
-        { inherit lib; };
-      uv2nix = import
-        (builtins.fetchGit {
-          url = "https://github.com/pyproject-nix/uv2nix.git";
-          rev = "83995ef5e4ece3c9c704aa645bbff439e15a0ac3";
-        })
-        { inherit pyproject-nix lib; };
-      pyproject-build-systems = import
-        (builtins.fetchGit {
-          url = "https://github.com/pyproject-nix/build-system-pkgs.git";
-          rev = "430680a19bc85a3bda55f12e4cc1a1aadcf2e478";
-        })
-        { inherit pyproject-nix uv2nix lib; };
       projectName = (builtins.fromTOML (builtins.readFile (workspaceRoot + "/pyproject.toml"))).project.name;
       workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
       # Let uv2nix resolve sources, then filter local path sources using the

@@ -2,7 +2,32 @@
 
 If you do not have Nix yet, follow the [official installation instructions](https://nixos.org/download/) for your operating system. The default ADB commands do not require flakes to be enabled.
 
-ADB supports classic Nix and flakes. Both entry points build the same package set and read the same `flake.lock` pin for Nixpkgs. ADB declares Linux and macOS packages for x86-64 and ARM64; individual experiments can have additional platform or service requirements.
+ADB supports classic Nix and flakes. Both entry points build the same package set and use the same `flake.lock` pins for nixpkgs and the Python build toolchain. Flake commands receive the inputs directly; classic commands fetch the locked sources through `pkgs/locked-sources.nix`. ADB declares Linux and macOS packages for x86-64 and ARM64; individual experiments can have additional platform or service requirements.
+
+## How do I override a dependency with classic Nix?
+
+`default.nix` accepts `nixpkgs`, `uv2nix`, `pyproject-nix`, and
+`pyproject-build-systems` as source-path arguments. Omitted sources use their
+`flake.lock` pins:
+
+```nix
+import ./agentdatabank {
+  uv2nix = /path/to/my/uv2nix;
+}
+```
+
+The same arguments work on the command line:
+
+```sh
+nix-build -A adb-runner --arg uv2nix /path/to/my/uv2nix
+```
+
+Overriding `nixpkgs` selects the package set used by ADB unless you also pass `pkgs`.
+Pass `pkgs` directly when you already have an imported package set:
+
+```sh
+nix-build -A adb-runner --arg pkgs 'import <nixpkgs> {}'
+```
 
 ## How do I make commands match my setup?
 
