@@ -39,6 +39,14 @@ Results describe how long the resource survived, how much agents collected,
 how evenly they shared it, and how much remained. Equality alone is not success:
 agents who all collect nothing are also equal.
 
+The runner records launch parameters, seeds, source references and build
+information in `run.json` and `run.start`. GovSim adds the resolved simulation
+configuration in `config.yaml` (including its effective seed) and the raw
+simulation record in `log_env.json`. The config is saved before model setup;
+if simulation fails, any existing log checkpoint is retained as an artifact.
+Conversation event timestamps reflect post-run replay, not when agents spoke;
+their order follows the raw simulation record.
+
 ## Choosing settings
 
 Use a real model and the `mxbai` memory embedder to explore model behavior.

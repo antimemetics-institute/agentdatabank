@@ -124,14 +124,57 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
     assert metrics["equality"] == 1.0
     assert metrics["model_calls"] > 0
     assert any(e["type"] == "custom" and e["kind"] == "govsim.state" for e in events)
-    provenance = json.loads((tmp_path / "artifacts/provenance.json").read_text())
-    assert provenance["effective_parameters"]["temperature"] is None
-    assert provenance["effective_parameters"]["top_p"] is None
-    assert provenance["effective_parameters"]["reasoning_effort"] == "low"
-    assert provenance["effective_seed_32bit"] == 37
-    assert provenance["effective_parameters"]["model"] == "mock/model"
-    assert "mock/model" in (tmp_path / "artifacts/config.yaml").read_text()
+    from omegaconf import OmegaConf
+    config = OmegaConf.load(tmp_path / "artifacts/config.yaml")
+    assert config.llm.temperature is None
+    assert config.llm.top_p is None
+    assert config.llm.reasoning_effort == "low"
+    assert config.seed == 37
+    assert config.llm.path == "mock/model"
+    assert config.llm.backend == "adb-experiment.ChatClient"
+    assert not (tmp_path / "artifacts/provenance.json").exists()
+    assert not any(e["type"] == "artifact" and e["name"] == "provenance" for e in events)
+    states = [e["data"] for e in events if e["type"] == "custom" and e["kind"] == "govsim.state"]
+    assert len(states) == 1
+    assert states[0]["round"] == 0
+    assert states[0]["resource"] == metrics["final_resource"]
     assert (tmp_path / "artifacts/log_env.json").exists()
+
+
+@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
+@pytest.mark.parametrize("fail_simulation", [True, False])
+def test_failed_run_retains_config_and_raw_log(tmp_path, event_capture, fail_simulation):
+    config = tmp_path / "params.json"
+    config.write_text(json.dumps(params()))
+    # Exercise the real setup and artifact path, then fail either inside the
+    # simulation or while parsing its output. Neither should lose the evidence.
+    script = '''
+import importlib
+from pathlib import Path
+from govsim_adapter.main import main
+
+def simulate(cfg, logger, wrappers, wrapper, embedder, storage):
+    Path(storage, "log_env.json").write_text("unfinished checkpoint")
+    if FAIL_SIMULATION:
+        raise RuntimeError("simulation failed after checkpoint")
+
+importlib.import_module("simulation.scenarios.fishing.run").run = simulate
+raise SystemExit(main())
+'''.replace("FAIL_SIMULATION", repr(fail_simulation))
+    proc = subprocess.run(
+        [sys.executable, "-c", script, str(config)], cwd=tmp_path,
+        env=dict(os.environ, ADB_RUN_DIR=str(tmp_path), HF_HUB_OFFLINE="1",
+                 TRANSFORMERS_OFFLINE="1"),
+        text=True, capture_output=True, timeout=120,
+    )
+    assert proc.returncode == 1, proc.stderr
+    assert (tmp_path / "artifacts/config.yaml").exists()
+    assert (tmp_path / "artifacts/log_env.json").read_text() == "unfinished checkpoint"
+    events = event_capture.read()
+    assert {e["name"] for e in events if e["type"] == "artifact"} == {"config", "log_env"}
+    assert not any(e["type"] == "metric" for e in events)
+    if fail_simulation:
+        assert "simulation failed after checkpoint" in proc.stderr
 
 
 def test_missing_upstream_exits_nonzero_with_traceback(tmp_path, event_capture):

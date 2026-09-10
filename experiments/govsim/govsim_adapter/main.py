@@ -122,26 +122,10 @@ def run(params: Params) -> None:
 
     cfg = _compose(root, params, seed)
     # The composed upstream model path is bypassed by our injected backend.
-    # Save the effective model in its place and describe all adapter choices.
+    # Save the effective model in the simulation config. The runner records
+    # launch parameters, source identity and build provenance for every experiment.
     cfg.llm.path = params.model
     cfg.llm.backend = "adb-experiment.ChatClient"
-    provenance = {
-        "govsim_revision": "1d11adf047b24fa2ba0d44a1d4931015ea2e5210",
-        "pathfinder_revision": "69b8d646ad3e618380dd0d47ec4d1e8d2d4c930e",
-        "imported_adapter_revision": "f3b028b14bce693c69936544685bf199f9f4f71d",
-        "effective_parameters": params.model_dump(),
-        "effective_seed_32bit": seed,
-        "backend": "mock" if params.model.startswith("mock/") else "openai-chat",
-        "embedding_model": "sha256-normalized-1024" if params.embedder == "hash"
-            else "mixedbread-ai/mxbai-embed-large-v1",
-        "embedding_revision": None,
-        "embedding_revision_note": "Hash algorithm is versioned with adapter code" if params.embedder == "hash"
-            else "Upstream EmbeddingModel does not pin a HuggingFace revision; weights are mutable",
-        "transcript_timestamps": "post-run replay time; order follows log_env.json",
-    }
-    deposit_artifact("provenance", json.dumps(provenance, indent=2),
-                     filename="provenance.json", media_type="application/json")
-
     from omegaconf import OmegaConf
     from transformers import set_seed
 
@@ -205,7 +189,7 @@ def run(params: Params) -> None:
     if scenario not in scenarios:
         raise ValueError(f"unknown experiment.scenario: {scenario}")
 
-    emit(Status(detail=f"starting {params.experiment} ({scenario}) on {params.model}"))
+    emit(Status(detail="Starting simulation"))
     log_env_path = Path(storage) / "log_env.json"
     try:
         scenarios[scenario](

@@ -10,7 +10,7 @@ no network, no files. On top of that:
   single-LLM shape.
 * ``log_game`` (the per-step hook every scenario ``run()``/env already calls)
   accumulates the round's stats and emits one ``govsim.state`` event per round,
-  a chartable ``pool`` metric series, and a status heartbeat.
+  and a chartable ``pool`` metric series.
 
 Round boundaries are inferred from the stats stream itself: a
 ``conversation_resource_limit`` key closes the round (the restaurant phase), and
@@ -22,7 +22,7 @@ pool reported for a round is the value observed alongside its last stats entry
 
 from __future__ import annotations
 
-from adb_events import CustomEvent, Metric, Status, emit
+from adb_events import CustomEvent, Metric, emit
 from simulation.utils import WandbLogger
 
 _COLLECTED = "_collected_resource"
@@ -61,7 +61,6 @@ class AdbLogger(WandbLogger):
         )
         if self._pool is not None:
             emit(Metric(name="pool", value=self._pool, step=self._round))
-        emit(Status(detail=f"round {self._round}: pool {self._pool}"))
         self._round += 1
         self._collected = {}
         self._limit = None
