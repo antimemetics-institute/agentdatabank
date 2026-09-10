@@ -4,8 +4,8 @@ ADB experiment.
 Five LLM personas share a common-pool resource (fishery / pasture / river):
 each month they harvest concurrently, observe each other's catch, negotiate at
 the restaurant, and reflect at home; the pool regrows doubling-capped, and the
-commons collapses when it drops below 5. Upstream code runs verbatim from a
-pinned checkout (``GOVSIM_UPSTREAM``, exported by the package.nix wrapper); this
+commons collapses when it drops below 5. Upstream code runs from a pinned
+checkout with a seed-forwarding patch (``GOVSIM_UPSTREAM``, exported by the package.nix wrapper); this
 program mirrors upstream ``simulation/main.py``'s construction site — config
 composition, model injection, embedder substitution, wandb neutralization —
 and extracts the paper's metrics from the persisted ``log_env.json``.
@@ -97,6 +97,7 @@ def _compose(root: str, params: Params, seed: int):
         f"llm.temperature={json.dumps(params.temperature)}",
         f"llm.top_p={json.dumps(params.top_p)}",
         f"seed={seed}",
+        f"+experiment.env.seed={seed}",
         "debug=true",
     ]
     if params.max_rounds > 0:

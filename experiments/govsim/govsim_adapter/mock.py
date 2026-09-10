@@ -9,8 +9,8 @@ pathfinder's regex parsing consumes, so the mock run exercises the real
 parse/aggregate paths.
 
 The policy is intentionally boring: every persona harvests 5 units/month.
-5 agents x 5 units from a pool of 100 never exceeds supply, so upstream's one
-seedless RNG (contended harvest allocation) never fires and the run is
+5 agents x 5 units from a pool of 100 never exceeds supply, so the resource
+allocation RNG never fires and the run is
 deterministic in practice: 12 rounds, no collapse, equal harvests.
 
 Pure function of (messages) — determinism rides on the prompts alone.

@@ -2,22 +2,26 @@
 # experiment: 5 LLM personas share a common-pool resource — harvest, negotiate,
 # collapse or sustain.
 #
-# Upstream stays verbatim and pinned: the checkout below rides PYTHONPATH (GovSim
+# Upstream is pinned with one seed-forwarding patch: the checkout rides PYTHONPATH (GovSim
 # ships no pyproject, so it cannot be a uv dependency); its pathfinder DSL is a
-# proper uv git dependency (pinned in pyproject.toml). All adaptation lives in
+# proper uv git dependency (pinned in pyproject.toml). Other adaptation lives in
 # ./govsim_adapter: config composition (hydra compose over the upstream conf tree), model
 # injection (a ChatClient-backed pathfinder ModelAPI), embedder substitution
 # (deterministic hash embedder on the keyless path), wandb neutralization, and
 # metric extraction from the persisted log_env.json.
-{ adb, lib, writeShellApplication }:
+{ adb, lib, writeShellApplication, applyPatches }:
 let
   # the pin participates in condition identity via this file's text (package.nix
   # is in src); fetchGit skips the pathfinder submodule — harmless, the empty dir
   # cannot shadow the installed package (regular package beats namespace dir)
-  govsimSrc = builtins.fetchGit {
-    url = "https://github.com/giorgiopiatti/GovSim";
-    ref = "main";
-    rev = "1d11adf047b24fa2ba0d44a1d4931015ea2e5210";
+  govsimSrc = applyPatches {
+    name = "govsim-seeded-source";
+    src = builtins.fetchGit {
+      url = "https://github.com/giorgiopiatti/GovSim";
+      ref = "main";
+      rev = "1d11adf047b24fa2ba0d44a1d4931015ea2e5210";
+    };
+    patches = [ ./seed.patch ];
   };
 
   env = adb.mkPythonEnv {
@@ -53,7 +57,7 @@ in
     name = "govsim";
     summary = "GovSim (NeurIPS 2024): 5 LLM personas share a common-pool resource — harvest, negotiate, collapse or sustain.";
     # identity = declaration + locks + code; README/docs/default.nix stay out
-    src = [ ./package.nix ./pyproject.toml ./uv.lock ./govsim_adapter ];
+    src = [ ./package.nix ./seed.patch ./pyproject.toml ./uv.lock ./govsim_adapter ];
     links = [
       { label = "paper"; url = "https://arxiv.org/abs/2404.16698"; }
       { label = "source"; url = "https://github.com/giorgiopiatti/GovSim"; }

@@ -1,0 +1,46 @@
+--- a/simulation/scenarios/fishing/run.py
++++ b/simulation/scenarios/fishing/run.py
+@@ -82,7 +82,7 @@
+         env = FishingConcurrentEnv(cfg.env, experiment_storage, agent_id_to_name)
+     else:
+         raise ValueError(f"Unknown environment class: {cfg.env.class_name}")
+-    agent_id, obs = env.reset()
++    agent_id, obs = env.reset(seed=cfg.env.seed)
+ 
+     while True:
+         agent = personas[agent_id]
+--- a/simulation/scenarios/sheep/run.py
++++ b/simulation/scenarios/sheep/run.py
+@@ -76,7 +76,7 @@
+         env = SheepConcurrentEnv(cfg.env, experiment_storage, agent_id_to_name)
+     else:
+         raise ValueError(f"Unknown environment class: {cfg.env.class_name}")
+-    agent_id, obs = env.reset()
++    agent_id, obs = env.reset(seed=cfg.env.seed)
+ 
+     while True:
+         agent = personas[agent_id]
+--- a/simulation/scenarios/pollution/run.py
++++ b/simulation/scenarios/pollution/run.py
+@@ -76,7 +76,7 @@
+         env = PollutionConcurrentEnv(cfg.env, experiment_storage, agent_id_to_name)
+     else:
+         raise ValueError(f"Unknown environment class: {cfg.env.class_name}")
+-    agent_id, obs = env.reset()
++    agent_id, obs = env.reset(seed=cfg.env.seed)
+ 
+     while True:
+         agent = personas[agent_id]
+--- a/simulation/scenarios/common/environment/perturbation_env.py
++++ b/simulation/scenarios/common/environment/perturbation_env.py
+@@ -181,8 +181,8 @@
+             self.terminations,
+         )
+ 
+-    def reset(self):
+-        super().reset()
++    def reset(self, seed=None, options=None):
++        super().reset(seed=seed, options=options)
+ 
+         if self.num_round == self.perturbation.round:
+             if self.perturbation.type == "change_language_nature" and (

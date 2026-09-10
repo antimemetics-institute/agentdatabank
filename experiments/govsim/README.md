@@ -47,6 +47,12 @@ if simulation fails, any existing log checkpoint is retained as an artifact.
 Conversation event timestamps reflect post-run replay, not when agents spoke;
 their order follows the raw simulation record.
 
+The packaged upstream source includes a small `seed.patch`: each scenario
+passes the effective run seed to environment reset, and perturbation environments
+forward it to the resource-allocation RNG. This makes random allocation under
+contention repeatable for the same seed and actions. It does not guarantee that
+a hosted model will produce identical actions on repeated runs.
+
 ## Choosing settings
 
 Use a real model and the `mxbai` memory embedder to explore model behavior.
