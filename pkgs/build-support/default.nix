@@ -99,9 +99,8 @@ in
 
   # mkPythonEnv: the uv2nix boilerplate as ONE helper. The toolchain is pinned here by
   # rev (flake eval is pure, so revs are mandatory); bump the three revs together.
-  # When the project depends on `adb-events` or `adb-inspect`, its build is overridden
-  # to the in-repo source, so those have ONE definition regardless of what the lock
-  # pins.
+  # Python sources come from uv.lock; local sources are filtered without
+  # changing which directory or revision the lock selects.
   mkPythonEnv =
     { name
     , workspaceRoot
@@ -132,70 +131,29 @@ in
           rev = "430680a19bc85a3bda55f12e4cc1a1aadcf2e478";
         })
         { inherit pyproject-nix uv2nix lib; };
-      # loadWorkspace would import workspaceRoot into the store as-is — .venv
-      # included; builds consume pyproject/uv.lock + package sources, never
-      # dev artifacts
-      cleanWorkspaceRoot = cleanImport "${name}-workspace" workspaceRoot;
-      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = cleanWorkspaceRoot; };
-      # uv2nix fetches git sources with full history and allRefs (its fetchGit has no
-      # shallow), which mirrors entire upstream repos into the eval git cache. The lock
-      # pins an exact rev and the store hash covers only the checkout, so depth can
-      # never affect identity — re-fetch every git-sourced package shallowly instead,
-      # with url+rev read from uv.lock (one place). uv2nix's own fetch is never forced:
-      # src is lazy. Assumes the host serves arbitrary pinned SHAs (GitHub does).
-      gitLockPackages = builtins.filter (p: p ? source.git)
-        (builtins.fromTOML (builtins.readFile (cleanWorkspaceRoot + "/uv.lock"))).package;
-      shallowGitOverlay = _final: prev:
-        builtins.listToAttrs (map
-          (p: {
-            inherit (p) name;
-            value = prev.${p.name}.overrideAttrs (_old: {
-              src = builtins.fetchGit {
-                url = builtins.head (lib.splitString "?" (builtins.head (lib.splitString "#" p.source.git)));
-                rev = lib.last (lib.splitString "#" p.source.git);
-                shallow = true;
-                submodules = true;
-              };
-            });
-          })
-          gitLockPackages);
-      # External repos lock the libs as git+subdirectory sources; the override
-      # must then also (a) clear uv2nix's postUnpack subdir descent — the
-      # replacement src IS the package root — and (b) inject hatchling: build
-      # systems are resolved from a path source's pyproject at eval, but a git
-      # source's isn't readable then, so none get attached.
-      inRepoOverlay = final: prev:
-        let
-          inRepo = name: src: prev.${name}.overrideAttrs (old: {
-            src = cleanImport "${name}-src" src;
-            postUnpack = "";
-            nativeBuildInputs =
-              (old.nativeBuildInputs or [ ]) ++ final.resolveBuildSystem { hatchling = [ ]; };
-          });
-        in
-        lib.optionalAttrs (prev ? adb-events) {
-          adb-events = inRepo "adb-events" ../../lib/adb-events;
-        }
-        // lib.optionalAttrs (prev ? adb-experiment) {
-          adb-experiment = inRepo "adb-experiment" ../../lib/adb-experiment;
-        }
-        // lib.optionalAttrs (prev ? adb-providers) {
-          adb-providers = inRepo "adb-providers" ../../lib/adb-providers;
-        }
-        // lib.optionalAttrs (prev ? adb-inspect) {
-          adb-inspect = inRepo "adb-inspect" ../../lib/adb-inspect;
-        };
+      projectName = (builtins.fromTOML (builtins.readFile (workspaceRoot + "/pyproject.toml"))).project.name;
+      workspace = uv2nix.lib.workspace.loadWorkspace { inherit workspaceRoot; };
+      # Let uv2nix resolve sources, then filter local path sources using the
+      # documented per-package overrideAttrs interface. Fetchers remain intact.
+      projectOverlay = workspace.mkPyprojectOverlay { inherit sourcePreference; };
+      filteredProjectOverlay = final: prev:
+        lib.mapAttrs
+          (_: package: package.overrideAttrs (old:
+            lib.optionalAttrs (builtins.isPath (old.src or null)) {
+              src = cleanImport "${old.pname}-src" old.src;
+            }))
+          (projectOverlay final prev);
       pythonSet =
         (pkgs.callPackage pyproject-nix.build.packages { inherit python; }).overrideScope
           (lib.composeManyExtensions [
             pyproject-build-systems.overlays.default
-            (workspace.mkPyprojectOverlay { inherit sourcePreference; })
-            shallowGitOverlay
-            inRepoOverlay
+            filteredProjectOverlay
             overrides
           ]);
     in
-    pythonSet.mkVirtualEnv name workspace.deps.default;
+    # Select the application only; editable local test dependencies are also
+    # workspace members, but must not become runtime installation roots.
+    pythonSet.mkVirtualEnv name { ${projectName} = [ ]; };
 
   # mkExperiment: the schema + program → a runnable flake app with the manifest JSON and
   # source identity baked in. `program` is whatever speaks the runner protocol (params
