@@ -12,9 +12,11 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import platform
 import queue
 import signal
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -110,6 +112,8 @@ def execute_run(
     condition_id: str,
     source: str,
     fetch_ref: str | None = None,
+    base_seed: int,
+    replicates: int,
     seed: int,
     replicate: int,
     store: RunStore,
@@ -151,6 +155,15 @@ def execute_run(
             if on_event:
                 on_event(saved)
 
+    environment = RunEnvironment(
+        adb_runner=__version__,
+        platform=os.uname().sysname.lower() + "-" + os.uname().machine,
+        experiment_bin=program,
+        runner_python=sys.executable,
+        runner_python_version=platform.python_version(),
+        runner_bin=os.environ.get("ADB_RUNNER_BIN"),
+        nix_system=os.environ.get("ADB_NIX_SYSTEM"),
+    )
     run_meta: dict[str, Any] = {
         "run": run_id,
         "condition": condition_id,
@@ -159,6 +172,10 @@ def execute_run(
         "source": source,
         "fetch_ref": fetch_ref,
         "dirty": dirty,
+        "base_seed": base_seed,
+        "replicates": replicates,
+        "realized_params": realized_params,
+        "env": environment.model_dump(mode="json"),
         "seed": seed,
         "replicate": replicate,
         "state": "provisioning",
@@ -176,12 +193,11 @@ def execute_run(
             dirty=dirty,
             spec_params=spec_params,
             realized_params=realized_params,
+            base_seed=base_seed,
+            replicates=replicates,
             seed=seed,
             replicate=replicate,
-            env=RunEnvironment(
-                adb_runner=__version__,
-                platform=os.uname().sysname.lower() + "-" + os.uname().machine,
-            ),
+            env=environment,
         )
     )
 

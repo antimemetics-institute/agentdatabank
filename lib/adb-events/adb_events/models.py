@@ -157,6 +157,12 @@ class CustomEvent(_Event[Literal["custom"]]):
 class RunEnvironment(Model):
     adb_runner: str
     platform: str
+    experiment_bin: str
+    runner_python: str
+    runner_python_version: str
+    # Supplied by the Nix launcher; absent for direct, unpackaged runner calls.
+    runner_bin: str | None = None
+    nix_system: str | None = None
 
 
 class UsageTotals(Model):
@@ -174,6 +180,8 @@ class RunStart(_Event[Literal["run.start"]]):
     dirty: bool
     spec_params: dict[str, Any]
     realized_params: dict[str, Any]
+    base_seed: int
+    replicates: Annotated[int, Field(ge=1)]
     seed: NonNegativeInt
     replicate: Annotated[int, Field(ge=1)]
     env: RunEnvironment

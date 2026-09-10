@@ -9,6 +9,7 @@ import sys
 
 import pytest
 
+from adb_runner.cli import _derive_seed
 from adb_runner.protocol import execute_run
 from adb_runner.store import RunStore
 
@@ -61,7 +62,9 @@ def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=N
         realized_params=params or {"x": 1},
         condition_id="cid",
         source="dirty:test",
-        seed=7,
+        base_seed=42,
+        replicates=1,
+        seed=_derive_seed(42, "cid", 1),
         replicate=1,
         store=store,
         run_id="rid",
@@ -174,6 +177,45 @@ def test_declarations_are_snapshotted_and_do_not_validate_values(tmp_path):
     )
 
 
+def test_provenance_is_saved_before_the_child_starts(tmp_path, monkeypatch):
+    from adb_events import RunStart, read_events
+
+    monkeypatch.setenv("ADB_RUNNER_BIN", "/nix/store/fixture-runner/bin/adb-runner")
+    monkeypatch.setenv("ADB_NIX_SYSTEM", "x86_64-linux")
+    monkeypatch.setenv("UNRELATED_SECRET", "must-not-be-recorded")
+    starts = []
+
+    def observe(envelope):
+        event = envelope["event"]
+        if event["type"] != "run.start":
+            return
+        record = json.loads((tmp_path / "home/runs/cid/rid/run.json").read_text())
+        assert record["state"] == "provisioning"
+        for field in (
+            "base_seed",
+            "replicates",
+            "seed",
+            "replicate",
+            "env",
+            "realized_params",
+        ):
+            assert record[field] == event[field]
+        starts.append(event)
+
+    _, _, store = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n", on_event=observe)
+    assert len(starts) == 1
+    start = next(read_events(store.dir)).event
+    assert isinstance(start, RunStart)
+    assert start.env.experiment_bin == str(tmp_path / "exp.sh")
+    assert start.env.runner_bin == "/nix/store/fixture-runner/bin/adb-runner"
+    assert start.env.nix_system == "x86_64-linux"
+    assert start.env.runner_python == sys.executable
+    assert start.env.runner_python_version
+    assert start.base_seed == 42 and start.replicates == 1
+    assert start.seed == _derive_seed(start.base_seed, "cid", start.replicate)
+    assert "must-not-be-recorded" not in (store.dir / "run.json").read_text()
+
+
 def test_nonzero_exit_is_failed(tmp_path):
     result, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n")
     assert result.state == "failed"
@@ -194,7 +236,11 @@ echo "params=$p seed=$ADB_SEED run=$ADB_RUN_ID"
         for p in payloads
         if p.get("type") == "stdout" and "params=" in p["line"]
     )
-    assert '"x": 9' in line and "seed=7" in line and "run=rid" in line
+    assert (
+        '"x": 9' in line
+        and f"seed={_derive_seed(42, 'cid', 1)}" in line
+        and "run=rid" in line
+    )
 
 
 @pytest.mark.parametrize("stream, fd", [("stdout", 1), ("stderr", 2)])

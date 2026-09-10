@@ -29,9 +29,17 @@ START = {
     "dirty": True,
     "spec_params": {"model": "mock/model"},
     "realized_params": {"model": "mock/model"},
+    "base_seed": 123,
+    "replicates": 1,
     "seed": 42,
     "replicate": 1,
-    "env": {"adb_runner": "0.1.0", "platform": "linux-x86_64"},
+    "env": {
+        "adb_runner": "0.1.0",
+        "platform": "linux-x86_64",
+        "experiment_bin": "/fixture/experiment",
+        "runner_python": "/fixture/python",
+        "runner_python_version": "3.13.14",
+    },
     "result_definitions": {},
 }
 PAYLOADS = [

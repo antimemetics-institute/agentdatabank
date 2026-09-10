@@ -22,13 +22,15 @@ nix run .#inspect-hello -- \
 
 Repeating that command against the same experiment source produces the same sequence of run seeds and new run IDs. Whether the resulting behavior repeats depends on the experiment, provider and external inputs.
 
-The seed shown on the run page and stored in `run.json` is the **derived run seed**. Passing that number to `--seed` derives another seed; it does not directly restore the original one. Save the original command and base seed when you need to repeat seed selection. The local job rerun action does not preserve a CLI base seed.
+The seed shown on the run page and stored as `seed` in `run.json` is the **derived run seed**. Passing that number to `--seed` derives another seed; it does not directly restore the original one. The runner also saves `base_seed` and `replicates` in `run.json` and `run.start`, even when the base seed was chosen randomly. To repeat seed selection, use the saved base seed with `--seed`, the saved count with `--replicates`, and the same condition. The local job rerun action does not preserve a CLI base seed.
 
 ## How do I keep the source version?
 
 A run records `source`, the experiment's declared content identity, and `fetch_ref`, a repository reference intended for fetching the source. A clean pinned source can be fetched again; a `dirty:` reference cannot recover unsaved working-tree content. Preserve your working tree separately when running local modifications.
 
 For reproduction, select the recorded repository revision rather than moving `main` or a registry alias that can change. [Working with Nix](nix.md#how-do-i-pin-a-source-version) gives the source forms. Compare the resolved condition with `--dry-run` before executing.
+
+For a clean, public revision built with its default Nix inputs, that revision also recovers the committed dependency locks and shared library code. The runner saves executable store paths and platform information in `env` so you can compare the selected builds; see [run metadata](../reference/layout.md#what-is-in-runjson). Keep the commit available in the public repository.
 
 ## What does a matching condition tell me?
 

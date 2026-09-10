@@ -62,7 +62,8 @@ def test_seed_spreads_across_the_range():
     assert any(s < UINT32_MAX // 2 for s in seeds)
 
 
-def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch):
+@pytest.mark.parametrize("base_seed", [42, -1, None])
+def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch, base_seed):
     import json
     import sys
     from adb_runner import cli
@@ -79,12 +80,24 @@ def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch)
     monkeypatch.setenv("ADB_MANIFEST", str(manifest))
     monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
     monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
-    monkeypatch.setattr(sys, "argv", ["adb-runner", "--json", "--replicates", "2",
-                                     "--out", str(home)])
+    argv = ["adb-runner", "--json", "--replicates", "2", "--out", str(home)]
+    if base_seed is not None:
+        argv += ["--seed", str(base_seed)]
+    monkeypatch.setattr(sys, "argv", argv)
     assert cli.main() == 1
     states = [json.loads(path.read_text())["state"]
               for path in home.glob("runs/*/*/run.json")]
     assert sorted(states) == ["completed", "failed"]
+    records = [json.loads(path.read_text()) for path in home.glob("runs/*/*/run.json")]
+    assert len({record["base_seed"] for record in records}) == 1
+    assert {record["replicate"] for record in records} == {1, 2}
+    for record in records:
+        if base_seed is not None:
+            assert record["base_seed"] == base_seed
+        assert record["replicates"] == 2
+        assert record["seed"] == _derive_seed(
+            record["base_seed"], record["condition"], record["replicate"]
+        )
 
 
 @pytest.mark.parametrize("json_output", [False, True])

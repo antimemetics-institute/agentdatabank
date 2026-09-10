@@ -199,9 +199,11 @@ in
         text = ''
           export ADB_MANIFEST=${manifest}
           export ADB_EXPERIMENT_BIN=${lib.escapeShellArg programPath}
+          export ADB_RUNNER_BIN=${lib.escapeShellArg (lib.getExe adb-runner)}
+          export ADB_NIX_SYSTEM=${lib.escapeShellArg pkgs.stdenv.hostPlatform.system}
           export ADB_SOURCE=${lib.escapeShellArg source}
           export ADB_FETCH_REF=${lib.escapeShellArg fetchRef}
-          exec adb-runner "$@"
+          exec "$ADB_RUNNER_BIN" "$@"
         '';
       };
     in

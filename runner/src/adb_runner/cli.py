@@ -316,6 +316,8 @@ def main() -> int:
                 condition_id=cond["cid"],
                 source=source,
                 fetch_ref=fetch_ref,
+                base_seed=base_seed,
+                replicates=replicates,
                 seed=run_seed,
                 replicate=replicate,
                 store=store,

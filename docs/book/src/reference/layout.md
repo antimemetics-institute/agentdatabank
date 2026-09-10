@@ -54,6 +54,8 @@ A run ID is a newly generated ULID. Replicates of a condition share its conditio
 | `source` | Declared experiment content identity. |
 | `fetch_ref` | Repository reference for fetching source, or a `dirty:` reference when no fetchable revision is recorded. |
 | `dirty` | Whether `fetch_ref` starts with `dirty:`. |
+| `base_seed` | CLI base seed, including the randomly chosen value when `--seed` was omitted. |
+| `replicates` | Number of replicates requested in this invocation. |
 | `seed` | Derived run seed, not the CLI base seed. |
 | `replicate` | One-based replicate number within this invocation. |
 | `state` | Current or terminal process state. |
@@ -63,7 +65,22 @@ A run ID is a newly generated ULID. Replicates of a condition share its conditio
 | `summary` | Last emitted metric values for names declared in manifest `results`; added at termination. |
 | `result_definitions` | Snapshot of normalized manifest result declarations, including supplied labels, descriptions, details and units. Also saved in `run.start`; older runs may omit it. |
 | `usage_totals` | `llm_calls`, `input_tokens`, `output_tokens` accumulated from `llm.call` events; added at termination. |
-| `realized_params` | Parameters passed to the process; added at termination. Also present in `run.start`. |
+| `realized_params` | Parameters passed to the process. Also present in `run.start`. |
+| `env` | Runner and experiment build information; fields below. Also present in `run.start`. |
+
+Source references, seeds, parameters and environment information are saved before the experiment starts, including for runs that fail.
+
+| `env` field | Meaning |
+| --- | --- |
+| `adb_runner` | Runner package version. |
+| `platform` | Runtime operating system and machine architecture. |
+| `experiment_bin` | Experiment executable path used by the runner. |
+| `runner_bin` | Runner executable path supplied by the Nix launcher. |
+| `nix_system` | Nix host platform supplied by the launcher, such as `x86_64-linux`. |
+| `runner_python` | Runner's Python interpreter path. |
+| `runner_python_version` | Runner's Python version. |
+
+For Nix launches, executable store paths identify the selected build outputs. `runner_bin` and `nix_system` are null for unpackaged calls without launcher metadata. These records do not copy build outputs or source code into the run directory.
 
 Token totals use the usage the adapter reports; absent token counts contribute zero. `llm_calls` counts emitted call events, including calls with errors. These are recorded-event totals, not an independently verified provider bill.
 
