@@ -42,6 +42,9 @@ They never become invalid records in the JSONL stream.
 All nonempty stdout/stderr lines from the experiment program become `stdout`/`stderr` events with a `line`
 field, including lines that happen to contain JSON objects. Whitespace-only
 stdout lines are ignored. Ordinary prints cannot submit structured events.
+These are UTF-8 text channels: malformed bytes are replaced with `�` so capture
+continues. Store binary output in artifact files. An unexpected capture failure
+is recorded as an error and makes the run fail.
 
 ## How does the run finish?
 

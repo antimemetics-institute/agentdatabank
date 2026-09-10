@@ -197,6 +197,56 @@ echo "params=$p seed=$ADB_SEED run=$ADB_RUN_ID"
     assert '"x": 9' in line and "seed=7" in line and "run=rid" in line
 
 
+@pytest.mark.parametrize("stream, fd", [("stdout", 1), ("stderr", 2)])
+def test_non_utf8_stdio_does_not_drop_subsequent_output(tmp_path, stream, fd):
+    # Arbitrary child-process output uses a different path from the typed event
+    # socket. Invalid bytes must not kill its reader or lose later valid text.
+    script = (
+        "#!/bin/sh\n"
+        "read -r params\n"
+        f"printf 'invalid byte: \\377\\n' >&{fd}\n"
+        f"printf 'after invalid bytes\\n' >&{fd}\n"
+    )
+    result, envelopes, store = run_fixture(tmp_path, script=script)
+    payloads = [envelope["event"] for envelope in envelopes]
+
+    assert [event["line"] for event in payloads if event["type"] == stream] == [
+        "invalid byte: \ufffd",
+        "after invalid bytes",
+    ]
+    assert not any(
+        event["type"] == "log" and "descendants still hold" in event["message"]
+        for event in payloads
+    )
+    assert result.state == "completed"
+    assert payloads[-1]["type"] == "run.end"
+    assert json.loads((store.dir / "run.json").read_text())["state"] == "completed"
+
+
+@pytest.mark.parametrize("stream, fd", [("stdout", 1), ("stderr", 2)])
+def test_output_reader_failure_is_reported(tmp_path, monkeypatch, stream, fd):
+    from adb_runner import protocol
+
+    def fail_capture(**kwargs):
+        raise RuntimeError("capture failure fixture")
+
+    monkeypatch.setattr(protocol, "CapturedLine", fail_capture)
+    result, envelopes, store = run_fixture(
+        tmp_path, script=f"#!/bin/sh\nread -r params\necho text >&{fd}\n"
+    )
+    logs = [e["event"] for e in envelopes if e["event"]["type"] == "log"]
+    assert logs == [
+        {
+            "type": "log",
+            "level": "error",
+            "message": f"failed to capture {stream}: capture failure fixture",
+        }
+    ]
+    assert result.state == "failed"
+    assert envelopes[-1]["event"]["state"] == "failed"
+    assert json.loads((store.dir / "run.json").read_text())["state"] == "failed"
+
+
 def test_orphaned_pipe_holders_do_not_hang_the_run(tmp_path):
     # a grandchild inheriting our pipes outlives the experiment; the reader loop
     # must drain and close within its grace period instead of waiting for EOF

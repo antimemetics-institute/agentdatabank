@@ -19,7 +19,7 @@ import threading
 import time
 from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Literal
+from typing import Any, Literal, TextIO
 
 from . import __version__
 from . import credentials
@@ -129,7 +129,7 @@ def execute_run(
     metrics: dict[str, Any] = {}
     result_definitions = deepcopy(manifest.get("results", {}))
     usage = {"input_tokens": 0, "output_tokens": 0, "llm_calls": 0}
-    events_q: queue.Queue[CapturedLine | None] = queue.Queue()
+    events_q: queue.Queue[CapturedLine | Log | None] = queue.Queue()
     record_lock = threading.Lock()
 
     def record_payload(payload: Payload) -> None:
@@ -206,28 +206,30 @@ def execute_run(
                 "ADB_EVENT_SOCKET": socket_path,
             },
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
         if stdin is None or stdout is None or stderr is None:
             raise RuntimeError("child pipes missing")  # typeshed can't see Popen(PIPE)
 
-        def read_stdout() -> None:
-            for line in stdout:
-                line = line.rstrip("\n")
-                if not line.strip():
-                    continue
-                events_q.put(CapturedLine(type="stdout", line=line))
-            events_q.put(None)
-
-        def read_stderr() -> None:
-            for line in stderr:
-                line = line.rstrip("\n")
-                if line:
-                    events_q.put(CapturedLine(type="stderr", line=line))
-            events_q.put(None)
+        def read_output(stream: TextIO, kind: Literal["stdout", "stderr"]) -> None:
+            try:
+                for line in stream:
+                    line = line.rstrip("\n")
+                    if not line or (kind == "stdout" and not line.strip()):
+                        continue
+                    events_q.put(CapturedLine(type=kind, line=line))
+            except Exception as exc:
+                events_q.put(
+                    Log(level="error", message=f"failed to capture {kind}: {exc}")
+                )
+            finally:
+                events_q.put(None)
 
         threads = [
-            threading.Thread(target=t, daemon=True) for t in (read_stdout, read_stderr)
+            threading.Thread(target=read_output, args=(stdout, "stdout"), daemon=True),
+            threading.Thread(target=read_output, args=(stderr, "stderr"), daemon=True),
         ]
         for t in threads:
             t.start()
@@ -239,6 +241,7 @@ def execute_run(
             pass
 
         interrupted = False
+        capture_failed = False
         finished_readers = 0
         last_beat = time.monotonic()
         child_exited_at: float | None = None
@@ -274,6 +277,8 @@ def execute_run(
             if item is None:
                 finished_readers += 1
                 continue
+            if isinstance(item, Log):
+                capture_failed = True
             record_payload(item)
 
         returncode = proc.wait()
@@ -281,7 +286,7 @@ def execute_run(
     state: RunState
     if interrupted or returncode < 0:
         state = "interrupted"
-    elif returncode == 0:
+    elif returncode == 0 and not capture_failed:
         state = "completed"
     else:
         state = "failed"
