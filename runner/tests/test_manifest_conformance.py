@@ -5,8 +5,8 @@ Full structural validation, driven by the TypedDicts themselves (annotations are
 introspected, so there is no second schema to drift): at every level, keys must
 be declared, required keys present, and every VALUE must match its annotated
 type — a manifest with `order: "1"` or a string where a list belongs fails here
-with the file and path in the message. (msgspec would do this in one call but
-rejects untagged TypedDict unions like StructField, hence the small walker.)
+with the file and path in the message. The walker checks the generated manifest
+directly against the declared TypedDict vocabulary.
 
 Gated on ADB_TEST_MANIFESTS (task test:python wires it to the nix-built manifests
 dir, same as the web suite's sweep); skips without it.

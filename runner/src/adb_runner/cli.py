@@ -134,7 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "skips the interactive picker)")
     p.add_argument("--seed", type=int, default=None, help="base seed (random if omitted)")
     p.add_argument("--out", default=None, metavar="DIR", help="override $ADB_DATA_DIR")
-    p.add_argument("--json", action="store_true", help="stream events to stdout (headless)")
+    p.add_argument("--json", action="store_true", help="print recorded events as JSON lines to stdout")
+    p.add_argument("--non-interactive", action="store_true",
+                   help="never prompt for input; fail if required credentials cannot be resolved")
     p.add_argument("--dry-run", action="store_true",
                    help="print the resolved condition + hash, execute nothing")
     p.add_argument("--describe", action="store_true",
@@ -254,10 +256,10 @@ def main() -> int:
     # a picker that re-asked every replicate would be noise). Interactively this may
     # prompt: first-use setup for an unconfigured built-in (the run continues with
     # the freshly entered credential; secrets never touch argv), and the profile
-    # picker when named profiles exist. Headless (piped stdin or --json) it never
+    # picker when named profiles exist. Headless (non-terminal stdin or --non-interactive) it never
     # prompts — remembered choice, else default profile, else exit 2 with the fix.
     realized = cond["params"]  # no distributions in the MVP: realized ARE the spec params
-    interactive = sys.stdin.isatty() and not args.json
+    interactive = sys.stdin.isatty() and not args.non_interactive
     selections = dict(_parse_kv(entry, "--profile") for entry in args.profile)
     try:
         credential_env = credentials.resolve_run_credentials(

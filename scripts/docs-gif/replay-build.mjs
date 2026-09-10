@@ -21,7 +21,8 @@ const build = attr => execFileSync('nix-build', [...args, attr], {
   encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
 }).trim();
 const manifests = build('manifests');
-const runner = build('exec.adb-runner');
+const runnerPackage = build('adb-runner');
+const runner = join(runnerPackage, 'bin', 'adb-runner');
 const manifest = JSON.parse(readFileSync(join(manifests, `${experiment}.json`), 'utf8'));
 function sanitize(value) {
   if (Array.isArray(value)) return value.map(sanitize);
@@ -35,7 +36,7 @@ const work = mkdtempSync(join(parent, 'replay-'));
 const manifestPath = join(work, 'manifest.json');
 writeFileSync(manifestPath, JSON.stringify(sanitize(manifest)));
 const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
-const python = execFileSync('which', ['python3'], {encoding: 'utf8'}).trim();
+const python = join(runnerPackage, 'bin', 'python');
 const adapter = join(work, 'adapter');
 writeFileSync(adapter, `#!/bin/sh\nexec ${quote(python)} ${quote(join(dirname(fileURLToPath(import.meta.url)), 'replay.py'))} --run ${quote(source)} --speed ${speed}\n`, {mode: 0o700});
 // Profile selections only make sense for a live experiment. The recording manifest

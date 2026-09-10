@@ -46,5 +46,5 @@ in
 # mainProgram: the venv carries several bins (adb-runner, adb-emit, python…) —
 # name the canonical one so lib.getExe (and anything mainProgram-aware) resolves
 # to adb-runner instead of guessing from the derivation name
-(pythonSet.mkVirtualEnv "adb-runner-env" workspace.deps.default).overrideAttrs
+(pythonSet.mkVirtualEnv "adb-runner-env" { adb-runner = [ ]; }).overrideAttrs
   (old: { meta = (old.meta or { }) // { mainProgram = "adb-runner"; }; })

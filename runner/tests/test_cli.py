@@ -7,6 +7,8 @@ degraded run — it is a 400 or a ValueError at generation time. These tests hol
 the width; the derivation itself may change.
 """
 
+import pytest
+
 from adb_runner.cli import _derive_seed
 
 UINT32_MAX = 2**32 - 1
@@ -83,3 +85,46 @@ def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch)
     states = [json.loads(path.read_text())["state"]
               for path in home.glob("runs/*/*/run.json")]
     assert sorted(states) == ["completed", "failed"]
+
+
+@pytest.mark.parametrize("json_output", [False, True])
+@pytest.mark.parametrize("non_interactive", [False, True])
+@pytest.mark.parametrize("terminal", [False, True])
+def test_output_and_interaction_are_independent(
+    tmp_path, monkeypatch, capsys, json_output, non_interactive, terminal
+):
+    import json
+    import sys
+    from adb_runner import cli
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    experiment = tmp_path / "experiment"
+    experiment.write_text("#!/bin/sh\nexit 0\n")
+    experiment.chmod(0o755)
+    monkeypatch.setenv("ADB_MANIFEST", str(manifest))
+    monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: terminal)
+    monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
+    interactions = []
+
+    def resolve_credentials(*args, interactive, **kwargs):
+        interactions.append(interactive)
+        return {}
+
+    monkeypatch.setattr(cli.credentials, "resolve_run_credentials", resolve_credentials)
+    argv = ["adb-runner", "--out", str(tmp_path / "runs")]
+    if json_output:
+        argv.append("--json")
+    if non_interactive:
+        argv.append("--non-interactive")
+    monkeypatch.setattr(sys, "argv", argv)
+    assert cli.main() == 0
+    assert interactions == [terminal and not non_interactive]
+    output = capsys.readouterr().out
+    if json_output:
+        events = [json.loads(line)["event"] for line in output.splitlines()]
+        assert events[0]["type"] == "run.start"
+        assert events[-1]["type"] == "run.end"
+    else:
+        assert output == ""

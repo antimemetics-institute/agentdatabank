@@ -25,7 +25,8 @@ dependencies = [
 
 # In-tree ADB libraries are shared with the runner.
 [tool.uv.sources]
-adb-events = { path = "../../lib/adb-events" }
+adb-testing = { path = "../../lib/adb-testing", editable = true }
+adb-events = { path = "../../lib/adb-events", editable = true }
 adb-experiment = { path = "../../lib/adb-experiment" }
 pathfinder = { git = "https://github.com/giorgiopiatti/PathFinder", rev = "69b8d646ad3e618380dd0d47ec4d1e8d2d4c930e" }
 torch = { index = "pytorch-cpu" }
@@ -47,4 +48,4 @@ build-backend = "hatchling.build"
 packages = ["govsim_adapter"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "adb-testing"]

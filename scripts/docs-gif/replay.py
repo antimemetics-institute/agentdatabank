@@ -96,12 +96,14 @@ def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep
 
 
 def main():
+    from adb_events import PRODUCER_ADAPTER, emit
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--speed', type=float, default=1)
     args = parser.parse_args()
     replay(args.run, Path(os.environ['ADB_RUN_DIR']), args.speed, json.load(sys.stdin),
-           lambda event: print(json.dumps(event, separators=(',', ':')), flush=True))
+           lambda event: emit(PRODUCER_ADAPTER.validate_python(event, strict=True)))
 
 
 if __name__ == '__main__':

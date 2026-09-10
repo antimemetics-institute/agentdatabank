@@ -22,7 +22,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from adb_events.emit import artifact, emit_raw, log, metric, set_output, status
+from adb_events import Artifact, CapturedLine, Log, Metric, Status, emit
 from .models import Params, inspect_model
 from .sandbox_status import sandbox_provisioning_status
 from .translate import (emit_aggregate, emit_live_model_event, emit_provenance,
@@ -82,8 +82,14 @@ def deposit_log(log_obj: Any, run_dir: Path) -> None:  # Any: EvalLog, whose imp
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / "run.eval"
     shutil.copyfile(src, dest)
-    artifact(name="run.eval", path="artifacts/run.eval",
-             media_type="application/octet-stream", size=dest.stat().st_size)
+    emit(
+        Artifact(
+            name="run.eval",
+            path="artifacts/run.eval",
+            media_type="application/octet-stream",
+            bytes=dest.stat().st_size,
+        )
+    )
 
 
 class PrintStream(io.TextIOBase):
@@ -94,8 +100,8 @@ class PrintStream(io.TextIOBase):
     contextvar and tag each line with the sample that printed it. (The runner
     normally synthesizes `stdout` events itself — this emits the same type one
     hop earlier, where the attribution still exists; anything that escapes this
-    capture still becomes a runner-synthesized line.) Side benefit: prints never
-    share the JSONL channel with events, so they can't tear an event line."""
+    capture still becomes a runner-synthesized line.) Tagged lines are submitted
+    through the event socket."""
 
     def __init__(self) -> None:
         self._buf = ""
@@ -110,7 +116,7 @@ class PrintStream(io.TextIOBase):
             while "\n" in self._buf:
                 line, self._buf = self._buf.split("\n", 1)
                 if line.strip():
-                    emit_raw("stdout", line=line, **self._sample_tag())
+                    emit(CapturedLine(type="stdout", line=line, **self._sample_tag()))
         return len(s)
 
     @staticmethod
@@ -161,7 +167,7 @@ def run(params: Params) -> int:
             s = data.summary
             live[data.sample_id] = {"id": s.id, "epoch": s.epoch,
                                     "msgs": set(), "evs": set()}
-            status(f"instance {s.id} repeat {s.epoch}: running")
+            emit(Status(detail=f"instance {s.id} repeat {s.epoch}: running"))
 
         async def on_sample_event(self, data: Any) -> None:
             st = live.get(data.sample_id)
@@ -178,7 +184,7 @@ def run(params: Params) -> int:
                 emit_live_model_event(ev, agent, st["id"], st["epoch"], st["msgs"])
                 st["evs"].add(uid)
             except Exception as exc:  # a bad event must not kill the eval
-                log(f"stream: live emit failed: {exc}", level="warn")
+                emit(Log(message=f"stream: live emit failed: {exc}", level="warn"))
 
         async def on_sample_end(self, data: Any) -> None:
             if data.sample is None:
@@ -189,28 +195,27 @@ def run(params: Params) -> int:
                             seen_messages=st["msgs"], seen_events=st["evs"])
                 streamed.add(data.sample.uuid)
             except Exception as exc:  # a bad sample must not kill the eval
-                log(f"stream: sample emit failed: {exc}", level="warn")
+                emit(Log(message=f"stream: sample emit failed: {exc}", level="warn"))
 
     _ = AdbStream  # registered by the decorator's side effect, never referenced
 
     task = resolve_task(params.task)
-    status(f"running inspect eval: task={params.task} model={params.model}")
-    # events keep flowing to the real stdout (the JSONL channel); everything the
+    emit(
+        Status(detail=f"running inspect eval: task={params.task} model={params.model}")
+    )
+    # Structured events use the socket; everything the
     # eval prints is captured and re-emitted as tagged `stdout` events (PrintStream),
     # and inspect's otherwise-silent docker provisioning is narrated as status
     # events (sandbox_status.py)
-    set_output(sys.stdout)
     try:
         with contextlib.redirect_stdout(PrintStream()), sandbox_provisioning_status():
             logs = run_eval(task, **eval_kwargs(params, log_dir))
     except Exception as exc:
-        log(f"inspect eval failed to run: {exc}", level="error")
+        emit(Log(message=f"inspect eval failed to run: {exc}", level="error"))
         raise
-    finally:
-        set_output(None)
 
     if not logs:
-        log("inspect eval produced no log", level="error")
+        emit(Log(message="inspect eval produced no log", level="error"))
         raise RuntimeError("inspect eval produced no log")
 
     log_obj = logs[0]
@@ -222,9 +227,12 @@ def run(params: Params) -> int:
     summary = emit_aggregate(log_obj, agent)
     deposit_log(log_obj, run_dir)
     if log_obj.error:
-        log(f"eval error: {log_obj.error.message}", level="error")
-    status(f"done: {log_obj.status} score={summary['score']} "
-           f"({summary['completed']}/{summary['samples']} samples)")
+        emit(Log(message=f"eval error: {log_obj.error.message}", level="error"))
+    emit(
+        Status(
+            detail=f"done: {log_obj.status} score={summary['score']} ({summary['completed']}/{summary['samples']} samples)"
+        )
+    )
     if log_obj.status != "success":
         return 1
     return 0
@@ -232,8 +240,8 @@ def run(params: Params) -> int:
 
 def _emit_zero() -> None:
     for k, v in _ZERO.items():
-        metric(name=k, value=v)
-    status("done: status=error (eval did not run)")
+        emit(Metric(name=k, value=v))
+    emit(Status(detail="done: status=error (eval did not run)"))
 
 
 def main() -> int:

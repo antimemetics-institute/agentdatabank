@@ -1,193 +1,264 @@
-"""Every emitter pathway: happy path lands on the wire correctly, and a malformed
-payload raises TypeError AT the emit site — the producer-validation guarantee
-(docs/book/src/reference/events.md). The rejection tests are load-bearing: msgspec Structs do NOT
-type-check plain construction, so nothing but the msgspec.convert call in
-emit._validated stands between a bad payload and the wire. If a future emitter is
-added with direct Struct construction, its rejection test here is what fails.
-"""
+"""Author constructors, lossless metadata, and permissive ingestion contracts."""
 
-import io
 import json
+from concurrent.futures import ThreadPoolExecutor
+from typing import Literal
 
-import msgspec
 import pytest
+from pydantic import BaseModel, ValidationError
+from pydantic_core import PydanticSerializationError
 
-from adb_events import emit, json_schemas, validate_event
-
-
-@pytest.fixture()
-def lines(capsys):
-    """Emitted wire lines, parsed."""
-    def read():
-        out = capsys.readouterr().out
-        return [json.loads(line) for line in out.splitlines() if line]
-    return read
-
-
-# --- happy paths -----------------------------------------------------------------
-
-def test_status(lines):
-    emit.status("warming up")
-    assert lines() == [{"type": "status", "detail": "warming up"}]
-
-
-def test_log_default_and_explicit_level(lines):
-    emit.log("hello")
-    emit.log("boom", level="error")
-    # omit_defaults drops the default level from the wire
-    assert lines() == [
-        {"type": "log", "message": "hello"},
-        {"type": "log", "message": "boom", "level": "error"},
-    ]
+from adb_events import (
+    AgentEvent,
+    Artifact,
+    CapturedLine,
+    CustomEvent,
+    RunStatus,
+    Instance,
+    InstanceData,
+    LLMCall,
+    LLMError,
+    LLMRequest,
+    LLMResponse,
+    LLMUsage,
+    Log,
+    Message,
+    Metric,
+    Status,
+    emit,
+    json_schemas,
+    validate_event,
+)
 
 
-def test_metric_scalars(lines):
-    emit.metric(name="reward", value=0.5, step=3, unit="frac")
-    emit.metric(name="verdict", value="cooperate")
-    emit.metric(name="halted", value=True)
-    got = lines()
-    assert got[0] == {"type": "metric", "name": "reward", "value": 0.5,
-                      "step": 3, "unit": "frac"}
-    assert got[1] == {"type": "metric", "name": "verdict", "value": "cooperate"}
-    assert got[2] == {"type": "metric", "name": "halted", "value": True}
+def test_models_emit_wire_shapes(event_capture):
+    emit(Status(detail="warming up"))
+    emit(Log(message="hello"))
+    emit(Message(from_="alice", content="hi", channel="world", meta={"round": 2}))
+    emit(Artifact(name="log", path="artifacts/log", bytes=123))
+    events = event_capture.read()
+    assert events[0] == {"type": "status", "detail": "warming up"}
+    assert events[1] == {"type": "log", "message": "hello", "level": "info"}
+    assert events[2] == {
+        "type": "message",
+        "from": "alice",
+        "content": "hi",
+        "channel": "world",
+        "meta": {"round": 2},
+        "to": None,
+        "visible_to": None,
+    }
+    assert events[3]["bytes"] == 123
+    assert all(validate_event(e) == [] for e in events)
 
 
-def test_message_from_rename_and_meta(lines):
-    emit.message(from_="alice", content="hi", channel="public",
-                 to="bob", visible_to=["bob"], round=2)
-    [got] = lines()
-    assert got["from"] == "alice"          # wire key is `from`, not `from_`
-    assert "from_" not in got
-    assert got["meta"] == {"round": 2}     # extra kwargs ride in meta
-
-
-def test_llm_call_nested_shapes(lines):
-    emit.llm_call(
-        agent="alice", model="openai/qwen3.5-9b",
-        request={"messages": [{"role": "user", "content": "hi"}],
-                 "params": {"temperature": 0}},
-        response={"message": {"role": "assistant", "content": "yo"},
-                  "finish_reason": "stop"},
-        usage={"input_tokens": 5, "output_tokens": 2},
-        latency_ms=12.5,
-        instance_id="row-7",
+def test_nested_provider_metadata_survives(event_capture):
+    raw = {"system_fingerprint": "fp_123", "vendor": {"future": [1, None, True]}}
+    emit(
+        LLMCall(
+            agent="alice",
+            model="provider/alias",
+            request=LLMRequest(
+                messages=[{"role": "user", "content": "hi"}],
+                params={"temperature": 0.2},
+                model="sent-model",
+                raw={"vendor_request": {"custom": 1}},
+            ),
+            response=LLMResponse(
+                message={"role": "assistant", "tool_calls": []},
+                model="resolved-model",
+                raw=raw,
+            ),
+            usage=LLMUsage(input_tokens=0, output_tokens=2),
+            latency_ms=0,
+        )
     )
-    [got] = lines()
-    assert got["type"] == "llm.call"
-    assert got["request"]["messages"][0]["role"] == "user"
-    assert got["usage"] == {"input_tokens": 5, "output_tokens": 2}
-    assert got["meta"] == {"instance_id": "row-7"}
+    event = event_capture.read()[0]
+    assert event["response"]["raw"] == raw
+    assert event["request"]["raw"] == {"vendor_request": {"custom": 1}}
+    assert event["request"]["model"] == "sent-model"
+    assert event["response"]["model"] == "resolved-model"
+    assert event["usage"]["input_tokens"] == event["latency_ms"] == 0
 
 
-def test_agent_event(lines):
-    emit.agent_event(agent="alice", kind="vote", target="bob")
-    assert lines() == [{"type": "agent.event", "agent": "alice", "kind": "vote",
-                        "data": {"target": "bob"}}]
+@pytest.mark.parametrize(
+    "construct",
+    [
+        lambda: Status(detail=123),
+        lambda: Status(detail="ok", detial="typo"),
+        lambda: Log(message="x", level="fatal"),
+        lambda: Metric(name="n", value={"nested": 1}),
+        lambda: Metric(name="n", value=float("nan")),
+        lambda: Message(from_="a", content="hi", channel=7),
+        lambda: LLMRequest(messages="nope"),
+        lambda: LLMRequest(messages=[], prams={}),
+        lambda: LLMResponse(message={}, system_fingerprint="misplaced"),
+        lambda: LLMUsage(input_tokens=-1),
+        lambda: LLMUsage(input_tokens=True),
+        lambda: LLMCall(model="m", request=LLMRequest(messages=[]), latency_ms=-1),
+        lambda: LLMError(kind="timeout"),
+        lambda: Artifact(name="a", path="p", bytes=-1),
+        lambda: InstanceData(id=True),
+        lambda: InstanceData(id="x", repeat=0),
+        lambda: InstanceData(id="x", scores={"s": {"nested": 1}}),
+        lambda: AgentEvent(agent="a", kind="vote", target="b"),
+    ],
+)
+def test_constructor_rejects_invalid_data(construct):
+    with pytest.raises(ValidationError):
+        construct()
 
 
-def test_instance_full(lines):
-    emit.instance(agent="solver", id="row-7", repeat=2,
-                  scores={"combined_scorer/refusal": 1, "pass": True},
-                  error=None, target="42")
-    [got] = lines()
-    assert got["type"] == "agent.event" and got["kind"] == "instance"
-    assert got["data"]["id"] == "row-7"
-    assert got["data"]["repeat"] == 2
-    assert got["data"]["scores"] == {"combined_scorer/refusal": 1, "pass": True}
-    assert got["data"]["target"] == "42"
-    assert "error" not in got["data"]      # None omitted, not emitted
+def test_assignment_and_nested_mutation_are_checked(event_capture):
+    event = Metric(name="n", value=1)
+    with pytest.raises(ValidationError):
+        event.value = {}
+    instance = Instance(agent="s", data=InstanceData(id="x", scores={"s": 1}))
+    instance.data.scores["s"] = {}
+    with pytest.raises((ValidationError, PydanticSerializationError)):
+        emit(instance)
+    assert event_capture.read() == []
 
 
-def test_instance_int_id_and_minimal(lines):
-    emit.instance(agent="solver", id=3)
-    [got] = lines()
-    assert got["data"] == {"id": 3}
+def test_custom_events_use_public_container(event_capture):
+    emit(CustomEvent(kind="werewolf.night", data={"victim": "alice", "unknown": None}))
+    assert event_capture.read()[0] == {
+        "type": "custom",
+        "kind": "werewolf.night",
+        "data": {"victim": "alice", "unknown": None},
+    }
 
 
-def test_artifact_size_becomes_bytes(lines):
-    emit.artifact(name="transcript", path="out/t.json",
-                  media_type="application/json", size=123)
-    assert lines() == [{"type": "artifact", "name": "transcript",
-                        "path": "out/t.json", "media_type": "application/json",
-                        "bytes": 123}]
+def test_private_models_and_lifecycle_cannot_be_emitted(event_capture):
+    class Night(BaseModel):
+        type: Literal["werewolf.night"] = "werewolf.night"
+        victim: str
+
+    class PrivateStatus(Status):
+        pass
+
+    for event in (
+        Night(victim="alice"),
+        PrivateStatus(detail="x"),
+        RunStatus(state="running"),
+        {"type": "status", "detail": "x"},
+    ):
+        with pytest.raises(TypeError, match="public producer model"):
+            emit(event)
+    assert event_capture.read() == []
 
 
-def test_emit_raw_is_unvalidated(lines):
-    emit.emit_raw("werewolf.night", victim=None, anything={"nested": [1, {}]})
-    assert lines() == [{"type": "werewolf.night", "victim": None,
-                        "anything": {"nested": [1, {}]}}]
+def test_instance_has_its_own_wire_type(event_capture):
+    emit(
+        Instance(
+            agent="solver",
+            data=InstanceData(id="x", repeat=2, scores={"correct": True}, target="42"),
+        )
+    )
+    event = event_capture.read()[0]
+    assert event == {
+        "type": "instance",
+        "agent": "solver",
+        "data": {
+            "id": "x",
+            "repeat": 2,
+            "scores": {"correct": True},
+            "target": "42",
+            "error": None,
+            "meta": None,
+        },
+    }
+    assert validate_event(event) == []
+    event["data"]["repeat"] = 0
+    assert validate_event(event)
 
 
-def test_set_output_redirects_and_restores(lines):
-    buf = io.StringIO()
-    emit.set_output(buf)
-    try:
-        emit.status("into the buffer")
-    finally:
-        emit.set_output(None)
-    emit.status("back on stdout")
-    assert json.loads(buf.getvalue()) == {"type": "status", "detail": "into the buffer"}
-    assert lines() == [{"type": "status", "detail": "back on stdout"}]
+def test_ingestion_rejects_unknown_fields_without_mutating_evidence():
+    event = {
+        "type": "llm.call",
+        "model": "m",
+        "future": True,
+        "request": {"messages": [], "future": {"field": 1}},
+        "response": {"message": {}, "system_fingerprint": "fp"},
+    }
+    before = json.dumps(event)
+    assert validate_event(event)
+    assert json.dumps(event) == before
+    event["request"]["messages"] = "bad"
+    assert validate_event(event)
+    for opaque in ({"type": "custom"}, {"no": "type"}, {"type": ["bad"]}):
+        assert validate_event(opaque)
 
 
-# --- rejection paths: malformed payloads must raise, not reach the wire -----------
-# Bad values are passed deliberately (annotations are not enforced at call time —
-# this is exactly the un-typechecked-caller case the runtime validation exists for).
-
-@pytest.mark.parametrize("call", [
-    lambda: emit.status(detail=123),
-    lambda: emit.log("x", level="fatal"),                       # not in the Literal
-    lambda: emit.metric(name="a", value={"nested": 1}),         # scalar-only
-    lambda: emit.metric(name="a", value=[1, 2]),
-    lambda: emit.metric(name=123, value=1),
-    lambda: emit.message(from_="a", content="hi", channel=7),
-    lambda: emit.message(from_="a", content="hi", channel="c", visible_to="bob"),
-    lambda: emit.llm_call(agent=None, model="m", request={"messages": "nope"}),
-    lambda: emit.llm_call(agent=None, model="m",
-                          request={"messages": []}, latency_ms="fast"),
-    lambda: emit.llm_call(agent=None, model="m", request={"messages": []},
-                          error={"kind": "timeout"}),           # missing message
-    lambda: emit.agent_event(agent=7, kind="vote"),
-    lambda: emit.artifact(name="a", path="p", size="big"),
-])
-def test_malformed_payload_raises(call, capsys):
-    with pytest.raises(TypeError):
-        call()
-    assert capsys.readouterr().out == ""   # nothing reached the wire
+def test_concurrent_emitters_use_socket(event_capture):
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda i: emit(Metric(name="n", value=i)), range(100)))
+    assert sorted(e["value"] for e in event_capture.read()) == list(range(100))
 
 
-@pytest.mark.parametrize("call", [
-    lambda: emit.instance(agent="s", id=True),                  # bool is not an id
-    lambda: emit.instance(agent="s", id=1.5),
-    lambda: emit.instance(agent="s", id="x", scores={"s": {"acc": 1}}),
-    lambda: emit.instance(agent="s", id="x", scores={"s": [1]}),
-])
-def test_instance_guards_raise(call, capsys):
-    with pytest.raises(TypeError):
-        call()
-    assert capsys.readouterr().out == ""
-
-
-# --- ingestion side + schema export ------------------------------------------------
-
-def test_validate_event_pathways():
-    assert validate_event({"type": "metric", "name": "a", "value": 1}) == []
-    assert validate_event({"type": "metric", "name": "a", "value": {}}) != []
-    # unknown/absent types are legal (conformance ladder), unknown fields ignored
-    assert validate_event({"type": "werewolf.night", "victim": None}) == []
-    assert validate_event({"no": "type"}) == []
-    assert validate_event({"type": "status", "detail": "ok", "extra": 1}) == []
-
-
-def test_json_schemas_cover_all_types():
+def test_json_schema_exposes_wire_discriminators_and_constraints():
     schemas = json_schemas()
-    assert set(schemas) == {"status", "log", "stdout", "stderr", "metric",
-                            "message", "llm.call", "agent.event", "artifact"}
+    assert set(schemas) == {
+        "status",
+        "log",
+        "stdout",
+        "stderr",
+        "metric",
+        "message",
+        "llm.call",
+        "agent.event",
+        "artifact",
+        "instance",
+        "custom",
+        "run.start",
+        "run.status",
+        "run.end",
+    }
+    assert schemas["message"]["properties"]["type"]["const"] == "message"
+    assert "from" in schemas["message"]["required"]
+    assert schemas["message"]["additionalProperties"] is False
+    assert (
+        schemas["llm.call"]["$defs"]["LLMUsage"]["properties"]["input_tokens"]["anyOf"][
+            0
+        ]["minimum"]
+        == 0
+    )
 
 
-def test_struct_construction_does_not_validate():
-    """Documents WHY emitters must go through msgspec.convert: plain construction
-    accepts garbage silently. If msgspec ever changes this, we can simplify."""
-    from adb_events.models import Metric
-    m = Metric(name=123, value={"not": "scalar"})   # no error — that's the trap
-    assert m.name == 123
+def test_emission_validation_cannot_rewrite_payload(event_capture, monkeypatch):
+    event = CustomEvent(kind="observation", data={"value": None, "number": 1.0})
+    original = event.model_dump_json(by_alias=True)
+    from adb_events.models import PRODUCER_ADAPTER
+
+    validate = PRODUCER_ADAPTER.validate_json
+
+    def normalize(payload, **kwargs):
+        parsed = validate(payload, **kwargs)
+        parsed.data["number"] = 999
+        return parsed
+
+    import importlib
+    from types import SimpleNamespace
+
+    module = importlib.import_module("adb_events.emit")
+    monkeypatch.setattr(
+        module, "PRODUCER_ADAPTER", SimpleNamespace(validate_json=normalize)
+    )
+    emit(event)
+    assert event_capture.read() == [json.loads(original)]
+    assert event.model_dump_json(by_alias=True) == original
+
+
+def test_union_catches_constraints_that_serialization_accepts(event_capture):
+    # An integer is serializable, but a negative latency violates the schema.
+    event = LLMCall.model_construct(
+        model="m", request=LLMRequest(messages=[]), latency_ms=-1
+    )
+    with pytest.raises(ValidationError):
+        emit(event)
+    assert event_capture.read() == []
+
+
+def test_custom_data_requires_json_values():
+    with pytest.raises(ValidationError):
+        CustomEvent(kind="bad", data={"value": object()})

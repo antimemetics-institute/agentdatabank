@@ -15,50 +15,49 @@ from concordia_sim.main import run  # noqa: E402
 from concordia_sim.models import Params  # noqa: E402
 
 
-def _events(capsys):
-    out = capsys.readouterr().out
-    return [json.loads(line) for line in out.splitlines() if line.strip()]
+def _events(event_capture):
+    return event_capture.read()
 
 
-def test_mock_backend_is_deterministic(capsys):
+def test_mock_backend_is_deterministic(event_capture):
     a = AdbLanguageModel(Params(default_model="mock/x", seed=3)).sample_text("hello there")
     b = AdbLanguageModel(Params(default_model="mock/x", seed=3)).sample_text("hello there")
     assert a == b and a  # deterministic and non-empty
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_mock_choice_is_valid_and_emits(capsys):
+def test_mock_choice_is_valid_and_emits(event_capture):
     m = AdbLanguageModel(Params(default_model="mock/x", seed=1))
     idx, resp, _ = m.sample_choice("pick one", ["red", "green", "blue"])
     assert 0 <= idx < 3 and resp == ["red", "green", "blue"][idx]
-    assert any(e["type"] == "llm.call" for e in _events(capsys))
+    assert any(e["type"] == "llm.call" for e in _events(event_capture))
 
 
-def test_anthropic_prefix_targets_compat_endpoint(capsys, monkeypatch):
+def test_anthropic_prefix_targets_compat_endpoint(event_capture, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     m = AdbLanguageModel(Params(default_model="anthropic/claude-haiku-4-5-20251001", seed=1))
     assert m._base_url == "https://api.anthropic.com/v1"
     assert m._served == "claude-haiku-4-5-20251001"
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_anthropic_base_url_override_gets_v1_mount(capsys, monkeypatch):
+def test_anthropic_base_url_override_gets_v1_mount(event_capture, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.local/")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     m = AdbLanguageModel(Params(default_model="anthropic/claude-haiku-4-5-20251001", seed=1))
     assert m._base_url == "https://proxy.local/v1"
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_anthropic_without_key_fails_fast(capsys, monkeypatch):
+def test_anthropic_without_key_fails_fast(event_capture, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
         AdbLanguageModel(Params(default_model="anthropic/claude-haiku-4-5-20251001", seed=1))
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_azureai_without_base_url_fails_fast(capsys, monkeypatch):
+def test_azureai_without_base_url_fails_fast(event_capture, monkeypatch):
     # azureai's base has no registry default (per-resource endpoint), so a missing
     # env var is caught at construction, before any turn runs. (openai/ falls back
     # to api.openai.com/v1 — the registry default — so it no longer fails here.)
@@ -66,19 +65,19 @@ def test_azureai_without_base_url_fails_fast(capsys, monkeypatch):
     monkeypatch.setenv("AZUREAI_API_KEY", "k")
     with pytest.raises(RuntimeError, match="AZUREAI_BASE_URL"):
         AdbLanguageModel(Params(default_model="azureai/my-deployment", seed=1))
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_unsupported_provider_rejected_with_supported_list(capsys, monkeypatch):
+def test_unsupported_provider_rejected_with_supported_list(event_capture, monkeypatch):
     with pytest.raises(RuntimeError, match=r"anthropic/"):
         AdbLanguageModel(Params(default_model="vertex/gemini-2.5-pro", seed=1))
-    capsys.readouterr()
+    event_capture.read()
 
 
-def test_smoke_mock_run(capsys, tmp_path, monkeypatch):
+def test_smoke_mock_run(event_capture, tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_RUN_DIR", str(tmp_path))
     run(Params(default_model="mock/model", max_steps=2, seed=7))
-    events = _events(capsys)
+    events = _events(event_capture)
     types = [e["type"] for e in events]
 
     # provenance recorded up front
@@ -115,15 +114,15 @@ def test_smoke_mock_run(capsys, tmp_path, monkeypatch):
     assert (tmp_path / "artifacts" / "concordia_log.html").stat().st_size > 0
 
 
-def test_events_conform_to_schema(capsys, tmp_path, monkeypatch):
+def test_events_conform_to_schema(event_capture, tmp_path, monkeypatch):
     from adb_events.testing import assert_conformant
 
     monkeypatch.setenv("ADB_RUN_DIR", str(tmp_path))
     run(Params(default_model="mock/model", max_steps=1, seed=7))
-    assert assert_conformant(_events(capsys)) > 0
+    assert assert_conformant(_events(event_capture)) > 0
 
 
-def test_simulation_crash_preserves_partial_results_and_fails(capsys, tmp_path, monkeypatch):
+def test_simulation_crash_preserves_partial_results_and_fails(event_capture, tmp_path, monkeypatch):
     import importlib
     from types import SimpleNamespace
 
@@ -139,7 +138,7 @@ def test_simulation_crash_preserves_partial_results_and_fails(capsys, tmp_path, 
     monkeypatch.setattr(main_module, "version", lambda package: "test")
     with pytest.raises(RuntimeError, match="play crashed"):
         main_module.run(Params(default_model="mock/model", max_steps=2, seed=7))
-    events = _events(capsys)
+    events = _events(event_capture)
     metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
     assert metrics["steps"] == 1
     assert metrics["world_events"] >= 1

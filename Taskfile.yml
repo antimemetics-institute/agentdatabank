@@ -31,6 +31,7 @@ tasks:
     desc: run Python unit tests, checking the runner against the Nix-built experiment manifests
     cmds:
       - cd runner && ADB_TEST_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
+      - cd lib/adb-testing && uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-experiment && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
@@ -41,6 +42,7 @@ tasks:
     desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first. The policy script gates the escapes pyright can't police (ignore-rule + cast allowlists).
     cmds:
       - bash scripts/check-typing-policy.sh
+      - cd lib/adb-testing && uv run -q pyright
       - cd lib/adb-events && uv run -q pyright
       # dependency-free and lockless — bare pyright, no venv involved
       - cd lib/adb-providers && pyright
@@ -175,6 +177,7 @@ tasks:
     cmds:
       - task: lock:check
       - task: typecheck
+      - python scripts/check-python-sources.py
       - task: test:python
       - pnpm --dir web install --frozen-lockfile
       - task: web:typecheck

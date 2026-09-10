@@ -28,9 +28,10 @@ dependencies = [
 ]
 
 # adb-events / adb-experiment are in-repo (not on PyPI); the nix build
-# (adb.mkPythonEnv) also overrides them to the same sources.
+# (adb.mkPythonEnv) builds the sources recorded in uv.lock.
 [tool.uv.sources]
-adb-events = { path = "../../lib/adb-events" }
+adb-testing = { path = "../../lib/adb-testing", editable = true }
+adb-events = { path = "../../lib/adb-events", editable = true }
 adb-experiment = { path = "../../lib/adb-experiment" }
 
 # the console script can't be `concordia` (it would collide with the upstream package's
@@ -39,7 +40,7 @@ adb-experiment = { path = "../../lib/adb-experiment" }
 concordia-sim = "concordia_sim.main:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "adb-testing"]
 
 [build-system]
 requires = ["hatchling"]

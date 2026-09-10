@@ -18,7 +18,12 @@ For GitHub sources, **always fetch latest** makes commands recheck the moving so
 
 ## What does each mode execute?
 
-In **nix-build** mode, ADB builds an `exec.NAME` output that points directly to the executable, then invokes it. It needs neither flakes nor a globally installed ADB command.
+All three modes below invoke the generated experiment launcher, which supplies
+the manifest and execution context to the runner. They do not invoke the raw
+experiment program. Use these named entry points rather than calling
+`adb-runner` directly to execute experiments.
+
+In **nix-build** mode, ADB builds an `exec.NAME` output that points to that launcher, then invokes it. It needs neither flakes nor a globally installed ADB command.
 
 ```sh
 $(nix-build --no-out-link -A exec.inspect-hello) --describe
@@ -28,7 +33,7 @@ In **flakes** mode, experiment names are app names. If flakes are not enabled gl
 
 For example: `nix run .#inspect-hello -- --describe`.
 
-In **nix-run** mode, the separate `nix-run` utility resolves a package's executable. Experiment package attributes use the `experiment-` prefix; tools use their `adb-` names. If the utility is not installed globally, command settings wrap it in `nix-shell -p nix-run --run ...`.
+In **nix-run** mode, the separate `nix-run` utility resolves the experiment package's generated launcher. Experiment package attributes use the `experiment-` prefix; tools use their `adb-` names. If the utility is not installed globally, command settings wrap it in `nix-shell -p nix-run --run ...`.
 
 With the utility installed: `nix-run . -A experiment-inspect-hello -- --describe`.
 

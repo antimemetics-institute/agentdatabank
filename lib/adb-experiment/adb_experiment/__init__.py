@@ -10,4 +10,3 @@ OpenAI SDK, which the base package deliberately doesn't require).
 # understand, replacing the noqa that only ruff could read
 from .scaffold import deposit_artifact as deposit_artifact
 from .scaffold import experiment_main as experiment_main
-from .scaffold import protected_stream as protected_stream

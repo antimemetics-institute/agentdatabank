@@ -22,7 +22,7 @@ import logging
 import shlex
 from collections.abc import Generator
 
-from adb_events.emit import status
+from adb_events import Status, emit
 
 _VERBS = {"build", "pull"}
 
@@ -58,13 +58,16 @@ class _ProvisioningHandler(logging.Handler):
                 return
             event = getattr(record, "event", "")
             if event == "enter":
-                status(f"sandbox: {verb} running…")
+                emit(Status(detail=f"sandbox: {verb} running…"))
             else:  # exit / cancel / timeout / error
                 duration = getattr(record, "duration", None)
                 took = (f" ({duration:.1f}s)"
                         if isinstance(duration, (int, float)) else "")
-                status(f"sandbox: {verb} "
-                       f"{'done' if event == 'exit' else event}{took}")
+                emit(
+                    Status(
+                        detail=f"sandbox: {verb} {('done' if event == 'exit' else event)}{took}"
+                    )
+                )
         except Exception:  # feedback only — never let it touch the eval
             pass
 

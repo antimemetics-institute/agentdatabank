@@ -99,7 +99,7 @@ class Client:
 def _job_args(job: dict[str, Json]) -> list[str]:
     """The claimed spec as runner argv — the same `--set key=value` strings the
     oneliner carries (one encoder upstream guarantees it), plus profile NAMES."""
-    args = ["--json", "--replicates", str(job.get("replicates") or 1)]
+    args = ["--json", "--non-interactive", "--replicates", str(job.get("replicates") or 1)]
     sets = job.get("sets")
     if isinstance(sets, list):
         for entry in sets:

@@ -18,7 +18,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PY_ROOTS=(runner/src lib/adb-events/adb_events lib/adb-providers/adb_providers
+PY_ROOTS=(runner/src lib/adb-testing/adb_testing lib/adb-events/adb_events lib/adb-providers/adb_providers
           lib/adb-experiment/adb_experiment lib/adb-inspect/adb_inspect)
 
 # Rules that MAY appear in `# pyright: ignore[...]`, and why:

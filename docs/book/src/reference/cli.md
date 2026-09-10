@@ -1,6 +1,10 @@
 # Commands and settings
 
-Run an experiment through its named app. ADB's tools use `adb-` names. Commands below follow the book's [Nix settings](../running/nix.md).
+Run an experiment through its named app, such as `nix run .#inspect-hello -- ...`.
+This is a generated launcher that supplies the manifest, source identity, and
+program path before starting the runner internally. Do not invoke `adb-runner`
+or the underlying experiment program directly to execute an experiment.
+ADB's management tools use `adb-` names. Commands below follow the book's [Nix settings](../running/nix.md).
 
 ## Experiment options
 
@@ -8,7 +12,7 @@ Run an experiment through its named app. ADB's tools use `adb-` names. Commands 
 nix run .#inspect-hello -- --help
 ```
 
-All experiment apps accept these runner options:
+Pass these options to the named experiment app:
 
 | Option | Meaning |
 | --- | --- |
@@ -17,7 +21,8 @@ All experiment apps accept these runner options:
 | `--seed INTEGER` | Base seed used to derive per-run seeds. A random 32-bit base seed is chosen when omitted. |
 | `--profile SET=PROFILE` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
 | `--out DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
-| `--json` | Stream event envelopes as JSON lines to stdout and disable credential prompts. Runner diagnostics remain on stderr. |
+| `--json` | Print each recorded event, including its run metadata, to stdout as one JSON line as it happens. Events are also saved normally; diagnostics go to stderr. |
+| `--non-interactive` | Never prompt for input. Fail if required credentials or profile selections cannot be resolved automatically. Non-terminal stdin also disables prompts. |
 | `--dry-run` | Print resolved inputs, condition ID, base seed and replicate count; do not execute or resolve credentials. Checks parameter names and types; list-length bounds are checked when executing. |
 | `--describe` | Print the experiment manifest as JSON and exit without requiring parameter bindings. |
 | `-h`, `--help` | Print usage. |
@@ -43,7 +48,8 @@ These are syntax examples; the keys must exist in the selected experiment. Unkno
 
 ## Credential commands
 
-Use the runner's standalone management command:
+Credential management is a standalone use of `adb-runner`; these commands
+configure profiles and do not execute experiments:
 
 ```sh
 nix run .#adb-runner -- credentials --help
@@ -76,7 +82,7 @@ Provider keys and endpoints come from the credential store. The runner does not 
 
 ## Package attributes
 
-| Entry point | Experiment | Tool |
+| Entry point | Generated experiment launcher | Management tool |
 | --- | --- | --- |
 | Flake app | `NAME` | `adb-local`, `adb-web`, `adb-runner` |
 | Flake package | `experiment-NAME` | The same tool names |

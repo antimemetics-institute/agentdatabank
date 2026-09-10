@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from adb_events.emit import emit_raw, message
+from adb_events import CustomEvent, Message, emit
 
 
 def gini(array: np.ndarray) -> float:
@@ -42,9 +42,14 @@ def compute_metrics(df: pd.DataFrame, max_rounds: int) -> dict:
     harvest = df[df["action"] == "harvesting"]
     if harvest.empty:
         return {
-            "rounds": 0, "collapsed": False, "survival_months": 0,
-            "total_harvest": 0, "gain_per_agent": 0.0, "final_resource": 0,
-            "equality": 0.0, "over_usage": 0.0,
+            "rounds": 0,
+            "collapsed": False,
+            "survival_months": 0,
+            "total_harvest": 0,
+            "gain_per_agent": 0.0,
+            "final_resource": 0,
+            "equality": 0.0,
+            "over_usage": 0.0,
         }
 
     rounds = int(harvest["round"].max()) + 1
@@ -91,18 +96,28 @@ def replay_transcript(df: pd.DataFrame) -> None:
         action = row.get("action")
         if action == "utterance":
             limit = row.get("resource_limit")
-            message(
-                from_=str(row.get("agent_name")),
-                content=str(row.get("utterance") or ""),
-                channel="restaurant",
-                round=int(row["round"]),
-                resource_limit=None if pd.isna(limit) else int(limit),
+            emit(
+                Message(
+                    from_=str(row.get("agent_name")),
+                    content=str(row.get("utterance") or ""),
+                    channel="restaurant",
+                    meta={
+                        "round": int(row["round"]),
+                        "resource_limit": None if pd.isna(limit) else int(limit),
+                    },
+                )
             )
         elif action in ("conversation_summary", "conversation_resource_limit"):
             limit = row.get("resource_limit")
-            emit_raw(
-                "govsim.conversation",
-                kind="summary" if action == "conversation_summary" else "limit",
-                round=int(row["round"]),
-                resource_limit=None if pd.isna(limit) else int(limit),
+            emit(
+                CustomEvent(
+                    kind="govsim.conversation",
+                    data={
+                        "kind": (
+                            "summary" if action == "conversation_summary" else "limit"
+                        ),
+                        "round": int(row["round"]),
+                        "resource_limit": None if pd.isna(limit) else int(limit),
+                    },
+                )
             )

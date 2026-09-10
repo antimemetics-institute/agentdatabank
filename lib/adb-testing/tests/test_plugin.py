@@ -1,0 +1,29 @@
+"""Exercise plugin discovery, opt-in activation, and real socket delivery."""
+
+
+def test_plugin_is_explicit_and_restores_environment(pytester, monkeypatch):
+    monkeypatch.delenv("ADB_EVENT_SOCKET", raising=False)
+    pytester.makeconftest('pytest_plugins = ["adb_testing.plugin"]')
+    pytester.makepyfile("""
+import os
+from pathlib import Path
+from adb_events import Metric, emit
+
+socket_paths = []
+
+def test_without_fixture():
+    assert "ADB_EVENT_SOCKET" not in os.environ
+
+def test_with_fixture(event_capture):
+    path = os.environ["ADB_EVENT_SOCKET"]
+    socket_paths.append(path)
+    assert Path(path).exists()
+    emit(Metric(name="score", value=1))
+    assert event_capture.read()[0]["value"] == 1
+    assert event_capture.read() == []
+
+def test_after_fixture():
+    assert "ADB_EVENT_SOCKET" not in os.environ
+    assert socket_paths and not Path(socket_paths[0]).exists()
+""")
+    pytester.runpytest_subprocess("-q").assert_outcomes(passed=3)

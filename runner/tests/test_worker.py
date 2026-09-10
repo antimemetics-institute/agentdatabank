@@ -19,11 +19,11 @@ JOB = {"id": "j1", "experiment": "hello",
 
 def test_job_args_mapping():
     assert _job_args(JOB) == [
-        "--json", "--replicates", "2",
+        "--json", "--non-interactive", "--replicates", "2",
         "--set", "x=1", "--set", "model=mockllm/model",
         "--profile", "openai=work",
     ]
-    assert _job_args({"id": "j", "experiment": "e"}) == ["--json", "--replicates", "1"]
+    assert _job_args({"id": "j", "experiment": "e"}) == ["--json", "--non-interactive", "--replicates", "1"]
 
 
 class StubQueue(BaseHTTPRequestHandler):
@@ -103,7 +103,7 @@ exit 0
     # the claimed spec became exactly the runner argv (one-encoder parity holds
     # through the queue: the --set strings pass through verbatim)
     argv = (tmp_path / "argv").read_text().split()
-    assert argv == ["--json", "--replicates", "2", "--set", "x=1",
+    assert argv == ["--json", "--non-interactive", "--replicates", "2", "--set", "x=1",
                     "--set", "model=mockllm/model", "--profile", "openai=work"]
     # run ids were REPORTED from run.start envelopes; narration became log lines
     reported_runs = [r for rep in seen["reports"] for r in rep.get("runs", [])]

@@ -1,29 +1,86 @@
-"""adb-events: the standardized ADB event shapes, shared by the runner and Python
-control planes so the wire vocabulary has one definition (docs/book/src/reference/events.md).
-
-- `adb_events.emit` — typed emitters (validated construction → wire JSONL).
-- models + `EVENT_MODELS` + `validate_event` — for ingestion validation.
-- `json_schemas()` — the per-type JSON Schema, the cross-language contract.
-"""
-
-from __future__ import annotations
+"""The public event vocabulary, its JSON schemas, and typed emission/read APIs."""
 
 from typing import Any
 
-import msgspec
-
-from .models import (EVENT_MODELS, AgentEvent, Artifact, CapturedLine, Json,
-                     LlmCall, LlmError, LlmRequest, LlmResponse, LlmUsage, Log,
-                     Message, Metric, Scalar, Status, validate_event)
+from .emit import emit
+from .models import (
+    EVENT_ADAPTER,
+    EVENT_MODELS,
+    PRODUCER_ADAPTER,
+    PRODUCER_MODELS,
+    AgentEvent,
+    Artifact,
+    CapturedLine,
+    CustomEvent,
+    Envelope,
+    Instance,
+    InstanceData,
+    Json,
+    LLMCall,
+    LLMError,
+    LLMRequest,
+    LLMResponse,
+    LLMUsage,
+    Log,
+    Message,
+    Metric,
+    Payload,
+    ProducerPayload,
+    RunEnd,
+    RunEnvironment,
+    RunStart,
+    RunStatus,
+    Scalar,
+    Status,
+    UsageTotals,
+    validate_event,
+)
+from .transport import EventTransportError
+from .read import EventReadError, parse_event, read_events
 
 __all__ = [
-    "EVENT_MODELS", "validate_event", "json_schemas", "Json", "Scalar",
-    "Status", "Log", "CapturedLine", "Metric", "Message", "LlmCall", "LlmRequest",
-    "LlmResponse", "LlmUsage", "LlmError", "AgentEvent", "Artifact",
+    "emit",
+    "parse_event",
+    "read_events",
+    "EventReadError",
+    "EventTransportError",
+    "Payload",
+    "ProducerPayload",
+    "Envelope",
+    "EVENT_ADAPTER",
+    "EVENT_MODELS",
+    "PRODUCER_ADAPTER",
+    "PRODUCER_MODELS",
+    "validate_event",
+    "json_schemas",
+    "Json",
+    "Scalar",
+    "Status",
+    "Log",
+    "CapturedLine",
+    "Metric",
+    "Message",
+    "LLMCall",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMUsage",
+    "LLMError",
+    "AgentEvent",
+    "Instance",
+    "InstanceData",
+    "Artifact",
+    "CustomEvent",
+    "RunStart",
+    "RunStatus",
+    "RunEnd",
+    "RunEnvironment",
+    "UsageTotals",
 ]
 
 
 def json_schemas() -> dict[str, Any]:
-    """One JSON Schema per standardized event type — what `adb-emit schema` serves and
-    any language's test suite validates against."""
-    return {t: msgspec.json.schema(m) for t, m in EVENT_MODELS.items()}
+    """Per-type schemas; EVENT_ADAPTER.json_schema() exports the complete union."""
+    return {
+        name: model.model_json_schema(by_alias=True)
+        for name, model in EVENT_MODELS.items()
+    }

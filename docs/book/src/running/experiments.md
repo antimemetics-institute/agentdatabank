@@ -21,7 +21,7 @@ The form keeps edits in this browser across navigation. Review the values when r
 
 ## How do I use the command line?
 
-The **oneliner** tab generates a command with every experiment parameter bound. Copy it into a terminal to run the same inputs. The command's Nix form and source follow the [command settings](nix.md); check those settings before executing. A command using moving `main` runs that source's current experiment, even if you copied it while examining older data. To repeat a historical configuration, [select its recorded source revision](model.md#how-do-i-keep-the-source-version) and inputs.
+The **oneliner** tab generates a command with every experiment parameter bound. Copy it into a terminal to run the same inputs. It invokes the generated experiment launcher, which supplies the runner’s execution context; do not substitute a direct `adb-runner` command or the underlying program. The command's Nix form and source follow the [command settings](nix.md); check those settings before executing. A command using moving `main` runs that source's current experiment, even if you copied it while examining older data. To repeat a historical configuration, [select its recorded source revision](model.md#how-do-i-keep-the-source-version) and inputs.
 
 For a model that needs credentials, [configure a saved profile](secrets.md) and select it with `--profile SET=PROFILE` when needed. An interactive terminal can prompt for missing built-in credentials; noninteractive runs require setup beforehand.
 
@@ -61,7 +61,7 @@ nix run .#adb-web
 
 Open the run under **Runs** using its printed run ID. If a viewer was already serving the same data directory, the runner's **watch** link opens the run directly. A printed link alone does not start a viewer. If you used `--out DIR`, start the viewer with `--data-dir DIR`. See [find and read a run](../browsing/runs.md) for inspecting results and evidence.
 
-For terminal processing, add `--json` to the experiment command to stream event envelopes as JSON lines on stdout; diagnostics go to stderr. Saved run files are still written. In this mode credentials must already be configured because the runner does not prompt. Each envelope identifies its run, so replicates can be processed separately.
+For terminal processing, add `--json` to the experiment command to stream event envelopes as JSON lines on the launcher’s stdout; its diagnostics go to stderr. This is distinct from the child experiment program’s stdout, which is captured as text events. Saved run files are still written. For unattended execution, also pass `--non-interactive` to disable prompts; required credentials and profile selections must be resolvable without input. Each envelope identifies its run, so replicates can be processed separately.
 
 Check `event.state` in each `run.end` envelope, or `state` in the saved `run.json`. The runner returns `0` when all runs complete, `1` if any run fails or times out, and `130` on interruption; an interruption stops the remaining replicates. A completed process can also report errors in individual evaluation items, so inspect the summary and relevant events. Missing `run.end` may mean execution is still active or stopped before recording its outcome. [Read the saved files directly](../browsing/runs.md#how-do-i-read-the-files-without-a-browser) to inspect the record without starting a viewer.
 

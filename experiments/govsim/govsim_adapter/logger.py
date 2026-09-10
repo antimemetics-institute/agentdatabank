@@ -22,7 +22,7 @@ pool reported for a round is the value observed alongside its last stats entry
 
 from __future__ import annotations
 
-from adb_events.emit import emit_raw, metric, status
+from adb_events import CustomEvent, Metric, Status, emit
 from simulation.utils import WandbLogger
 
 _COLLECTED = "_collected_resource"
@@ -47,17 +47,21 @@ class AdbLogger(WandbLogger):
     # -- live progress --------------------------------------------------------
 
     def _flush(self, *, final: bool = False) -> None:
-        emit_raw(
-            "govsim.state",
-            round=self._round,
-            resource=self._pool,
-            collected=self._collected,
-            limit=self._limit,
-            final=final,
+        emit(
+            CustomEvent(
+                kind="govsim.state",
+                data={
+                    "round": self._round,
+                    "resource": self._pool,
+                    "collected": self._collected,
+                    "limit": self._limit,
+                    "final": final,
+                },
+            )
         )
         if self._pool is not None:
-            metric(name="pool", value=self._pool, step=self._round)
-        status(f"round {self._round}: pool {self._pool}")
+            emit(Metric(name="pool", value=self._pool, step=self._round))
+        emit(Status(detail=f"round {self._round}: pool {self._pool}"))
         self._round += 1
         self._collected = {}
         self._limit = None

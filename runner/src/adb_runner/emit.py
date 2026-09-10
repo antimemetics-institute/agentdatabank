@@ -5,12 +5,9 @@
     adb-emit llm-call --agent a --model mock/x < call.json
     adb-emit schema [TYPE]
 
-Validates against the same models the runner lints with (the adb_events package) and prints
-one conformant payload line to stdout — which IS the event channel (the runner wraps
-each line in the transport envelope), so a shell adapter just calls it inline. Wrong shape = loud error on stderr, exit 2. This is the
-no-library help story: language-neutral emission with the schema enforced at the point
-of use; python experiments may instead vendor a small emitter (werewolf's events.py is
-the reference) and validate in their tests via `adb-emit schema`.
+Validates against adb_events and submits one event to ADB_EVENT_SOCKET.
+The runner acknowledges successful recording. Invalid events or failed delivery
+return exit 2. Schema commands print JSON Schema without requiring a runner.
 """
 
 from __future__ import annotations
@@ -20,9 +17,18 @@ import json
 import sys
 from typing import Any
 
-import msgspec
+from pydantic import ValidationError
 
-from adb_events import EVENT_MODELS, Json, json_schemas
+from adb_events import (
+    EVENT_ADAPTER,
+    EVENT_MODELS,
+    PRODUCER_ADAPTER,
+    Envelope,
+    EventTransportError,
+    Json,
+    emit,
+    json_schemas,
+)
 
 # CLI surface per type: (flag-name, field-name, kind) where kind ∈
 # str | json (value parsed as JSON) | jsonish (JSON if it parses, else raw string)
@@ -30,19 +36,42 @@ from adb_events import EVENT_MODELS, Json, json_schemas
 FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "status": [("--detail", "detail", "str")],
     "log": [("--message", "message", "str"), ("--level", "level", "str")],
-    "metric": [("--name", "name", "str"), ("--value", "value", "jsonish"),
-               ("--step", "step", "json"), ("--unit", "unit", "str")],
-    "message": [("--from", "from", "str"), ("--content", "content", "str"),
-                ("--channel", "channel", "str"), ("--to", "to", "str"),
-                ("--visible-to", "visible_to", "strlist"), ("--meta", "meta", "json")],
-    "llm-call": [("--agent", "agent", "str"), ("--model", "model", "str"),
-                 ("--latency-ms", "latency_ms", "json"),
-                 ("--request", "request", "json"), ("--response", "response", "json"),
-                 ("--usage", "usage", "json"), ("--error", "error", "json")],
-    "agent-event": [("--agent", "agent", "str"), ("--kind", "kind", "str"),
-                    ("--data", "data", "json")],
-    "artifact": [("--name", "name", "str"), ("--path", "path", "str"),
-                 ("--media-type", "media_type", "str"), ("--bytes", "bytes", "json")],
+    "metric": [
+        ("--name", "name", "str"),
+        ("--value", "value", "jsonish"),
+        ("--step", "step", "json"),
+        ("--unit", "unit", "str"),
+    ],
+    "message": [
+        ("--from", "from", "str"),
+        ("--content", "content", "str"),
+        ("--channel", "channel", "str"),
+        ("--to", "to", "str"),
+        ("--visible-to", "visible_to", "strlist"),
+        ("--meta", "meta", "json"),
+    ],
+    "llm-call": [
+        ("--agent", "agent", "str"),
+        ("--model", "model", "str"),
+        ("--latency-ms", "latency_ms", "json"),
+        ("--request", "request", "json"),
+        ("--response", "response", "json"),
+        ("--usage", "usage", "json"),
+        ("--error", "error", "json"),
+    ],
+    "agent-event": [
+        ("--agent", "agent", "str"),
+        ("--kind", "kind", "str"),
+        ("--data", "data", "json"),
+    ],
+    "custom": [("--kind", "kind", "str"), ("--data", "data", "json")],
+    "instance": [("--agent", "agent", "str"), ("--data", "data", "json")],
+    "artifact": [
+        ("--name", "name", "str"),
+        ("--path", "path", "str"),
+        ("--media-type", "media_type", "str"),
+        ("--bytes", "bytes", "json"),
+    ],
 }
 
 # subcommand name → wire type name
@@ -72,9 +101,20 @@ def build_parser() -> argparse.ArgumentParser:
     for name, fields in FIELDS.items():
         sub = subs.add_parser(name, help=f"emit a {WIRE_TYPE[name]} event")
         for flag, _field, _kind in fields:
-            sub.add_argument(flag, dest=flag.lstrip("-").replace("-", "_"), default=None)
-    schema = subs.add_parser("schema", help="print JSON Schema for one or all event types")
+            sub.add_argument(
+                flag, dest=flag.lstrip("-").replace("-", "_"), default=None
+            )
+    schema = subs.add_parser(
+        "schema", help="print JSON Schema for one or all event types"
+    )
     schema.add_argument("type", nargs="?", choices=sorted(EVENT_MODELS))
+    formats = schema.add_mutually_exclusive_group()
+    formats.add_argument(
+        "--union", action="store_true", help="complete payload union schema"
+    )
+    formats.add_argument(
+        "--envelope", action="store_true", help="saved JSONL record schema"
+    )
     return parser
 
 
@@ -82,6 +122,16 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "schema":
+        if args.type and (args.union or args.envelope):
+            raise SystemExit("adb-emit: choose a type or --union/--envelope")
+        if args.union or args.envelope:
+            schema = (
+                EVENT_ADAPTER.json_schema()
+                if args.union
+                else Envelope.model_json_schema()
+            )
+            print(json.dumps(schema, indent=2))
+            return 0
         schemas = json_schemas()
         if args.type:
             print(json.dumps(schemas[args.type], indent=2))
@@ -107,14 +157,18 @@ def main(argv: list[str] | None = None) -> int:
             body = {**stdin_body, **body}
 
     try:
-        model = msgspec.convert(body, EVENT_MODELS[wire_type])
-    except msgspec.ValidationError as exc:
+        model = PRODUCER_ADAPTER.validate_python(
+            {**body, "type": wire_type}, strict=True
+        )
+    except ValidationError as exc:
         print(f"adb-emit: invalid {wire_type} event: {exc}", file=sys.stderr)
         return 2
 
-    # encode→decode applies the struct's field renames (from_→from) and omit_defaults
-    event = {"type": wire_type, **msgspec.json.decode(msgspec.json.encode(model))}
-    print(json.dumps(event, ensure_ascii=False), flush=True)
+    try:
+        emit(model)
+    except EventTransportError as exc:
+        print(f"adb-emit: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 

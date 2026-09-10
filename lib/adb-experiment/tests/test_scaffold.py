@@ -7,13 +7,17 @@ import subprocess
 import sys
 
 
-def test_crash_exits_nonzero_and_keeps_partial_events_and_fallback(tmp_path):
+def test_crash_exits_nonzero_and_keeps_partial_events_and_fallback(tmp_path, event_capture):
     root = Path(__file__).resolve().parents[3]
     env = dict(os.environ, ADB_RUN_DIR=str(tmp_path),
                PYTHONPATH=os.pathsep.join([str(root / 'lib' / 'adb-experiment'),
                                           str(root / 'lib' / 'adb-events')]))
-    proc = subprocess.run([sys.executable, '-c', '''
-from adb_events.emit import metric
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from adb_events import Metric, emit
 from adb_experiment import experiment_main
 class Params:
     @classmethod
@@ -21,14 +25,21 @@ class Params:
         return raw
 
 def run(params):
-    metric(name="observations", value=params["observations"])
+    emit(Metric(name="observations", value=params["observations"]))
     raise RuntimeError("simulation crashed after observation")
 
 raise SystemExit(experiment_main(Params, run, prog="crashing-experiment",
                                 fallback_summary={"errors": 1}))
-'''], input='{"observations": 3}', text=True, capture_output=True, env=env,
-        cwd=tmp_path, timeout=30)
+""",
+        ],
+        input='{"observations": 3}',
+        text=True,
+        capture_output=True,
+        env=env,
+        cwd=tmp_path,
+        timeout=30,
+    )
     assert proc.returncode == 1
     assert "RuntimeError: simulation crashed after observation" in proc.stderr
-    events = [json.loads(line) for line in proc.stdout.splitlines()]
+    events = event_capture.read()
     assert [(e['name'], e['value']) for e in events] == [('observations', 3), ('errors', 1)]

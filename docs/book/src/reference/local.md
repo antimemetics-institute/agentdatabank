@@ -76,11 +76,11 @@ nix run .#inspect-hello -- \
   --set limit=0 --set epochs=1 --set 'generate_args={}'
 ```
 
-To run your checkout's version of `inspect-hello`, select **local checkout** in the command settings and run from that directory. The experiment runs directly; neither browser tool needs to be running. Every declared parameter must be supplied in a terminal command; the browser fills its fields for you. This is a credential-free check using fixed mock replies, rather than the real model in the browser guide. It runs one replicate, both samples (`limit=0`), one pass (`epochs=1`), and no generation overrides. Expect two completed samples, zero errors, and score `1.0`. It needs no credentials or network access after the Nix build.
+To run your checkout's version of `inspect-hello`, select **local checkout** in the command settings and run from that directory. The named experiment app handles terminal execution; neither browser tool needs to be running. Every declared parameter must be supplied in a terminal command; the browser fills its fields for you. This is a credential-free check using fixed mock replies, rather than the real model in the browser guide. It runs one replicate, both samples (`limit=0`), one pass (`epochs=1`), and no generation overrides. Expect two completed samples, zero errors, and score `1.0`. It needs no credentials or network access after the Nix build.
 
 The runner prints a run ID, a `watch` URL, and a `store` path. It looks for a viewer serving the same data directory on ports 8340–8343. If it finds one, open the `watch` URL. Otherwise, start a viewer and find the run under **Runs** using that viewer’s startup URL. A printed `watch` URL alone does not start a viewer.
 
-Use `--set KEY=VALUE` repeatedly to change parameters, `--replicates N` for more executions, or `--json` to stream events to standard output while retaining saved run data. `--seed N` sets a base seed (random when omitted); each run receives a derived seed. `--dry-run` prints the resolved configuration without executing, and `--describe` prints the experiment's parameter schema.
+Use `--set KEY=VALUE` repeatedly to change parameters, `--replicates N` for more executions, or `--json` to stream event envelopes to the launcher’s standard output while retaining saved run data. Add `--non-interactive` to disable prompts for unattended execution. `--seed N` sets a base seed (random when omitted); each run receives a derived seed. `--dry-run` prints the resolved configuration without executing, and `--describe` prints the experiment's parameter schema.
 
 ## Browser launch options
 

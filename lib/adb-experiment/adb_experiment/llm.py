@@ -25,6 +25,7 @@ module so the base package adds no requirement.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import re
 import threading
@@ -33,7 +34,7 @@ import types
 from collections.abc import Callable
 from typing import Any, cast
 
-from adb_events.emit import llm_call
+from adb_events import LLMCall, LLMError, LLMRequest, LLMResponse, LLMUsage, emit
 
 from .providers import resolve
 
@@ -145,30 +146,45 @@ class ChatClient:
             }
         if self.is_mock:
             return self._mock_create(kw)
+        request = LLMRequest(
+            messages=deepcopy(kw["messages"]),
+            params=deepcopy(
+                {k: v for k, v in kw.items() if k not in ("messages", "model")}
+            ),
+            model=kw.get("model"),
+        )
         started = time.monotonic()
         try:
             response = self._request(kw)
         except Exception as exc:
             self._emit(
-                kw["messages"], "", {"backend": "openai-chat"},
+                request,
+                error=LLMError(kind="request_failed", message=str(exc)),
                 latency_ms=int((time.monotonic() - started) * 1000),
-                error={"kind": "request_failed", "message": str(exc)},
             )
             raise
         latency = int((time.monotonic() - started) * 1000)
         choice = response.choices[0]
         raw = choice.message.content or ""
         usage = response.usage
-        # the llm.call records the reply verbatim (reasoning included); the caller
-        # gets the cleaned text
+        # Snapshot the SDK response before changing the text returned to the caller.
         self._emit(
-            kw["messages"], raw, {"backend": "openai-chat"},
-            usage=None if usage is None else {
-                "input_tokens": usage.prompt_tokens,
-                "output_tokens": usage.completion_tokens,
-            },
+            request,
+            response=LLMResponse(
+                message=choice.message.model_dump(mode="json"),
+                finish_reason=choice.finish_reason,
+                model=response.model,
+                raw=response.model_dump(mode="json"),
+            ),
+            usage=(
+                None
+                if usage is None
+                else LLMUsage(
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.completion_tokens,
+                )
+            ),
             latency_ms=latency,
-            finish_reason=choice.finish_reason,
         )
         choice.message.content = strip_think(raw)
         return response
@@ -182,8 +198,18 @@ class ChatClient:
 
     def _mock_create(self, kw: dict[str, Any]) -> Any:
         text = self._mock_responder(kw.get("messages") or [])
-        self._emit(kw.get("messages") or [], text, {"backend": "mock"},
-                   finish_reason="stop")
+        self._emit(
+            LLMRequest(
+                messages=kw.get("messages") or [],
+                params={k: v for k, v in kw.items() if k not in ("messages", "model")},
+                model=kw.get("model"),
+            ),
+            response=LLMResponse(
+                message={"role": "assistant", "content": text},
+                finish_reason="stop",
+                model=self.served_model,
+            ),
+        )
         # the OpenAI response shape consumers read: choices[0].message.content
         return types.SimpleNamespace(
             choices=[types.SimpleNamespace(
@@ -198,26 +224,24 @@ class ChatClient:
 
     def _emit(
         self,
-        messages: list[dict[str, Any]],
-        text: str,
-        params: dict[str, Any],
+        request: LLMRequest,
         *,
-        usage: dict[str, Any] | None = None,
+        response: LLMResponse | None = None,
+        usage: LLMUsage | None = None,
         latency_ms: int | None = None,
-        finish_reason: str | None = None,
-        error: dict[str, Any] | None = None,
+        error: LLMError | None = None,
     ) -> None:
-        with self._count_lock:  # callers may fan out over a thread pool
+        with self._count_lock:
             self.n_calls += 1
-        llm_call(
-            agent=self.agent,
-            model=self.model_id,
-            request={"messages": messages, "params": params},
-            response=None if error else {
-                "message": {"role": "assistant", "content": text},
-                "finish_reason": finish_reason or "stop",
-            },
-            usage=usage,
-            latency_ms=latency_ms,
-            error=error,
+        emit(
+            LLMCall(
+                agent=self.agent,
+                model=self.model_id,
+                request=request,
+                response=response,
+                usage=usage,
+                latency_ms=latency_ms,
+                error=error,
+                meta={"backend": "mock" if self.is_mock else "openai-chat"},
+            )
         )

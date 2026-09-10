@@ -10,7 +10,7 @@ audience). This is the actual dialogue, not a dump of the game master's internal
 
 from __future__ import annotations
 
-from adb_events.emit import agent_event, message, metric
+from adb_events import AgentEvent, Message, Metric, emit
 
 # The narrator's display name — sits next to roster names ("Alice", "Bob") in the
 # transcript, so it's spelled like one. main.py names the Concordia game-master
@@ -27,13 +27,17 @@ def emit_provenance(*, concordia_version: str, model: str,
     # attributed to the wrapped component, not a scene character: this is concordia's
     # provenance, not something the game master did (agent.event requires an agent
     # string; `concordia` names the component whose identity is being recorded)
-    agent_event(
-        agent="concordia",
-        kind="provenance",
-        concordia=concordia_version,
-        model=model,
-        agents=agents,
-        python=python_version,
+    emit(
+        AgentEvent(
+            agent="concordia",
+            kind="provenance",
+            data={
+                "concordia": concordia_version,
+                "model": model,
+                "agents": agents,
+                "python": python_version,
+            },
+        )
     )
 
 
@@ -56,7 +60,9 @@ def emit_scene(premise: str) -> int:
     premise is empty."""
     if not premise:
         return 0
-    message(from_=GM_NAME, content=premise, channel="world", kind="scene")
+    emit(
+        Message(from_=GM_NAME, content=premise, channel="world", meta={"kind": "scene"})
+    )
     return 1
 
 
@@ -69,7 +75,7 @@ def emit_turn(step: int, actor: str, action: str, roster: set[str]) -> int:
     content = _strip_leading_name(actor, action)
     if not content:
         return 0
-    message(from_=actor, content=content, channel="world", step=step)
+    emit(Message(from_=actor, content=content, channel="world", meta={"step": step}))
     return 1
 
 
@@ -144,8 +150,15 @@ class TurnEmitter:
                 # Bookkeeping, not perception: only narrated observations are
                 # semantic here.
                 if content and not content.startswith("Event:"):
-                    message(from_=GM_NAME, to=agent, content=content,
-                            channel="observation", step=step)
+                    emit(
+                        Message(
+                            from_=GM_NAME,
+                            to=agent,
+                            content=content,
+                            channel="observation",
+                            meta={"step": step},
+                        )
+                    )
             self._obs_seen[agent] = max(seen, len(window))
 
             # the agent's current read of itself and the scene, this turn (perception
@@ -157,7 +170,13 @@ class TurnEmitter:
                     or (components.get(comp) or {}).get("Value"))
             }
             if perception:
-                agent_event(agent=agent, kind="perception", step=step, **perception)
+                emit(
+                    AgentEvent(
+                        agent=agent,
+                        kind="perception",
+                        data={"step": step, **perception},
+                    )
+                )
 
 
 def emit_summary(*, steps: int, agents: int,
@@ -171,5 +190,5 @@ def emit_summary(*, steps: int, agents: int,
         "model_calls": model_calls,
     }
     for name, value in summary.items():
-        metric(name=name, value=value)
+        emit(Metric(name=name, value=value))
     return summary

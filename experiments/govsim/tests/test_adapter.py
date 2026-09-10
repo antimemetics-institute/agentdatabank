@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -52,7 +51,7 @@ def test_collapse_and_outsider_denominator():
     assert gini(np.array([0, 0])) == 0
 
 
-def test_backend_forwards_sampling_and_caps_tokens(monkeypatch):
+def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     from govsim_adapter.backend import ChatClientBackend
     backend = ChatClientBackend("mock/model", 42, temperature=0.2, max_tokens=64)
     # Replace transport only: exercise the real adapter and shared client's
@@ -60,8 +59,7 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch):
     captured = {}
     def transport(kw):
         captured.update(kw)
-        return SimpleNamespace(choices=[SimpleNamespace(
-            message=SimpleNamespace(content="Answer: 5."), finish_reason="stop")], usage=None)
+        return _reply("Answer: 5.")
     backend.client.is_mock = False
     backend.client._request = transport
     chat = [{"role": "user", "content": "test"},
@@ -81,7 +79,7 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch):
     (None, None, "low"), (None, 0.75, None), (0.2, None, None),
 ])
 def test_backend_explicit_null_omits_upstream_sampling_defaults(
-    temperature, top_p, reasoning_effort,
+    temperature, top_p, reasoning_effort, event_capture,
 ):
     from govsim_adapter.backend import ChatClientBackend
     parsed = Params(**params(temperature=temperature, top_p=top_p,
@@ -94,8 +92,7 @@ def test_backend_explicit_null_omits_upstream_sampling_defaults(
     captured = {}
     def transport(kw):
         captured.update(kw)
-        return SimpleNamespace(choices=[SimpleNamespace(
-            message=SimpleNamespace(content="5"), finish_reason="stop")], usage=None)
+        return _reply("5")
     backend.client.is_mock = False
     backend.client._request = transport
     # Upstream select forces 0.0/1.0 even when the wrapper receives None.
@@ -110,7 +107,7 @@ def test_backend_explicit_null_omits_upstream_sampling_defaults(
 
 @pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
 @pytest.mark.parametrize("experiment", EXPERIMENTS)
-def test_upstream_mock_pipeline(tmp_path, experiment):
+def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params(experiment=experiment, temperature=None,
                                         top_p=None, reasoning_effort="low")))
@@ -119,14 +116,14 @@ def test_upstream_mock_pipeline(tmp_path, experiment):
     proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
-    events = [json.loads(line) for line in proc.stdout.splitlines()]
+    events = event_capture.read()
     metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
     assert "status" not in metrics
     assert metrics["rounds"] == 1
     assert metrics["total_harvest"] == (20 if "outsider" in experiment else 25)
     assert metrics["equality"] == 1.0
     assert metrics["model_calls"] > 0
-    assert any(e["type"] == "govsim.state" for e in events)
+    assert any(e["type"] == "custom" and e["kind"] == "govsim.state" for e in events)
     provenance = json.loads((tmp_path / "artifacts/provenance.json").read_text())
     assert provenance["effective_parameters"]["temperature"] is None
     assert provenance["effective_parameters"]["top_p"] is None
@@ -137,7 +134,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment):
     assert (tmp_path / "artifacts/log_env.json").exists()
 
 
-def test_missing_upstream_exits_nonzero_with_traceback(tmp_path):
+def test_missing_upstream_exits_nonzero_with_traceback(tmp_path, event_capture):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params()))
     env = dict(os.environ, ADB_RUN_DIR=str(tmp_path))
@@ -145,6 +142,26 @@ def test_missing_upstream_exits_nonzero_with_traceback(tmp_path):
     proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
     assert proc.returncode != 0
-    events = [json.loads(line) for line in proc.stdout.splitlines()]
+    events = event_capture.read()
     assert not any(e["type"] == "metric" and e["name"] == "status" for e in events)
     assert "GOVSIM_UPSTREAM is not set" in proc.stderr
+
+
+def _reply(text):
+    from openai.types.chat import ChatCompletion
+
+    return ChatCompletion.model_validate(
+        {
+            "id": "test",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "test-model",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": text},
+                }
+            ],
+        }
+    )

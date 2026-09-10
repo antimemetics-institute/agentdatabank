@@ -199,7 +199,7 @@ in
 
   # mkExperiment: the schema + program → a runnable flake app with the manifest JSON and
   # source identity baked in. `program` is whatever speaks the runner protocol (params
-  # JSON on stdin → event JSONL on stdout): a derivation (resolved via lib.getExe — the
+  # JSON on stdin → events through ADB_EVENT_SOCKET): a derivation (resolved via lib.getExe — the
   # usual case, a writeShellApplication adapter next to package.nix) or an explicit
   # executable path string.
   mkExperiment =

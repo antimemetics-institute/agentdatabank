@@ -88,9 +88,8 @@ def _log() -> EvalLog:
         ])
 
 
-def _capture(capsys) -> list[dict[str, Any]]:
-    out = capsys.readouterr().out
-    return [json.loads(line) for line in out.splitlines() if line.strip()]
+def _capture(event_capture) -> list[dict[str, Any]]:
+    return event_capture.read()
 
 
 def _slim(msg: dict[str, Any]) -> tuple[str, str]:
@@ -99,30 +98,31 @@ def _slim(msg: dict[str, Any]) -> tuple[str, str]:
     return msg["role"], msg["content"]
 
 
-def test_full_translation_shape(capsys):
+def test_full_translation_shape(event_capture):
     summary = translate.emit_all(_log(), "mockllm/model")
-    events = _capture(capsys)
+    events = _capture(event_capture)
     kinds = [e["type"] for e in events]
 
     assert kinds.count("message") == 4  # 2 samples x 2 messages
     assert kinds.count("llm.call") == 2
     ae = [e for e in events if e["type"] == "agent.event"]
-    assert len([e for e in ae if e["kind"] == "instance"]) == 2
+    assert len([e for e in events if e["type"] == "instance"]) == 2
     assert len([e for e in ae if e["kind"] == "provenance"]) == 1
 
     # ADB-shaped request/response (events.md), raw provider payload under response.raw
     calls = [e for e in events if e["type"] == "llm.call"]
     assert [_slim(m) for m in calls[0]["request"]["messages"]] == [("user", "hi")]
     assert calls[0]["request"]["params"] == {"max_tokens": 1024}
+    assert calls[0]["request"]["raw"] == {"vendor": "wire"}
     assert _slim(calls[0]["response"]["message"]) == ("assistant", "Default output")
     assert calls[0]["response"]["finish_reason"] == "stop"
     assert calls[0]["response"]["raw"] == {"provider": "raw"}  # raw call preserved here
-    assert "raw" not in calls[1]["response"]                   # none recorded → absent
+    assert calls[1]["response"]["raw"] is None
     assert calls[0]["usage"] == {"input_tokens": 1, "output_tokens": 33}
 
     # per-instance scores ride the instance close-out, NOT metric events (a metric
     # has no instance scope — N same-named metrics buried the run header)
-    inst = [e for e in ae if e["kind"] == "instance"]
+    inst = [e for e in events if e["type"] == "instance"]
     assert [e["data"]["scores"] for e in inst] == \
         [{"includes": "C"}, {"includes": "I"}]
     assert [e["data"]["repeat"] for e in inst] == [1, 1]
@@ -138,17 +138,17 @@ def test_full_translation_shape(capsys):
                        "tokens_input": 3, "tokens_output": 38}
 
 
-def test_messages_carry_sample_channel_and_meta(capsys):
+def test_messages_carry_sample_channel_and_meta(event_capture):
     translate.emit_all(_log(), "m")
-    msgs = [e for e in _capture(capsys) if e["type"] == "message"]
+    msgs = [e for e in _capture(event_capture) if e["type"] == "message"]
     assert {m["channel"] for m in msgs} == {"instance:1", "instance:2"}
     assert all(m["meta"]["instance_id"] in (1, 2) for m in msgs)
     assert all(m["from"] in ("user", "assistant") for m in msgs)
 
 
-def test_llm_calls_tagged_with_sample(capsys):
+def test_llm_calls_tagged_with_sample(event_capture):
     translate.emit_all(_log(), "m")
-    calls = [e for e in _capture(capsys) if e["type"] == "llm.call"]
+    calls = [e for e in _capture(event_capture) if e["type"] == "llm.call"]
     assert [c["meta"]["instance_id"] for c in calls] == [1, 2]
     assert all(c["meta"]["repeat"] == 1 for c in calls)
 
@@ -156,7 +156,7 @@ def test_llm_calls_tagged_with_sample(capsys):
 # --- error paths: only ever executed on real provider failure, so the tests are the
 # only coverage these branches get before live-fire ---------------------------------
 
-def test_errored_model_event_emits_structured_error(capsys):
+def test_errored_model_event_emits_structured_error(event_capture):
     """The live-fire regression: a failed call's ModelEvent carries `error` as a
     plain string, a placeholder empty output message, no usage, no working_time,
     and the provider's error body under call.response (inspect_ai's error branch).
@@ -167,54 +167,54 @@ def test_errored_model_event_emits_structured_error(capsys):
         usage=None, reply="", in_id="m1", out_id="m2",
         working_time=None, error="model call failed")
     translate.emit_model_event(ev, "agent", "s1", 1)
-    [call] = _capture(capsys)
+    [call] = _capture(event_capture)
     assert call["type"] == "llm.call"
     assert call["error"] == {"kind": "model_error", "message": "model call failed"}
     assert call["response"]["raw"] == {"error": "model call failed"}
-    assert "usage" not in call
-    assert "latency_ms" not in call
+    assert call["usage"] is None
+    assert call["latency_ms"] is None
 
 
-def test_sample_error_lands_on_instance_closeout(capsys):
+def test_sample_error_lands_on_instance_closeout(event_capture):
     """sample.error is an EvalError object — its `.message` (not its pydantic
     str()) must land on the instance close-out (wire error is `str | None`)."""
     s = _sample(2, call=None, score="I", reply="output")
     s.error = EvalError(message="RuntimeError('boom')",
                         traceback="", traceback_ansi="")
     translate.emit_sample(s, "m")
-    inst = [e for e in _capture(capsys)
-            if e["type"] == "agent.event" and e["kind"] == "instance"]
+    inst = [e for e in _capture(event_capture)
+            if e["type"] == "instance"]
     assert inst[0]["data"]["error"] == "RuntimeError('boom')"
 
 
-def test_live_model_event_streams_new_turns_once(capsys):
+def test_live_model_event_streams_new_turns_once(event_capture):
     seen: set[str] = set()
     ev = _model_event(call=None, usage=ModelUsage(input_tokens=1, output_tokens=2),
                       reply="yo", in_id="m1", out_id="m2")
     translate.emit_live_model_event(ev, "agent", "s1", 1, seen)
-    events = _capture(capsys)
+    events = _capture(event_capture)
     assert [e["from"] for e in events if e["type"] == "message"] == ["user", "assistant"]
     call = [e for e in events if e["type"] == "llm.call"][0]
     assert call["meta"] == {"instance_id": "s1", "repeat": 1}
 
     # replaying the same event emits no duplicate turns (deduped via seen ids)
     translate.emit_live_model_event(ev, "agent", "s1", 1, seen)
-    assert not [e for e in _capture(capsys) if e["type"] == "message"]
+    assert not [e for e in _capture(event_capture) if e["type"] == "message"]
 
 
-def test_emit_sample_skips_what_was_streamed_live(capsys):
+def test_emit_sample_skips_what_was_streamed_live(event_capture):
     s = _sample(1, call=None, score="C", reply="Default output")
     translate.emit_sample(s, "m", seen_messages={"mu-1", "ma-1"},
                           seen_events={s.events[0].uuid or ""})
-    events = _capture(capsys)
-    # only the closing agent.event remains
+    events = _capture(event_capture)
+    # only the closing instance remains
     assert not [e for e in events if e["type"] in ("message", "llm.call")]
-    assert [e["type"] for e in events if e["type"] == "agent.event"] == ["agent.event"]
+    assert [e["type"] for e in events] == ["instance"]
 
 
-def test_provenance_records_sliceable_covariates(capsys):
+def test_provenance_records_sliceable_covariates(event_capture):
     translate.emit_all(_log(), "mockllm/model")
-    prov = [e for e in _capture(capsys)
+    prov = [e for e in _capture(event_capture)
             if e["type"] == "agent.event" and e["kind"] == "provenance"]
     assert len(prov) == 1
     d = prov[0]["data"]

@@ -2,10 +2,9 @@
 
 runner → experiment: realized params JSON on stdin; ADB_RUN_ID/ADB_RUN_DIR/ADB_SEED env;
 fresh workspace as cwd; a small env allowlist (never the full host environment).
-experiment → runner: event payloads as JSON objects on stdout, one per line — each is
-wrapped verbatim in the transport envelope {v, ts, run, seq, event} (docs/book/src/reference/events.md);
-`type` is optional (conformance ladder: unknown or absent types are preserved). Non-JSON
-stdout lines become `stdout` events, stderr lines `stderr` events. Exit code 0 → completed, nonzero → failed, signal → interrupted.
+experiment → runner: validated JSON events through ADB_EVENT_SOCKET; stdout and
+stderr are always captured as text. The runner records typed envelopes and
+acknowledges each socket submission after writing it to the event store.
 """
 
 from __future__ import annotations
@@ -25,8 +24,21 @@ from typing import Any, Literal
 from . import __version__
 from . import credentials
 
-from adb_events import Json, validate_event
+from adb_events import (
+    Envelope,
+    CapturedLine,
+    Payload,
+    Metric,
+    LLMCall,
+    Log,
+    RunStart,
+    RunStatus,
+    RunEnd,
+    RunEnvironment,
+    UsageTotals,
+)
 from .schema import Manifest, Params
+from .event_socket import event_socket
 from .store import RunStore
 from .ulid import ulid
 
@@ -53,8 +65,9 @@ def _now() -> str:
     )
 
 
-def child_env(run_id: str, run_dir: str, seed: int,
-              credential_env: dict[str, str] | None = None) -> dict[str, str]:
+def child_env(
+    run_id: str, run_dir: str, seed: int, credential_env: dict[str, str] | None = None
+) -> dict[str, str]:
     # constructed from scratch: system basics from the allowlist, then the stored
     # credentials/endpoints (credentials.py) — the store always wins over the
     # host — then ADB_* run vars. This is how a real model reaches its key without
@@ -73,8 +86,14 @@ RunState = Literal["provisioning", "running", "completed", "failed", "interrupte
 
 
 class RunResult:
-    def __init__(self, run_id: str, state: RunState, summary: dict[str, Any],
-                 usage: dict[str, int], duration_s: float):
+    def __init__(
+        self,
+        run_id: str,
+        state: RunState,
+        summary: dict[str, Any],
+        usage: dict[str, int],
+        duration_s: float,
+    ):
         self.run_id = run_id
         self.state = state
         self.summary = summary
@@ -110,26 +129,27 @@ def execute_run(
     metrics: dict[str, Any] = {}
     result_definitions = deepcopy(manifest.get("results", {}))
     usage = {"input_tokens": 0, "output_tokens": 0, "llm_calls": 0}
-    events_q: queue.Queue[dict[str, Any] | None] = queue.Queue()
+    events_q: queue.Queue[CapturedLine | None] = queue.Queue()
+    record_lock = threading.Lock()
 
-    def emit(payload: dict[str, Any]) -> None:
-        # transport envelope (runner-owned); the payload is stored verbatim, so
-        # payload keys can never collide with envelope keys. Envelope ts is capture
-        # time — an experiment's own timestamps ride inside the payload.
+    def record_payload(payload: Payload) -> None:
         nonlocal seq
-        envelope = {"v": 0, "ts": _now(), "run": run_id, "seq": seq, "event": payload}
-        seq += 1
-        store.write_event(envelope)
-        ptype = payload.get("type")
-        if ptype == "metric" and "name" in payload:
-            metrics[payload["name"]] = payload.get("value")
-        elif ptype == "llm.call":
-            u: dict[str, Any] = payload.get("usage") or {}
-            usage["input_tokens"] += u.get("input_tokens") or 0
-            usage["output_tokens"] += u.get("output_tokens") or 0
-            usage["llm_calls"] += 1
-        if on_event:
-            on_event(envelope)
+        # Socket handlers and stdio capture share one sequence and store writer.
+        with record_lock:
+            envelope = Envelope(v=0, ts=_now(), run=run_id, seq=seq, event=payload)
+            # Serialize the public models, including defaults and wire aliases.
+            saved = envelope.model_dump(mode="json", by_alias=True)
+            store.write_event(saved)
+            seq += 1
+            if isinstance(payload, Metric):
+                metrics[payload.name] = payload.value
+            elif isinstance(payload, LLMCall):
+                if payload.usage is not None:
+                    usage["input_tokens"] += payload.usage.input_tokens or 0
+                    usage["output_tokens"] += payload.usage.output_tokens or 0
+                usage["llm_calls"] += 1
+            if on_event:
+                on_event(saved)
 
     run_meta: dict[str, Any] = {
         "run": run_id,
@@ -146,23 +166,24 @@ def execute_run(
     }
     store.write_run_json(run_meta)
 
-    emit({
-        "type": "run.start",
-        "result_definitions": result_definitions,
-        "condition": condition_id,
-        "experiment": manifest["name"],
-        "source": source,
-        "fetch_ref": fetch_ref,
-        "dirty": dirty,
-        "spec_params": spec_params,
-        "realized_params": realized_params,
-        "seed": seed,
-        "replicate": replicate,
-        "env": {
-            "adb_runner": __version__,
-            "platform": os.uname().sysname.lower() + "-" + os.uname().machine,
-        },
-    })
+    record_payload(
+        RunStart(
+            result_definitions=result_definitions,
+            condition=condition_id,
+            experiment=manifest["name"],
+            source=source,
+            fetch_ref=fetch_ref,
+            dirty=dirty,
+            spec_params=spec_params,
+            realized_params=realized_params,
+            seed=seed,
+            replicate=replicate,
+            env=RunEnvironment(
+                adb_runner=__version__,
+                platform=os.uname().sysname.lower() + "-" + os.uname().machine,
+            ),
+        )
+    )
 
     # stored credentials/endpoints for the credential sets this run's model ids route
     # to (docs/book/src/running/model.md: endpoint + key are environment, not condition).
@@ -170,103 +191,92 @@ def execute_run(
     # direct callers without one get the default-profile resolution.
     if credential_env is None:
         credential_env = credentials.env_for_run(manifest, realized_params)
-    proc = subprocess.Popen(
-        [program],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=store.workspace,
-        env=child_env(run_id, str(store.dir), seed, credential_env),
-        text=True,
-    )
-    stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
-    if stdin is None or stdout is None or stderr is None:
-        raise RuntimeError("child pipes missing")  # typeshed can't see Popen(PIPE)
     run_meta["state"] = "running"
     store.write_run_json(run_meta)
-    emit({"type": "run.status", "state": "running"})
+    record_payload(RunStatus(state="running"))
+    with event_socket(record_payload) as socket_path:
+        proc = subprocess.Popen(
+            [program],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=store.workspace,
+            env={
+                **child_env(run_id, str(store.dir), seed, credential_env),
+                "ADB_EVENT_SOCKET": socket_path,
+            },
+            text=True,
+        )
+        stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
+        if stdin is None or stdout is None or stderr is None:
+            raise RuntimeError("child pipes missing")  # typeshed can't see Popen(PIPE)
 
-    def read_stdout() -> None:
-        for line in stdout:
-            line = line.rstrip("\n")
-            if not line.strip():
-                continue
-            try:
-                payload: Json = json.loads(line)
-            except json.JSONDecodeError:
-                payload = None
-            if isinstance(payload, dict):
-                # a payload, typed or not — `type` is optional (conformance ladder)
-                events_q.put(payload)
-            else:
-                # captured verbatim, untruncated, no invented severity (docs/book/src/reference/events.md)
-                events_q.put({"type": "stdout", "line": line})
-        events_q.put(None)
+        def read_stdout() -> None:
+            for line in stdout:
+                line = line.rstrip("\n")
+                if not line.strip():
+                    continue
+                events_q.put(CapturedLine(type="stdout", line=line))
+            events_q.put(None)
 
-    def read_stderr() -> None:
-        for line in stderr:
-            line = line.rstrip("\n")
-            if line:
-                events_q.put({"type": "stderr", "line": line})
-        events_q.put(None)
+        def read_stderr() -> None:
+            for line in stderr:
+                line = line.rstrip("\n")
+                if line:
+                    events_q.put(CapturedLine(type="stderr", line=line))
+            events_q.put(None)
 
-    threads = [threading.Thread(target=t, daemon=True) for t in (read_stdout, read_stderr)]
-    for t in threads:
-        t.start()
+        threads = [
+            threading.Thread(target=t, daemon=True) for t in (read_stdout, read_stderr)
+        ]
+        for t in threads:
+            t.start()
 
-    try:
-        stdin.write(json.dumps(realized_params))
-        stdin.close()
-    except BrokenPipeError:
-        pass
-
-    interrupted = False
-    finished_readers = 0
-    last_beat = time.monotonic()
-    child_exited_at: float | None = None
-    while finished_readers < 2:
-        if time.monotonic() - last_beat >= HEARTBEAT_S:
-            os.utime(store.dir / "run.json")
-            last_beat = time.monotonic()
-        if child_exited_at is None and proc.poll() is not None:
-            child_exited_at = time.monotonic()
         try:
-            item = events_q.get(timeout=0.5)
-        except queue.Empty:
-            # orphaned grandchildren can inherit our pipes and hold them open long
-            # after the experiment exited — don't wait on them forever
-            if child_exited_at is not None and time.monotonic() - child_exited_at > 10:
-                emit({"type": "log", "level": "warn",
-                      "message": "experiment exited but descendants still hold its "
-                                 "stdio pipes; closing the stream (orphans keep "
-                                 "running unsupervised)"})
-                break
-            continue
-        except KeyboardInterrupt:
-            interrupted = True
-            proc.send_signal(signal.SIGTERM)
-            continue
-        if item is None:
-            finished_readers += 1
-            continue
-        # Ingestion lint (docs/book/src/reference/events.md):
-        # the payload is ALWAYS stored verbatim — a claimed lifecycle type (`run.*`
-        # is runner-synthesized) or a known type with the wrong shape earns a
-        # companion warning, never mutation or drop. Schema: the adb_events models.
-        ptype = item.get("type")
-        if isinstance(ptype, str) and ptype.startswith("run."):
-            emit({"type": "log", "level": "warn",
-                  "message": f"experiment emitted reserved lifecycle type {ptype!r}; "
-                             "preserved verbatim but ignored for run lifecycle"})
-        else:
-            problems = validate_event(item)
-            if problems:
-                emit({"type": "log", "level": "warn",
-                      "message": f"malformed {ptype} event ({'; '.join(problems[:3])}): "
-                                 f"{json.dumps(item)[:300]}"})
-        emit(item)
+            stdin.write(json.dumps(realized_params))
+            stdin.close()
+        except BrokenPipeError:
+            pass
 
-    returncode = proc.wait()
+        interrupted = False
+        finished_readers = 0
+        last_beat = time.monotonic()
+        child_exited_at: float | None = None
+        while finished_readers < 2:
+            if time.monotonic() - last_beat >= HEARTBEAT_S:
+                os.utime(store.dir / "run.json")
+                last_beat = time.monotonic()
+            if child_exited_at is None and proc.poll() is not None:
+                child_exited_at = time.monotonic()
+            try:
+                item = events_q.get(timeout=0.5)
+            except queue.Empty:
+                # orphaned grandchildren can inherit our pipes and hold them open long
+                # after the experiment exited — don't wait on them forever
+                if (
+                    child_exited_at is not None
+                    and time.monotonic() - child_exited_at > 10
+                ):
+                    record_payload(
+                        Log(
+                            level="warn",
+                            message="experiment exited but descendants still hold its "
+                            "stdio pipes; closing the stream (orphans keep "
+                            "running unsupervised)",
+                        )
+                    )
+                    break
+                continue
+            except KeyboardInterrupt:
+                interrupted = True
+                proc.send_signal(signal.SIGTERM)
+                continue
+            if item is None:
+                finished_readers += 1
+                continue
+            record_payload(item)
+
+        returncode = proc.wait()
     duration = time.monotonic() - start
     state: RunState
     if interrupted or returncode < 0:
@@ -283,14 +293,15 @@ def execute_run(
     # Declarations describe outputs; every observed metric belongs in the summary,
     # including undeclared metrics. Missing declared outputs stay absent.
     summary = dict(metrics)
-    emit({
-        "type": "run.end",
-        "state": state,
-        "duration_s": round(duration, 3),
-        "summary": summary,
-        "usage_totals": usage,
-        "exit_code": returncode,
-    })
+    record_payload(
+        RunEnd(
+            state=state,
+            duration_s=round(duration, 3),
+            summary=summary,
+            usage_totals=UsageTotals.model_validate(usage),
+            exit_code=returncode,
+        )
+    )
     run_meta.update(
         state=state,
         finished_at=_now(),

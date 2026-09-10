@@ -21,18 +21,14 @@ Flake users can enter the same shell with `nix develop`. Create `experiments/exa
 Save this as `experiments/example-count/package.nix`:
 
 ```nix
-{ adb, writeShellApplication, python3 }:
+{ adb, writeShellApplication, jq, adb-runner }:
 let
   program = writeShellApplication {
     name = "example-count-program";
-    runtimeInputs = [ python3 ];
+    runtimeInputs = [ jq adb-runner ]; # adb-runner supplies the adb-emit CLI
     text = ''
-      python3 -c '
-import json
-import sys
-params = json.load(sys.stdin)
-print(json.dumps({"type": "metric", "name": "count", "value": params["count"]}), flush=True)
-'
+      count="$(jq -er '.count')"
+      adb-emit metric --name count --value "$count"
     '';
   };
 in
@@ -70,9 +66,17 @@ These definitions appear in the collapsible **Results this experiment records** 
 
 ## What must the program do?
 
-The runner starts the program in a fresh workspace, sends the complete parameter object as JSON on standard input, and provides the run directory and seed in environment variables. Emit one JSON object per line on standard output. The example emits a metric matching its declared result name.
+`adb.mkExperiment` generates the named experiment launcher. Authors supply the
+underlying `program`; users invoke the named app or launch it from `adb-local`.
+The generated launcher provides the manifest, source identity, and program path
+to the runner. Do not invoke `adb-runner`, build its execution environment by
+hand, or start the underlying program directly to create a run.
+
+The runner starts the program in a fresh workspace, sends the complete parameter object as JSON on standard input, and provides the run directory and seed in environment variables. Use `adb_events.emit()` in Python or the `adb-emit` CLI in other languages. The shell example reads its input with `jq` and calls `adb-emit` to record a metric matching its declared result name. Its `adb-runner` package dependency supplies that CLI; the program never invokes the runner itself. Ordinary stdout/stderr is captured as text, including printed JSON.
 
 For a larger program, put the implementation beside `package.nix` and have the adapter invoke its packaged executable. Pin dependencies in the package definition and dependency lock. Python experiments can use `adb.mkPythonEnv` to build a `pyproject.toml`/`uv.lock` workspace, and `adb-events` for validated event emission. `adb-experiment` provides a shared parameter-reading scaffold and artifact helper; see its [failure behavior](../reference/protocol.md#how-can-python-experiments-emit-validated-events) before adopting it.
+
+Both emitter APIs handle validation and transport. Do not write a socket client in an experiment.
 
 Add [standard events](../reference/events.md) for the evidence a reader needs: messages, model calls, instance outcomes and metrics. Preserve useful native output as artifacts, write files under `ADB_RUN_DIR/artifacts/`, and emit artifact pointers. Read `ADB_SEED` and pass it to supported random generators or backend settings. The [process protocol](../reference/protocol.md) defines the boundary in full.
 
@@ -91,19 +95,68 @@ nix run .#example-count -- --describe
 nix run .#example-count -- --set count=3 --dry-run
 ```
 
-Then execute the keyless example:
+Then execute the keyless example through its generated named app:
 
 ```sh,repo-local
 nix run .#example-count -- --set count=3
 ```
 
-Open its viewer link and verify that the input and result are both `3` and the feed contains the metric. Launch the local UI from the checkout to check the generated form:
+Start the local UI from the checkout if it is not already running:
 
 ```sh,repo-local
 nix run .#adb-local
 ```
 
+Open the completed run under **Runs** and verify that the input and result are both `3` and the feed contains the metric. If the UI was running when you launched the experiment, its printed **watch** link opens the run directly. Also open the experiment page to check the generated form.
+
 For a real experiment, test parameter rejection, event shapes, summary selection and failure reporting with mocks or small local fixtures. Run the affected package's tests; after changing dependency declarations, update its lock and check dependent locks. `task lock:check` checks lock freshness, and `task ci` runs the repository's broader checks. Build documentation separately with `task docs:build` when changing it.
+
+## How do I test Python emission without launching a full run?
+
+Add `adb-testing` to your experiment's development dependencies and regenerate
+its lock. From `experiments/EXPERIMENT/pyproject.toml`, the local source is:
+
+```toml
+[dependency-groups]
+dev = ["pytest>=8", "adb-testing"]
+
+[tool.uv.sources]
+adb-testing = { path = "../../lib/adb-testing", editable = true }
+```
+
+Merge these entries into existing sections. Register the installed plugin in
+`tests/conftest.py`:
+
+```python
+pytest_plugins = ["adb_testing.plugin"]
+```
+
+No path manipulation or copied fixture implementation is needed. Tests that
+request `event_capture` receive the runner's actual socket receiver and its
+connection environment; the fixture cleans up afterward. It is not autouse:
+parameter-validation tests that do not emit events need not request it. Do not
+implement a test socket server or patch emission to print JSON.
+
+Call your adapter normally, then inspect `event_capture.read()`. For example,
+this shows the fixture interface; in an adapter test, replace the direct `emit`
+call with the adapter function being tested:
+
+```python
+from adb_events import Metric, emit
+
+
+def test_recorded_score(event_capture):
+    emit(Metric(name="score", value=1))
+    events = event_capture.read()
+    assert any(e["type"] == "metric" and e["name"] == "score" and e["value"] == 1
+               for e in events)
+```
+
+`read()` returns and clears the captured payload dictionaries. Assertions on
+ordinary prints still use pytest's `capsys` separately. Subprocess tests inherit
+the fixture's environment; preserve it when constructing a child environment.
+This fixture checks emission and delivery, not run orchestration or stored
+summaries. Check the complete integration through the named app as above.
 
 ## How do I change an existing experiment?
 

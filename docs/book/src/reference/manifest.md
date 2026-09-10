@@ -1,6 +1,6 @@
 # Experiment manifest
 
-A manifest is generated JSON describing an experiment's inputs and presentation. The runner uses it for validation, credential discovery and summary selection; the local interface uses it to build the parameter form.
+A manifest is generated JSON describing an experiment's inputs and presentation. The runner uses it for validation, credential discovery and result descriptions; the local interface uses it to build the parameter form.
 
 Read a packaged manifest with:
 
@@ -16,7 +16,7 @@ nix run .#inspect-hello -- --describe
 | `name` | Unique experiment name and app name. |
 | `summary` | Short description shown in the interface. |
 | `params` | Object mapping parameter names to declarations. Every key must be bound for a run. |
-| `results` | Object mapping possible summary metric names to result declarations (see below). The runner selects the last emitted value for each declared name that occurred. |
+| `results` | Object mapping possible summary metric names to result declarations (see below). Declarations describe outputs; the runner summarizes the last emitted value for every metric name, including undeclared names. |
 | `env` | Optional experiment metadata. It does not cause the runner to inject arbitrary variables or provision services. |
 | `origin` | Packaging repository reference, separate from a run's pinned fetch reference. |
 | `links` | External references, each with `label` and `url`, displayed on experiment and run pages when the manifest is available. |
@@ -55,7 +55,7 @@ Each result declaration contains a type descriptor and optional presentation fie
 
 In Nix, declare a result as `{ type = adb.types.int; label = "Recorded count"; description = "Count supplied to the program."; }`. The existing bare-type shorthand, such as `count = adb.types.int;`, remains supported. Manifest generation normalizes it to `"count": { "type": { "kind": "int" } }`; rich declarations retain their presentation fields.
 
-Results are possible outputs, not required outputs. A declared metric that was never emitted is absent from the summary; absence does not mean zero. Undeclared emitted metrics remain visible in the viewer with neutral formatting, but are not selected for the run summary. Boolean results display as neutral Yes/No values without inferring success or failure.
+Results are possible outputs, not required outputs. A declared metric that was never emitted is absent from the summary; absence does not mean zero. Undeclared emitted metrics also enter the run summary and remain visible in the viewer with neutral formatting. Boolean results display as neutral Yes/No values without inferring success or failure.
 
 The run page uses one Results list with labels, values, units and short descriptions; expand a row for its calculation details. Before launch, expand **Results this experiment records** on the experiment page to read the declared outputs. The runner snapshots the normalized declarations as `result_definitions` in both `run.json` and `run.start`. These saved definitions preserve the run's interpretation when the installed experiment changes. A metric event's existing `unit` field takes precedence when displaying that event's value; it does not change the saved declaration. Events do not override result labels, descriptions or details.
 

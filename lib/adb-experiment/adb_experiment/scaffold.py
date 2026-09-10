@@ -2,7 +2,7 @@
 
 The protocol (runner side: adb_runner/protocol.py): realized params arrive as
 JSON on stdin, ``ADB_RUN_DIR``/``ADB_SEED`` ride in the env, events leave as
-JSON lines on stdout, and execution failures return a nonzero exit code after
+JSON over the event socket, and execution failures return a nonzero exit code after
 emitting diagnostic evidence and any fallback summary. A config file named on
 argv overrides stdin — the hand-run/debug path, and the seam an
 adapter uses when it reshapes params first (concordia). Every experiment
@@ -12,15 +12,13 @@ repeats that scaffold verbatim, so it lives here:
         return experiment_main(Params, run, prog="my-experiment",
                                fallback_summary={"samples": 0})
 
-Also here: ``protected_stream()`` — run a wrapped tool that prints to stdout
-without corrupting the JSONL channel — and ``deposit_artifact()`` — write a file
-into the run's ``artifacts/`` and emit the pointer event (layout.md).
+Also here: ``deposit_artifact()`` writes a file into the run's ``artifacts/``
+and emits its pointer event. Framework stdout is captured by the runner.
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import sys
@@ -29,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
-from adb_events.emit import artifact, metric, set_output
+from adb_events import Artifact, Metric, emit
 
 
 class SupportsModelValidate(Protocol):
@@ -68,24 +66,9 @@ def experiment_main(params_model: SupportsModelValidate,
     except Exception:
         traceback.print_exc()
         for name, value in (fallback_summary or {}).items():
-            metric(name=name, value=value)
+            emit(Metric(name=name, value=value))
         return 1
     return 0
-
-
-@contextlib.contextmanager
-def protected_stream():
-    """Keep the event stream flowing while a wrapped tool prints to stdout.
-
-    Events emitted inside the block go to the real stdout (the JSONL channel);
-    everything the wrapped tool prints goes to devnull. The pair to
-    :func:`adb_events.emit.set_output`, packaged."""
-    set_output(sys.stdout)
-    try:
-        with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
-            yield
-    finally:
-        set_output(None)
 
 
 def deposit_artifact(name: str, text: str, *, filename: str,
@@ -97,6 +80,12 @@ def deposit_artifact(name: str, text: str, *, filename: str,
     art_dir.mkdir(parents=True, exist_ok=True)  # pre-created by the runner, not by bare CLI runs
     path = art_dir / filename
     path.write_text(text, encoding="utf-8")
-    artifact(name=name, path=f"artifacts/{filename}", media_type=media_type,
-             size=path.stat().st_size)
+    emit(
+        Artifact(
+            name=name,
+            path=f"artifacts/{filename}",
+            media_type=media_type,
+            bytes=path.stat().st_size,
+        )
+    )
     return path

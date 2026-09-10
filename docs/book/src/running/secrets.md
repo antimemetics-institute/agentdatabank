@@ -6,7 +6,9 @@ ADB stores model credentials and endpoints in named profiles on your machine. A 
 
 In `adb-local`, choose a model in the experiment form and open the **run** tab. Use the credential controls to enter the endpoint and key, save a profile, and select it for the job.
 
-From the terminal, start the equivalent setup prompt:
+From the terminal, use the standalone credential-management command below.
+Direct `adb-runner` invocation here configures profiles; experiment execution
+uses the [named experiment app](experiments.md#how-do-i-use-the-command-line).
 
 ```sh
 nix run .#adb-runner -- credentials set openai
@@ -33,7 +35,7 @@ The store is normally `~/.config/adb/credentials.toml`, or `$XDG_CONFIG_HOME/adb
 
 Add `--profile openai=research` to an experiment command to select that profile explicitly. Repeat the flag for runs using several credential sets. The selected set must be used by this run, and the profile must exist.
 
-Without an explicit selection, the runner uses a remembered choice for this experiment and set, then a lone default profile. In an interactive terminal it offers a picker when there are other profiles, and offers first-use setup for an unconfigured built-in provider. With `--json` or noninteractive input it never prompts: it uses the remembered choice or default profile, and fails if a required selection is unavailable.
+Without an explicit selection, the runner uses a remembered choice for this experiment and set, then a lone default profile. In an interactive terminal it offers a picker when there are other profiles, and offers first-use setup for an unconfigured built-in provider. With `--non-interactive` or non-terminal stdin it never prompts: it uses the remembered choice or default profile, and fails if a required selection is unavailable.
 
 You can save a preference explicitly:
 

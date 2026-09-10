@@ -21,6 +21,7 @@ llm = ["openai>=1.60"]
 
 [dependency-groups]
 dev = [
+    "adb-testing",
     "pytest>=8",
     # mirrors the [llm] extra so `task typecheck` sees the SDK's real types;
     # consumers still opt in via adb-experiment[llm]
@@ -30,7 +31,8 @@ dev = [
 # adb-events is in-repo (not on PyPI); the nix build (adb.mkPythonEnv) also
 # overrides it to the same source.
 [tool.uv.sources]
-adb-events = { path = "../adb-events" }
+adb-testing = { path = "../adb-testing", editable = true }
+adb-events = { path = "../adb-events", editable = true }
 adb-providers = { path = "../adb-providers" }
 
 # Non-editable path-dep consumers rebuild only when the cache key changes, and uv's

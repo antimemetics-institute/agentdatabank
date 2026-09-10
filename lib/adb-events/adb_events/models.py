@@ -1,153 +1,256 @@
-"""The event payload vocabulary as msgspec Structs (docs/book/src/reference/events.md).
+"""Event models: strict authoring, open JSON metadata, and typed saved records.
 
-These model *payloads* — the `event` value inside the runner-owned transport envelope
-`{v, ts, run, seq, event}`. Single source of truth for the standardized shapes: the
-runner imports them for ingestion validation and `adb-emit schema`, and Python control
-planes emit through `adb_events.emit`, whose typed emitters validate every payload via
-msgspec.convert — a malformed `llm.call`/`message`/… raises at the emit site. (Plain
-Struct construction does NOT type-check; only the convert path validates.) Experiments may still emit ANY json — `type` is optional, and
-unknown or absent types are legal and preserved (the spec's conformance ladder); these
-are the shapes that get first-class rendering and cross-experiment comparison.
-
-msgspec (not pydantic) on purpose: this is the package every experiment pins, so a
-single zero-dependency C extension keeps that closure minimal. Unknown fields are
-ignored on validation (msgspec's default), so extension fields never fail the check —
-the raw line is what gets stored, and extension emission goes through `emit.emit_raw`.
+Construct public models and pass them to emit(). Experiment-specific data uses
+CustomEvent. Payload is the closed vocabulary shared by producers and readers.
+The runner rejects invalid socket submissions and captures stdout as text.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, get_args
 
-import msgspec
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    ValidationError,
+)
 
-# A JSON value, for signatures that accept arbitrary payload data (emit's **meta /
-# **data / request dicts) — so typecheckers flag non-JSON arguments instead of Any
-# swallowing them. STATIC-ONLY: msgspec cannot analyze recursive aliases
-# (RecursionError at convert/decode), so this must never appear in a Struct field;
-# runtime validation is whatever the Struct field types declare.
-# Mapping/Sequence (not dict/list) so concrete types like dict[str, str] are
-# assignable — invariant containers would reject them.
+# Covariant containers for shared API annotations. Open wire objects below use
+# dict[str, Any] because adapters pass provider-owned JSON with arbitrary shapes.
 type Json = Mapping[str, "Json"] | Sequence["Json"] | str | int | float | bool | None
-
-# A contract-scalar (docs/book/src/reference/events.md): metric values and instance scores are flat
-# scalars — structured values flatten to multiple '/'-joined names. Non-recursive, so
-# safe in Struct fields (msgspec validates it).
-Scalar = Union[int, float, str, bool]
+type Scalar = int | float | str | bool
+NonNegativeInt = Annotated[int, Field(ge=0)]
+NonNegativeNumber = Annotated[int | float, Field(ge=0)]
 
 
-class Status(msgspec.Struct, omit_defaults=True):
+class Model(BaseModel):
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        populate_by_name=True,
+        validate_assignment=True,
+        revalidate_instances="always",
+        allow_inf_nan=False,
+    )
+
+
+class _Event[EventType: str = str](Model):
+    """Internal base for the closed set of public payload models."""
+
+    type: EventType
+
+
+class Status(_Event[Literal["status"]]):
+    type: Literal["status"] = "status"
     detail: str
 
 
-class Log(msgspec.Struct, omit_defaults=True):
-    """A deliberate, structured emission. Captured process output is CapturedLine
-    (`stdout`/`stderr`), which never gets an invented level."""
+class Log(_Event[Literal["log"]]):
+    type: Literal["log"] = "log"
     message: str
     level: Literal["debug", "info", "warn", "error"] = "info"
 
 
-class CapturedLine(msgspec.Struct, omit_defaults=True):
-    """`stdout`/`stderr` payload: one line of captured process output that wasn't an
-    event payload — runner-synthesized, verbatim, untruncated."""
+class CapturedLine(_Event[Literal["stdout", "stderr"]]):
+    type: Literal["stdout", "stderr"]
     line: str
+    meta: dict[str, Any] | None = None
 
 
-class Metric(msgspec.Struct, omit_defaults=True):
+class Metric(_Event[Literal["metric"]]):
+    type: Literal["metric"] = "metric"
     name: str
     value: Scalar
-    step: Union[int, None] = None
-    unit: Union[str, None] = None
+    step: int | None = None
+    unit: str | None = None
 
 
-class Message(msgspec.Struct, rename={"from_": "from"}, omit_defaults=True):
-    from_: str
+class Message(_Event[Literal["message"]]):
+    type: Literal["message"] = "message"
+    from_: str = Field(validation_alias="from", serialization_alias="from")
     content: str
     channel: str
-    to: Union[str, None] = None
-    visible_to: Union[list[str], None] = None
-    # dict[str, Any], not the recursive Json alias (msgspec can't validate that) and
-    # not bare dict (a typed consumer deserves better than Unknown): JSON objects
-    # have str keys; values stay deliberately open — the payload contract
-    meta: Union[dict[str, Any], None] = None
+    to: str | None = None
+    visible_to: list[str] | None = None
+    meta: dict[str, Any] | None = None
 
 
-class LlmRequest(msgspec.Struct, omit_defaults=True):
+class LLMRequest(Model):
     messages: list[dict[str, Any]]
-    params: dict[str, Any] = msgspec.field(default_factory=dict[str, Any])
+    # Effective SDK arguments after adapter overrides, excluding messages/model.
+    params: dict[str, Any] = Field(default_factory=dict)
+    model: str | None = None  # actual model argument sent to the SDK
+    raw: dict[str, Any] | None = None  # provider request, when available
 
 
-class LlmResponse(msgspec.Struct, omit_defaults=True):
+class LLMResponse(Model):
     message: dict[str, Any]
-    finish_reason: Union[str, None] = None
-    # the provider-echoed RESOLVED model id, when the wrapper can see it — distinct
-    # from LlmCall.model (the REQUESTED id): a run naming a moving alias records
-    # here what the alias resolved to at the moment of use (a comparability
-    # covariate that cannot be backfilled)
-    model: Union[str, None] = None
-    raw: Union[dict[str, Any], None] = None
+    finish_reason: str | None = None
+    model: str | None = None  # provider-returned name; not proof of equivalence
+    raw: dict[str, Any] | None = None  # full provider response, not just its message
 
 
-class LlmUsage(msgspec.Struct, omit_defaults=True):
-    input_tokens: Union[int, None] = None
-    output_tokens: Union[int, None] = None
+class LLMUsage(Model):
+    input_tokens: NonNegativeInt | None = None
+    output_tokens: NonNegativeInt | None = None
 
 
-class LlmError(msgspec.Struct, omit_defaults=True):
+class LLMError(Model):
     kind: str
     message: str
 
 
-class LlmCall(msgspec.Struct, omit_defaults=True):
-    model: str
-    request: LlmRequest
-    agent: Union[str, None] = None
-    response: Union[LlmResponse, None] = None
-    usage: Union[LlmUsage, None] = None
-    latency_ms: Union[int, float, None] = None
-    error: Union[LlmError, None] = None
-    # what the call served (like Message.meta) — e.g. sample_id/epoch when one run
-    # works through many problems, so calls stay attributable under interleaving
-    meta: Union[dict[str, Any], None] = None
+class LLMCall(_Event[Literal["llm.call"]]):
+    type: Literal["llm.call"] = "llm.call"
+    model: str  # experiment-requested provider/model identifier
+    request: LLMRequest
+    agent: str | None = None
+    response: LLMResponse | None = None
+    usage: LLMUsage | None = None
+    latency_ms: NonNegativeNumber | None = None
+    error: LLMError | None = None
+    meta: dict[str, Any] | None = None
 
 
-class AgentEvent(msgspec.Struct, omit_defaults=True):
+class AgentEvent(_Event[Literal["agent.event"]]):
+    type: Literal["agent.event"] = "agent.event"
     agent: str
     kind: str
-    data: dict[str, Any] = msgspec.field(default_factory=dict[str, Any])
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
-class Artifact(msgspec.Struct, omit_defaults=True):
+class InstanceData(Model):
+    id: str | int
+    repeat: Annotated[int, Field(ge=1)] | None = None
+    scores: dict[str, Scalar] | None = None
+    error: str | None = None
+    target: Any = None
+    meta: dict[str, Any] | None = None
+
+
+class Instance(_Event[Literal["instance"]]):
+    type: Literal["instance"] = "instance"
+    agent: str
+    data: InstanceData
+
+
+class Artifact(_Event[Literal["artifact"]]):
+    type: Literal["artifact"] = "artifact"
     name: str
     path: str
-    media_type: Union[str, None] = None
-    bytes: Union[int, None] = None
+    media_type: str | None = None
+    bytes: NonNegativeInt | None = None
 
 
-# payload `type` on the wire → Struct
-EVENT_MODELS: dict[str, type[msgspec.Struct]] = {
-    "status": Status,
-    "log": Log,
-    "stdout": CapturedLine,
-    "stderr": CapturedLine,
-    "metric": Metric,
-    "message": Message,
-    "llm.call": LlmCall,
-    "agent.event": AgentEvent,
-    "artifact": Artifact,
-}
+class CustomEvent(_Event[Literal["custom"]]):
+    """Experiment-specific observations within the public wire vocabulary."""
+
+    type: Literal["custom"] = "custom"
+    kind: str
+    data: dict[str, JsonValue]
+
+
+class RunEnvironment(Model):
+    adb_runner: str
+    platform: str
+
+
+class UsageTotals(Model):
+    llm_calls: NonNegativeInt
+    input_tokens: NonNegativeInt
+    output_tokens: NonNegativeInt
+
+
+class RunStart(_Event[Literal["run.start"]]):
+    type: Literal["run.start"] = "run.start"
+    condition: str
+    experiment: str
+    source: str
+    fetch_ref: str
+    dirty: bool
+    spec_params: dict[str, Any]
+    realized_params: dict[str, Any]
+    seed: NonNegativeInt
+    replicate: Annotated[int, Field(ge=1)]
+    env: RunEnvironment
+    result_definitions: dict[str, Any]
+
+
+class RunStatus(_Event[Literal["run.status"]]):
+    type: Literal["run.status"] = "run.status"
+    state: Literal["provisioning", "running", "completed", "failed", "interrupted"]
+
+
+class RunEnd(_Event[Literal["run.end"]]):
+    type: Literal["run.end"] = "run.end"
+    state: Literal["completed", "failed", "interrupted"]
+    duration_s: NonNegativeNumber
+    summary: dict[str, Scalar]
+    usage_totals: UsageTotals
+    exit_code: int
+
+
+# These unions are the authority. The registry used for per-type schema export
+# is derived from their literal tags, rather than maintaining a second list.
+type ProducerPayload = Annotated[
+    Status
+    | Log
+    | CapturedLine
+    | Metric
+    | Message
+    | LLMCall
+    | AgentEvent
+    | Instance
+    | Artifact
+    | CustomEvent,
+    Field(discriminator="type"),
+]
+type Payload = Annotated[
+    ProducerPayload | RunStart | RunStatus | RunEnd,
+    Field(discriminator="type"),
+]
+PRODUCER_ADAPTER = TypeAdapter[ProducerPayload](ProducerPayload)
+EVENT_ADAPTER = TypeAdapter[Payload](Payload)
+
+
+def _event_models(annotation: Any) -> dict[str, type[_Event[Any]]]:
+    from typing import TypeAliasType
+
+    if isinstance(annotation, TypeAliasType):
+        return _event_models(annotation.__value__)
+    if isinstance(annotation, type) and issubclass(annotation, _Event):
+        return {
+            tag: annotation
+            for tag in get_args(annotation.model_fields["type"].annotation)
+        }
+    models: dict[str, type[_Event[Any]]] = {}
+    for arg in get_args(annotation):
+        models.update(_event_models(arg))
+    return models
+
+
+EVENT_MODELS = _event_models(Payload)
+PRODUCER_MODELS = _event_models(ProducerPayload)
+
+
+class Envelope(Model):
+    """A saved record with a conformant payload."""
+
+    v: Literal[0] = 0
+    ts: str
+    run: str
+    seq: NonNegativeInt
+    event: Payload
 
 
 def validate_event(payload: Mapping[str, Any]) -> list[str]:
-    """Errors for a known-type payload dict; empty list = valid or unknown/absent type
-    (both legal by spec — the conformance ladder). Unknown *fields* are allowed."""
-    model = EVENT_MODELS.get(payload.get("type") or "")
-    if model is None:
-        return []
-    body = {k: v for k, v in payload.items() if k != "type"}
+    """Validate the public vocabulary without modifying the original payload."""
     try:
-        msgspec.convert(body, model)
-        return []
-    except msgspec.ValidationError as exc:
+        EVENT_ADAPTER.validate_python(dict(payload), strict=True)
+    except ValidationError as exc:
         return [str(exc)]
+    return []

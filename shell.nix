@@ -46,7 +46,7 @@ pkgs.mkShell {
     UV_PYTHON_PREFERENCE = "only-system";
   };
 
-  # manylinux wheels (numpy/pandas under inspect_ai, msgspec, …) dlopen the C++
+  # manylinux wheels (numpy/pandas under inspect_ai, …) dlopen the C++
   # runtime and zlib; nix's bare interpreter has neither on the loader path, so plain
   # `uv run` in a uv2nix-less venv fails with `libstdc++.so.6: cannot open`. Put them
   # on LD_LIBRARY_PATH so `uv run pytest` etc. work without a manual export.

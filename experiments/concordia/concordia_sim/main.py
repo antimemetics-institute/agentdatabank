@@ -20,8 +20,8 @@ from importlib.metadata import version
 
 import numpy as np
 
-from adb_events.emit import log, status
-from adb_experiment import deposit_artifact, experiment_main, protected_stream
+from adb_events import Log, Status, emit
+from adb_experiment import deposit_artifact, experiment_main
 from .models import Params
 from .translate import (GM_NAME, TurnEmitter, emit_provenance, emit_scene,
                         emit_summary)
@@ -119,17 +119,17 @@ def run(params: Params) -> None:
     )
     sim, clients = build_simulation(params)
     turns = TurnEmitter({agent.name for agent in params.agents})
-    status(f"running concordia: default_model={params.default_model} "
-           f"agents={len(params.agents)} max_steps={params.max_steps}")
+    emit(
+        Status(
+            detail=f"running concordia: default_model={params.default_model} agents={len(params.agents)} max_steps={params.max_steps}"
+        )
+    )
 
     scene = emit_scene(params.premise)  # the opening, streamed first
     failure = None
     try:
-        # Concordia's engine prints its narration to stdout — our JSONL channel —
-        # so play() runs under the protected stream (events live, prints dropped)
-        with protected_stream():
-            sim_log = sim.play(premise=params.premise, max_steps=params.max_steps,
-                               raw_log=turns.raw_log, step_callback=turns.step)
+        sim_log = sim.play(premise=params.premise, max_steps=params.max_steps,
+                           raw_log=turns.raw_log, step_callback=turns.step)
         # Concordia's own log viewer — memories, per-component reasoning, the works —
         # deposited verbatim; the event stream stays the semantic tier + llm.calls
         deposit_artifact("concordia log", sim_log.to_html(),
@@ -140,15 +140,18 @@ def run(params: Params) -> None:
         turns.drain()  # semantic events from entries appended after the last callback
 
     if failure is not None:
-        log(f"concordia simulation failed: {failure}", level="error")
+        emit(Log(message=f"concordia simulation failed: {failure}", level="error"))
     summary = emit_summary(
         steps=turns.steps,
         agents=len(params.agents),
         world_events=scene + turns.world_events,
         model_calls=sum(c.n_calls for c in clients),
     )
-    status(f"done: steps={summary['steps']} "
-           f"world_events={summary['world_events']} model_calls={summary['model_calls']}")
+    emit(
+        Status(
+            detail=f"done: steps={summary['steps']} world_events={summary['world_events']} model_calls={summary['model_calls']}"
+        )
+    )
     if failure is not None:
         raise failure
 

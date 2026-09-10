@@ -12,7 +12,7 @@ and extracts the paper's metrics from the persisted ``log_env.json``.
 
 The program speaks the runner protocol (adb-experiment packages it): params
 arrive as JSON on stdin (or a config path on argv for hand-runs), events leave
-as JSON lines on stdout. Any params or results change here must be mirrored in
+as JSON over the event socket. Any params or results change here must be mirrored in
 package.nix.
 """
 
@@ -24,9 +24,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from adb_events.emit import metric, status
-from adb_experiment.scaffold import (deposit_artifact, experiment_main,
-                                     protected_stream)
+from adb_events import Metric, Status, emit
+from adb_experiment.scaffold import deposit_artifact, experiment_main
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -108,13 +107,6 @@ def _compose(root: str, params: Params, seed: int):
 
 
 def run(params: Params) -> None:
-    # Construction also prints (WandbLogger storage name), so protect the
-    # complete upstream lifecycle, not just its simulation loop.
-    with protected_stream():
-        _run(params)
-
-
-def _run(params: Params) -> None:
     # the runner derives wide per-replicate seeds; numpy's global RNG (via
     # transformers.set_seed, mirrored from upstream) only takes 32 bits — mask
     # once and use the same value everywhere (cfg.seed, RNGs, ChatClient)
@@ -209,7 +201,7 @@ def _run(params: Params) -> None:
     if scenario not in scenarios:
         raise ValueError(f"unknown experiment.scenario: {scenario}")
 
-    status(f"starting {params.experiment} ({scenario}) on {params.model}")
+    emit(Status(detail=f"starting {params.experiment} ({scenario}) on {params.model}"))
     scenarios[scenario](
         cfg.experiment, logger, wrappers, wrapper, embedding_model, storage,
     )
@@ -230,8 +222,8 @@ def _run(params: Params) -> None:
                      filename="config.yaml", media_type="application/yaml")
 
     for name, value in results.items():
-        metric(name=name, value=value)
-    metric(name="model_calls", value=backend.client.n_calls)
+        emit(Metric(name=name, value=value))
+    emit(Metric(name="model_calls", value=backend.client.n_calls))
 
 
 def main() -> int:

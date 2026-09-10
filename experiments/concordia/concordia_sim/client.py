@@ -4,7 +4,7 @@ One class implementing Concordia's `LanguageModel` interface (`sample_text` /
 `sample_choice`) by delegating to Concordia's own ``BaseGPTModel``
 (concordia.contrib), which owns all prompt-shaping (the continuation system message
 + few-shot examples) and the multiple-choice retry loop. Underneath it sits
-:class:`adb_events.llm.ChatClient` — the ADB-instrumented OpenAI-compat client:
+:class:`adb_experiment.llm.ChatClient` — the ADB-instrumented OpenAI-compat client:
 provider routing from the model id's prefix, one ``llm.call`` event per call with
 usage and latency, reasoning-tag stripping, and the keyless ``mock/`` backend.
 
@@ -26,7 +26,7 @@ from concordia.contrib.language_models.openai.base_gpt_model import BaseGPTModel
 from concordia.language_model import language_model
 from concordia.prefabs.simulation import generic as generic_simulation
 
-from adb_events.emit import log
+from adb_events import Log, emit
 from adb_experiment.llm import ChatClient, deterministic_pick
 
 # a small bank of neutral, conversation-shaped replies for the mock backend; picking
@@ -86,7 +86,7 @@ class AdbLanguageModel(language_model.LanguageModel):
                 mock_responder=self._mock_respond,
             )
         except ValueError as exc:
-            log(str(exc), level="error")
+            emit(Log(message=str(exc), level="error"))
             raise RuntimeError(str(exc)) from None
         self._served = self._chat.served_model
         self._base_url = self._chat.base_url

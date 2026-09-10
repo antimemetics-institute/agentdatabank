@@ -15,7 +15,8 @@ dependencies = [
 
 # adb-events is in-repo (not yet on PyPI); the nix build resolves it from the same path
 [tool.uv.sources]
-adb-events = { path = "../lib/adb-events" }
+adb-testing = { path = "../lib/adb-testing", editable = true }
+adb-events = { path = "../lib/adb-events", editable = true }
 adb-providers = { path = "../lib/adb-providers" }
 
 [project.scripts]
@@ -23,7 +24,7 @@ adb-runner = "adb_runner.cli:main"
 adb-emit = "adb_runner.emit:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "adb-testing"]
 
 [build-system]
 requires = ["hatchling"]

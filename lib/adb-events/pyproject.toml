@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "The standardized ADB event shapes — shared by the runner and Python control planes"
 requires-python = ">=3.13"
 dependencies = [
-    "msgspec>=0.18",
+    "pydantic>=2.12,<3",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "adb-testing"]
 
 [build-system]
 requires = ["hatchling"]
@@ -23,3 +23,6 @@ packages = ["adb_events"]
 # Keying the built wheel on the sources makes `uv sync`/`uv run` pick edits up.
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }, { file = "adb_events/py.typed" }]
+
+[tool.uv.sources]
+adb-testing = { path = "../adb-testing", editable = true }
