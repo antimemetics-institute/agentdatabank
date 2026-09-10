@@ -1,9 +1,8 @@
 """Exercise plugin discovery, opt-in activation, and real socket delivery."""
 
 
-def test_plugin_is_explicit_and_restores_environment(pytester, monkeypatch):
+def test_plugin_autoloads_without_conftest_and_restores_environment(pytester, monkeypatch):
     monkeypatch.delenv("ADB_EVENT_SOCKET", raising=False)
-    pytester.makeconftest('pytest_plugins = ["adb_testing.plugin"]')
     pytester.makepyfile("""
 import os
 from pathlib import Path

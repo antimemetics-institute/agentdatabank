@@ -1,1 +1,1 @@
-"""Shared test support. Register adb_testing.plugin in your pytest configuration."""
+"""Shared test support, discovered automatically by pytest when installed."""

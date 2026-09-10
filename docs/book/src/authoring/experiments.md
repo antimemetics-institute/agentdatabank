@@ -124,15 +124,9 @@ dev = ["pytest>=8", "adb-testing"]
 adb-testing = { path = "../../lib/adb-testing", editable = true }
 ```
 
-Merge these entries into existing sections. Register the installed plugin in
-`tests/conftest.py`:
-
-```python
-pytest_plugins = ["adb_testing.plugin"]
-```
-
-No path manipulation or copied fixture implementation is needed. Tests that
-request `event_capture` receive the runner's actual socket receiver and its
+Merge these entries into existing sections. Pytest discovers the installed
+`adb-testing` plugin automatically; no `conftest.py` registration is needed.
+Tests that request `event_capture` receive the runner's actual socket receiver and its
 connection environment; the fixture cleans up afterward. It is not autouse:
 parameter-validation tests that do not emit events need not request it. Do not
 implement a test socket server or patch emission to print JSON.
