@@ -145,6 +145,10 @@ def run(params: Params) -> None:
     from omegaconf import OmegaConf
     from transformers import set_seed
 
+    # Preserve the resolved configuration even if model setup or simulation fails.
+    deposit_artifact("config", OmegaConf.to_yaml(cfg),
+                     filename="config.yaml", media_type="application/yaml")
+
     set_seed(seed)  # mirrored from upstream main.py (global python/numpy/torch)
 
     # model: our pathfinder backend, wrapped in the upstream wrapper — never
@@ -202,24 +206,26 @@ def run(params: Params) -> None:
         raise ValueError(f"unknown experiment.scenario: {scenario}")
 
     emit(Status(detail=f"starting {params.experiment} ({scenario}) on {params.model}"))
-    scenarios[scenario](
-        cfg.experiment, logger, wrappers, wrapper, embedding_model, storage,
-    )
+    log_env_path = Path(storage) / "log_env.json"
+    try:
+        scenarios[scenario](
+            cfg.experiment, logger, wrappers, wrapper, embedding_model, storage,
+        )
+    finally:
+        # Upstream checkpoints this file during execution. Retain the last
+        # checkpoint on failure too, before parsing or replay can raise.
+        if log_env_path.exists():
+            deposit_artifact("log_env", log_env_path.read_text(encoding="utf-8"),
+                             filename="log_env.json", media_type="application/json")
 
     # post-run: the paper's record -> results, transcript, artifacts
     import pandas as pd
 
     from .metrics import compute_metrics, replay_transcript
 
-    log_env_path = Path(storage) / "log_env.json"
     df = pd.read_json(log_env_path)
     results = compute_metrics(df, int(cfg.experiment.env.max_num_rounds))
     replay_transcript(df)
-
-    deposit_artifact("log_env", log_env_path.read_text(),
-                     filename="log_env.json", media_type="application/json")
-    deposit_artifact("config", OmegaConf.to_yaml(cfg),
-                     filename="config.yaml", media_type="application/yaml")
 
     for name, value in results.items():
         emit(Metric(name=name, value=value))

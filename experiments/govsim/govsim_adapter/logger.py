@@ -82,10 +82,8 @@ class AdbLogger(WandbLogger):
             self._pool = kwargs.get("num_resource", self._pool)
         if _LIMIT in kwargs:
             self._limit = kwargs[_LIMIT]
-            self._flush()
-        elif last_log:
-            if not self._collected and self._limit is None:
-                # round already flushed — this is a bare terminal marker, and
-                # the going-forward pool is the honest value for it
-                self._pool = kwargs.get("num_resource", self._pool)
+            self._flush(final=last_log)
+        elif last_log and self._collected:
+            # A bare terminal notification after an already flushed round is
+            # not another harvest. In particular, don't chart its regrown pool.
             self._flush(final=True)
