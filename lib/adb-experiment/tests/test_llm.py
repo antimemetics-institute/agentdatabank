@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from types import SimpleNamespace
 
 import pytest
 from openai.types.chat import ChatCompletion
@@ -12,7 +13,6 @@ from adb_experiment.llm import ChatClient
 def client_and_reply():
     client = ChatClient("mock/alias", temperature=0.2, seed=17, max_tokens=80)
     client.is_mock = False
-    client._disable_thinking = True
     reply = ChatCompletion.model_validate(
         {
             "id": "call-123",
@@ -99,3 +99,39 @@ def test_mock_records_effective_parameters(event_capture):
         "max_completion_tokens": 80,
     }
     assert event["meta"]["backend"] == "mock"
+
+
+@pytest.mark.parametrize("thinking", [None, True, False])
+def test_qwen_reasoning_settings_are_caller_owned(event_capture, monkeypatch, thinking):
+    _, reply = client_and_reply()
+    sent = {}
+
+    def create(**kw):
+        sent.update(deepcopy(kw))
+        return reply
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setattr(
+        "openai.OpenAI",
+        lambda **kw: SimpleNamespace(chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create))),
+    )
+    client = ChatClient("openai/Qwen3-test")
+    request = {
+        "model": client.served_model,
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+    if thinking is not None:
+        request["extra_body"] = {
+            "chat_template_kwargs": {"enable_thinking": thinking, "custom": "kept"},
+        }
+    original = deepcopy(request)
+    client.chat.completions.create(**request)
+
+    assert sent == original
+    assert request == original
+    event = event_capture.read()[0]
+    assert event["request"]["params"] == {
+        k: v for k, v in original.items() if k not in ("model", "messages")
+    }

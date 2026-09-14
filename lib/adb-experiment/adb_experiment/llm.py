@@ -15,9 +15,8 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
   * run-level generation params apply uniformly: `temperature` overrides (it is the
     run's declared axis), `seed` fills in when the caller passes none, `max_tokens`
     caps whatever the caller asks for;
-  * local reasoning models are accommodated: qwen served names get llama.cpp/vLLM's
-    ``chat_template_kwargs.enable_thinking=false``, and ``<think>`` blocks are
-    stripped from the content handed back (the event keeps the reply verbatim).
+  * ``<think>`` blocks are stripped from the content handed back (the event keeps
+    the reply verbatim). Request-side reasoning settings are caller-owned.
 
 Needs the ``openai`` SDK — depend on ``adb-events[llm]``. Import stays inside this
 module so the base package adds no requirement.
@@ -97,18 +96,12 @@ class ChatClient:
             self.served_model = model_id.split("/", 1)[1]
             self.base_url = ""
             self._request = self._mock_create  # unreached (_create short-circuits)
-            self._disable_thinking = False
         else:
             import openai  # the [llm] extra; only this module needs it
 
             endpoint = resolve(model_id)  # ValueError with the fix in the message
             self.served_model = endpoint.served_model
             self.base_url = endpoint.base_url
-            # Qwen is a reasoning model: left alone it spends the whole token budget
-            # inside <think>…</think> and returns an empty answer. The reliable switch
-            # is the chat endpoint's chat_template_kwargs (llama.cpp/vLLM); strip_think
-            # still covers any that slip through.
-            self._disable_thinking = "qwen" in self.served_model.lower()
             sdk = openai.OpenAI(api_key=endpoint.api_key,
                                 base_url=endpoint.base_url)
 
@@ -140,10 +133,6 @@ class ChatClient:
                 self._max_tokens if want is None else min(want, self._max_tokens)
             )
             kw.pop("max_tokens", None)
-        if self._disable_thinking:
-            kw.setdefault("extra_body", {})["chat_template_kwargs"] = {
-                "enable_thinking": False
-            }
         if self.is_mock:
             return self._mock_create(kw)
         request = LLMRequest(
