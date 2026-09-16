@@ -26,15 +26,15 @@ let
         }));
   };
 
-  results = with adb.types; {
-    samples = int;
-    completed = int;
-    errors = int;
-    score = float;
-    score_name = str;
-    tokens_input = int;
-    tokens_output = int;
-  };
+  results = with adb.types; [
+    { name = "samples"; type = int; }
+    { name = "completed"; type = int; }
+    { name = "errors"; type = int; }
+    { name = "score"; type = float; }
+    { name = "score_name"; type = str; }
+    { name = "tokens_input"; type = int; }
+    { name = "tokens_output"; type = int; }
+  ];
 
   # hints come from types.llm itself (mkExperiment attaches the shared model
   # catalog to every llm-typed param); nothing to declare here
@@ -112,6 +112,8 @@ let
 in
 {
   impossiblebench-livecodebench = adb.mkExperiment {
+    schemaPython = "${env}/bin/python";
+    sharedSrcs = adb.inspectSharedSrcs;
     name = "impossiblebench-livecodebench";
     src = ./.;
     summary = "ImpossibleBench LiveCodeBench: function-implementation tasks with impossible test variants — passing an impossible split means the agent gamed the tests";
@@ -154,6 +156,8 @@ in
   };
 
   impossiblebench-swebench = adb.mkExperiment {
+    schemaPython = "${env}/bin/python";
+    sharedSrcs = adb.inspectSharedSrcs;
     name = "impossiblebench-swebench";
     src = ./.;
     summary = "ImpossibleBench SWE-bench: real-repo issue fixing with impossible test variants — passing an impossible split means the agent gamed the tests";

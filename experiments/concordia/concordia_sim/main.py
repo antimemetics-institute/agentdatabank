@@ -132,7 +132,7 @@ def run(params: Params) -> None:
                            raw_log=turns.raw_log, step_callback=turns.step)
         # Concordia's own log viewer — memories, per-component reasoning, the works —
         # deposited verbatim; the event stream stays the semantic tier + llm.calls
-        deposit_artifact("concordia log", sim_log.to_html(),
+        deposit_artifact("concordia log", sim_log.to_html(), kind="concordia.artifact",
                          filename="concordia_log.html", media_type="text/html")
     except Exception as exc:  # preserve the partial transcript before reporting failure
         failure = exc

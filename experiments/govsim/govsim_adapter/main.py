@@ -9,6 +9,9 @@ checkout with a seed-forwarding patch (``GOVSIM_UPSTREAM``, exported by the pack
 program mirrors upstream ``simulation/main.py``'s construction site — config
 composition, model injection, embedder substitution, wandb neutralization —
 and extracts the paper's metrics from the persisted ``log_env.json``.
+Persisted persona nodes are ingested too. ``persona_*/embeddings.json`` is
+recomputable from node descriptions and the embedder named in ``govsim.config``
+(``data.embedder``), so embeddings are left out of the event stream.
 
 The program speaks the runner protocol (adb-experiment packages it): params
 arrive as JSON on stdin (or a config path on argv for hand-runs), events leave
@@ -21,12 +24,15 @@ from __future__ import annotations
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Literal
 
-from adb_events import Metric, Status, emit
-from adb_experiment.scaffold import deposit_artifact, experiment_main
+from adb_events import Result, Status, emit
+from adb_experiment.scaffold import experiment_main
 from pydantic import BaseModel, Field, field_validator
+from pydantic.warnings import UnsupportedFieldAttributeWarning
+from .models import ConfigData, GovsimConfig
 
 
 EXPERIMENTS = (
@@ -98,6 +104,7 @@ def _compose(root: str, params: Params, seed: int):
         f"llm.top_p={json.dumps(params.top_p)}",
         f"seed={seed}",
         f"+experiment.env.seed={seed}",
+        f"+embedder={params.embedder}",
         "debug=true",
     ]
     if params.max_rounds > 0:
@@ -130,9 +137,8 @@ def run(params: Params) -> None:
     from omegaconf import OmegaConf
     from transformers import set_seed
 
-    # Preserve the resolved configuration even if model setup or simulation fails.
-    deposit_artifact("config", OmegaConf.to_yaml(cfg),
-                     filename="config.yaml", media_type="application/yaml")
+    # Configuration belongs in the transcript, including on setup failure.
+    emit(GovsimConfig(data=ConfigData.model_validate(OmegaConf.to_container(cfg, resolve=True))))
 
     set_seed(seed)  # mirrored from upstream main.py (global python/numpy/torch)
 
@@ -190,32 +196,46 @@ def run(params: Params) -> None:
     if scenario not in scenarios:
         raise ValueError(f"unknown experiment.scenario: {scenario}")
 
+    from .metrics import compute_metrics
+    from .upstream import ingest_storage
+
     emit(Status(detail="Starting simulation"))
     log_env_path = Path(storage) / "log_env.json"
+    rows = None
     try:
         scenarios[scenario](
             cfg.experiment, logger, wrappers, wrapper, embedding_model, storage,
         )
     finally:
-        # Upstream checkpoints this file during execution. Retain the last
-        # checkpoint on failure too, before parsing or replay can raise.
-        if log_env_path.exists():
-            deposit_artifact("log_env", log_env_path.read_text(encoding="utf-8"),
-                             filename="log_env.json", media_type="application/json")
+        # Capture every completed native file even when the simulation fails.
+        # Ingestion precedes Pandas so native values remain unchanged.
+        simulation_error = sys.exception()
+        try:
+            rows = ingest_storage(Path(storage))
+        except (ValueError, OSError) as exc:
+            if simulation_error is None:
+                raise
+            # Diagnostics are already in the stream. A missing or broken
+            # checkpoint must not replace the original simulation failure.
+            simulation_error.add_note(f"Checkpoint ingestion also failed: {exc}")
 
-    # post-run: the paper's record -> results, transcript, artifacts
+    if rows is None:
+        raise FileNotFoundError(log_env_path)
     import pandas as pd
 
-    from .metrics import compute_metrics, replay_transcript
-
-    df = pd.read_json(log_env_path)
-    results = compute_metrics(df, int(cfg.experiment.env.max_num_rounds))
-    replay_transcript(df)
+    results = compute_metrics(pd.DataFrame(rows), int(cfg.experiment.env.max_num_rounds))
 
     for name, value in results.items():
-        emit(Metric(name=name, value=value))
-    emit(Metric(name="model_calls", value=backend.client.n_calls))
+        emit(Result(name=name, value=value))
 
 
 def main() -> int:
+    # wandb's generated GraphQL models attach Field(repr/frozen) to union
+    # members; Pydantic warns at import time even with wandb disabled.
+    warnings.filterwarnings("ignore", category=UnsupportedFieldAttributeWarning)
+    # Hydra's defaults_list.py warns because upstream config omits _self_.
+    warnings.filterwarnings(
+        "ignore", message=r".*Defaults list is missing `_self_`.*",
+        category=UserWarning, module=r"hydra\._internal\.defaults_list",
+    )
     return experiment_main(Params, run, prog="govsim")

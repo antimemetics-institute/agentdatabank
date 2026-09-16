@@ -1,4 +1,4 @@
-"""Post-run: GovSim's persisted record (log_env.json) → ADB results + transcript.
+"""GovSim's persisted environment rows → ADB results.
 
 Everything the paper's headline numbers need lands in ``log_env.json`` (pandas
 records, rewritten by the env every round). Survival and equality reuse the
@@ -20,7 +20,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from adb_events import CustomEvent, Message, emit
 
 
 def gini(array: np.ndarray) -> float:
@@ -86,38 +85,3 @@ def compute_metrics(df: pd.DataFrame, max_rounds: int) -> dict:
         "equality": 1.0 - gini(per_agent.to_numpy()),
         "over_usage": over_usage,
     }
-
-
-def replay_transcript(df: pd.DataFrame) -> None:
-    """Replay the persisted conversation as ADB events. Timestamps are
-    replay-time; ordering is the persisted order. (Live utterance hooks would
-    mean patching upstream cognition code — rejected.)"""
-    for _, row in df.iterrows():
-        action = row.get("action")
-        if action == "utterance":
-            limit = row.get("resource_limit")
-            emit(
-                Message(
-                    from_=str(row.get("agent_name")),
-                    content=str(row.get("utterance") or ""),
-                    channel="restaurant",
-                    meta={
-                        "round": int(row["round"]),
-                        "resource_limit": None if pd.isna(limit) else int(limit),
-                    },
-                )
-            )
-        elif action in ("conversation_summary", "conversation_resource_limit"):
-            limit = row.get("resource_limit")
-            emit(
-                CustomEvent(
-                    kind="govsim.conversation",
-                    data={
-                        "kind": (
-                            "summary" if action == "conversation_summary" else "limit"
-                        ),
-                        "round": int(row["round"]),
-                        "resource_limit": None if pd.isna(limit) else int(limit),
-                    },
-                )
-            )

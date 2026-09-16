@@ -50,7 +50,12 @@ def test_run_passes_effective_seed_to_environment(
     with pytest.raises(ReachedReset):
         run(parameters(experiment))
 
-    assert not any(event["type"] == "llm.call" for event in event_capture.read())
+    events = event_capture.read()
+    assert not any(event["type"] == "llm.call" for event in events)
+    # Stopping before a checkpoint records its absence without replacing the
+    # simulation's exception with FileNotFoundError during final ingestion.
+    assert any(event.get("kind") == "govsim.unparsed_log"
+               and "log_env.json" in event["data"]["error"] for event in events)
     assert received == [37], "The simulation environment must receive the run seed"
 
 

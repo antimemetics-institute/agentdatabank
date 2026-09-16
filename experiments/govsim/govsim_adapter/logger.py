@@ -4,13 +4,12 @@ Subclass, not fork (extend-tool-as-library): ``debug=True`` is forced, so
 ``wandb.init(mode="disabled")`` makes every trace/log upstream fires a no-op —
 no network, no files. On top of that:
 
-* ``get_agent_chain`` re-points the shared backend's ChatClient ``agent`` before
-  delegating, so each ``llm.call`` event carries the persona (or ``framework``)
-  it belongs to — one backend serves all personas, matching upstream's
-  single-LLM shape.
+* ``get_agent_chain`` maps names to configured persona IDs; ``start_chain``
+  attributes framework calls to their query component and records phase/query
+  metadata. One backend serves all personas, matching upstream's single-LLM shape.
 * ``log_game`` (the per-step hook every scenario ``run()``/env already calls)
-  accumulates the round's stats and emits one ``govsim.state`` event per round,
-  and a chartable ``pool`` metric series.
+  accumulates the round's stats and emits one ``govsim.state`` event per round;
+  its ``resource`` field is the chartable pool series.
 
 Round boundaries are inferred from the stats stream itself: a
 ``conversation_resource_limit`` key closes the round (the restaurant phase), and
@@ -22,17 +21,30 @@ pool reported for a round is the value observed alongside its last stats entry
 
 from __future__ import annotations
 
-from adb_events import CustomEvent, Metric, emit
+from adb_events import emit
 from simulation.utils import WandbLogger
+from .models import GovsimState, StateData
 
 _COLLECTED = "_collected_resource"
 _LIMIT = "conversation_resource_limit"
+_FRAMEWORK_QUERIES = {
+    "prompt_summarize_conversation_in_one_sentence": "summarize_conversation",
+    "prompt_find_harvesting_limit_from_conversation": "find_harvesting_limit",
+    "prompt_text_to_triple": "text_to_triple",
+}
 
 
 class AdbLogger(WandbLogger):
     def __init__(self, experiment_name: str, config: dict, *, backend) -> None:
         super().__init__(experiment_name, config, debug=True)
         self._backend = backend
+        # Match upstream run.py's identity map: the logger receives display names,
+        # while log_env.json and the model-call boundary use stable persona IDs.
+        personas = config["experiment"]["personas"]
+        self._agent_ids = {
+            personas[f"persona_{i}"]["name"]: f"persona_{i}"
+            for i in range(personas["num"])
+        } | {"framework": "framework"}
         self._round = 0
         self._pool: int | None = None  # pool observed with the round's stats
         self._collected: dict[str, int] = {}
@@ -41,26 +53,29 @@ class AdbLogger(WandbLogger):
     # -- llm.call attribution -------------------------------------------------
 
     def get_agent_chain(self, agent_name, phase_name):
-        self._backend.client.agent = agent_name
+        self._agent_id = self._agent_ids[agent_name]
+        self._backend.client.agent = self._agent_id
         return super().get_agent_chain(agent_name, phase_name)
+
+    def start_chain(self, chain_name):
+        # ModelWandbWrapper calls these two hooks in order, before any request.
+        phase, query = chain_name.split("::", 1)
+        self._backend.client.agent = (
+            f"framework/{_FRAMEWORK_QUERIES[query]}"
+            if self._agent_id == "framework" else self._agent_id
+        )
+        self._backend.client.metadata = {"govsim.phase": phase, "govsim.query": query}
+        return super().start_chain(chain_name)
 
     # -- live progress --------------------------------------------------------
 
     def _flush(self, *, final: bool = False) -> None:
         emit(
-            CustomEvent(
-                kind="govsim.state",
-                data={
-                    "round": self._round,
-                    "resource": self._pool,
-                    "collected": self._collected,
-                    "limit": self._limit,
-                    "final": final,
-                },
+            GovsimState(
+                data=StateData(round=self._round, resource=self._pool,
+                               collected=self._collected, limit=self._limit, final=final),
             )
         )
-        if self._pool is not None:
-            emit(Metric(name="pool", value=self._pool, step=self._round))
         self._round += 1
         self._collected = {}
         self._limit = None

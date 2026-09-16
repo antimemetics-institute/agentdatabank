@@ -73,6 +73,38 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     assert captured["messages"][-1]["content"] == "Answer:"
     assert chat[-1]["content"] == "Answer: "
     assert backend.client.n_calls == 1
+    assert event_capture.read()[0]["agent"] == "framework"
+
+
+@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
+@pytest.mark.parametrize("name,query,agent", [
+    ("John", "prompt_harvest", "persona_0"),
+    ("framework", "prompt_summarize_conversation_in_one_sentence", "framework/summarize_conversation"),
+    ("framework", "prompt_find_harvesting_limit_from_conversation", "framework/find_harvesting_limit"),
+    ("framework", "prompt_text_to_triple", "framework/text_to_triple"),
+])
+def test_logger_attributes_queries_without_changing_api_request(monkeypatch, event_capture, name, query, agent):
+    monkeypatch.syspath_prepend(os.environ["GOVSIM_UPSTREAM"])
+    from simulation.utils import WandbLogger
+    from govsim_adapter.backend import ChatClientBackend
+    from govsim_adapter.logger import AdbLogger
+
+    # Replace wandb work only: use the real logger hooks, backend and event emitter.
+    monkeypatch.setattr(WandbLogger, "__init__", lambda *args, **kwargs: None)
+    monkeypatch.setattr(WandbLogger, "get_agent_chain", lambda *args: None)
+    monkeypatch.setattr(WandbLogger, "start_chain", lambda *args: None)
+    backend = ChatClientBackend("mock/model", 42, mock_responder=lambda _: "5")
+    logger = AdbLogger("test", {"experiment": {"personas": {
+        "num": 1, "persona_0": {"name": "John"},
+    }}}, backend=backend)
+    logger.get_agent_chain(name, "phase")
+    logger.start_chain(f"phase::{query}")
+    backend.request_api([{"role": "user", "content": "test"}], 0, 1, 64)
+    [event] = event_capture.read()
+    assert event["agent"] == agent
+    assert event["metadata"]["govsim.phase"] == "phase"
+    assert event["metadata"]["govsim.query"] == query
+    assert "metadata" not in event["call"]["request"]
 
 
 @pytest.mark.parametrize("temperature,top_p,reasoning_effort", [
@@ -117,28 +149,37 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
     events = event_capture.read()
-    metrics = {e["name"]: e["value"] for e in events if e["type"] == "metric"}
+    metrics = {e["name"]: e["value"] for e in events if e["type"] == "result"}
     assert "status" not in metrics
     assert metrics["rounds"] == 1
     assert metrics["total_harvest"] == (20 if "outsider" in experiment else 25)
     assert metrics["equality"] == 1.0
-    assert metrics["model_calls"] > 0
+    assert "model_calls" not in metrics
+    calls = [e for e in events if e["type"] == "llm.call"]
+    assert calls
+    allowed_agents = {*(f"persona_{i}" for i in range(5)),
+                      "framework/summarize_conversation", "framework/find_harvesting_limit",
+                      "framework/text_to_triple"}
+    assert {e["agent"] for e in calls} <= allowed_agents
+    assert all(e["metadata"]["govsim.phase"] and e["metadata"]["govsim.query"] for e in calls)
+    assert "UnsupportedFieldAttributeWarning" not in proc.stderr
     assert any(e["type"] == "custom" and e["kind"] == "govsim.state" for e in events)
     from omegaconf import OmegaConf
-    config = OmegaConf.load(tmp_path / "artifacts/config.yaml")
+    config = OmegaConf.create(next(e["data"] for e in events if e.get("kind") == "govsim.config"))
     assert config.llm.temperature is None
     assert config.llm.top_p is None
     assert config.llm.reasoning_effort == "low"
     assert config.seed == 37
     assert config.llm.path == "mock/model"
     assert config.llm.backend == "adb-experiment.ChatClient"
-    assert not (tmp_path / "artifacts/provenance.json").exists()
-    assert not any(e["type"] == "artifact" and e["name"] == "provenance" for e in events)
+    assert not any(e["type"] == "artifact" for e in events)
+    assert not (tmp_path / "artifacts").exists()
     states = [e["data"] for e in events if e["type"] == "custom" and e["kind"] == "govsim.state"]
     assert len(states) == 1
     assert states[0]["round"] == 0
     assert states[0]["resource"] == metrics["final_resource"]
-    assert (tmp_path / "artifacts/log_env.json").exists()
+    source_rows = json.loads((tmp_path / "govsim_storage" / experiment / "log_env.json").read_text())
+    assert [e["data"] for e in events if e.get("kind") in {"govsim.record", "govsim.harvest", "govsim.utterance", "govsim.summary", "govsim.resource_limit"}] == source_rows
 
 
 @pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
@@ -146,15 +187,22 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
 def test_failed_run_retains_config_and_raw_log(tmp_path, event_capture, fail_simulation):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params()))
-    # Exercise the real setup and artifact path, then fail either inside the
-    # simulation or while parsing its output. Neither should lose the evidence.
+    # A broken checkpoint remains inspectable in the transcript, without artifacts.
     script = '''
 import importlib
+import os
+import sys
 from pathlib import Path
 from govsim_adapter.main import main
 
+# This fixture patches upstream before main() can add GOVSIM_UPSTREAM to sys.path.
+sys.path.insert(0, os.environ["GOVSIM_UPSTREAM"])
+
 def simulate(cfg, logger, wrappers, wrapper, embedder, storage):
     Path(storage, "log_env.json").write_text("unfinished checkpoint")
+    persona = Path(storage, "persona_0")
+    persona.mkdir()
+    (persona / "nodes.json").write_text('[{"id":1,"description":"completed memory checkpoint"}]')
     if FAIL_SIMULATION:
         raise RuntimeError("simulation failed after checkpoint")
 
@@ -168,11 +216,15 @@ raise SystemExit(main())
         text=True, capture_output=True, timeout=120,
     )
     assert proc.returncode == 1, proc.stderr
-    assert (tmp_path / "artifacts/config.yaml").exists()
-    assert (tmp_path / "artifacts/log_env.json").read_text() == "unfinished checkpoint"
     events = event_capture.read()
-    assert {e["name"] for e in events if e["type"] == "artifact"} == {"config", "log_env"}
-    assert not any(e["type"] == "metric" for e in events)
+    assert any(e.get("kind") == "govsim.config" for e in events), proc.stderr
+    assert next(e["data"]["text"] for e in events if e.get("kind") == "govsim.unparsed_log") == "unfinished checkpoint"
+    assert [e["data"]["source"] for e in events if e.get("kind") == "govsim.upstream_log"] == ["log_env.json", "persona_0/nodes.json"]
+    assert next(e["data"] for e in events if e.get("kind") == "govsim.memory") == {
+        "persona": "persona_0", "node": {"id": 1, "description": "completed memory checkpoint"},
+    }
+    assert not any(e["type"] == "artifact" for e in events)
+    assert not any(e["type"] == "result" for e in events)
     if fail_simulation:
         assert "simulation failed after checkpoint" in proc.stderr
 
@@ -186,7 +238,7 @@ def test_missing_upstream_exits_nonzero_with_traceback(tmp_path, event_capture):
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
     assert proc.returncode != 0
     events = event_capture.read()
-    assert not any(e["type"] == "metric" and e["name"] == "status" for e in events)
+    assert not any(e["type"] == "result" and e["name"] == "status" for e in events)
     assert "GOVSIM_UPSTREAM is not set" in proc.stderr
 
 
@@ -208,3 +260,23 @@ def _reply(text):
             ],
         }
     )
+
+
+def test_ingested_discussion_keeps_row_rounds_without_boundary_events(event_capture, tmp_path):
+    from adb_events import CustomEvent, parse_event
+    from govsim_adapter.upstream import ingest_storage
+
+    rows = [dict(action="utterance", round=round_, agent_id="a", utterance=text)
+            for round_ in (0, 3) for text in ("Take two.", "Leave enough for tomorrow.")]
+    rows.insert(0, {"action": "harvesting", "round": 0, "wanted_resource": 7,
+                    "html_interactions": ["<b>original</b>"], "future_field": {"x": None}})
+    rows.append({"action": "future_action", "round": 3, "value": 1.25})
+    (tmp_path / "log_env.json").write_text(json.dumps(rows))
+    assert ingest_storage(tmp_path) == rows
+    events = event_capture.read()
+    assert all(isinstance(parse_event(json.dumps(e)), CustomEvent) for e in events)
+    assert [e["data"] for e in events if e["kind"] in {"govsim.record", "govsim.harvest", "govsim.utterance", "govsim.summary", "govsim.resource_limit"}] == rows
+    assert events[0]["kind"] == "govsim.upstream_log"
+    assert events[0]["data"]["source"] == "log_env.json"
+    assert events[0]["data"]["records"] == len(rows)
+    assert len(events) == len(rows) + 1

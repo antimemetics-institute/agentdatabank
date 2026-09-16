@@ -34,6 +34,7 @@ let
 in
 {
   concordia = adb.mkExperiment {
+    schemaPython = "${env}/bin/python";
     name = "concordia";
     # NOT ./. — tests are not behavior, so a test edit re-versions nothing
     src = [ ./package.nix ./pyproject.toml ./uv.lock ./concordia_sim ];
@@ -102,12 +103,12 @@ in
         group = "generation";
       };
     };
-    results = with adb.types; {
-      steps = int;         # simulation steps actually run
-      agents = int;        # size of the scenario roster
-      world_events = int;  # world-channel messages (premise + agent turns)
-      model_calls = int;   # llm.call events emitted
-    };
+    results = with adb.types; [
+      { name = "steps"; type = int; }         # simulation steps actually run
+      { name = "agents"; type = int; }        # size of the scenario roster
+      { name = "world_events"; type = int; }  # world-channel messages (premise + agent turns)
+      { name = "model_calls"; type = int; }   # llm.call events emitted
+    ];
     env = { network = true; };
     # the lift between the runner protocol (flat params on stdin, seed in $ADB_SEED)
     # and the sim's config file: rename model -> default_model, merge the seed.

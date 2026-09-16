@@ -2,15 +2,13 @@
 premise, and one (step, actor, action) tuple per turn), so it needs no Concordia import
 and its test can feed hand-built inputs.
 
-The transcript is the turn-by-turn conversation: the game master narrates the opening
-premise, then each step is a `message` on the ``world`` channel attributed to the agent
-that acted (the completeness convention — every observable fact is a message with an
-audience). This is the actual dialogue, not a dump of the game master's internal memory.
+Opening narration, agent actions, and observations use experiment-specific custom
+events. Their meanings follow Concordia's recorded data.
 """
 
 from __future__ import annotations
 
-from adb_events import AgentEvent, Message, Metric, emit
+from adb_events import CustomEvent, Result, emit
 
 # The narrator's display name — sits next to roster names ("Alice", "Bob") in the
 # transcript, so it's spelled like one. main.py names the Concordia game-master
@@ -24,14 +22,11 @@ def emit_provenance(*, concordia_version: str, model: str,
 
     The runner separately records the scenario parameters.
     """
-    # attributed to the wrapped component, not a scene character: this is concordia's
-    # provenance, not something the game master did (agent.event requires an agent
-    # string; `concordia` names the component whose identity is being recorded)
     emit(
-        AgentEvent(
-            agent="concordia",
-            kind="provenance",
+        CustomEvent(
+            kind="concordia.provenance",
             data={
+                "agent": "concordia",
                 "concordia": concordia_version,
                 "model": model,
                 "agents": agents,
@@ -56,26 +51,28 @@ def _strip_leading_name(actor: str, action: str) -> str:
 
 
 def emit_scene(premise: str) -> int:
-    """Emit the opening premise as a game-master ``world`` message. Returns 1, or 0 if the
+    """Emit the opening premise as a concordia.scene event. Returns 1, or 0 if the
     premise is empty."""
     if not premise:
         return 0
     emit(
-        Message(from_=GM_NAME, content=premise, channel="world", meta={"kind": "scene"})
+        CustomEvent(kind="concordia.scene", data={"narrator": GM_NAME, "text": premise})
     )
     return 1
 
 
 def emit_turn(step: int, actor: str, action: str, roster: set[str]) -> int:
-    """Emit one agent turn as a ``world`` message, live, the moment it happens. Skips
+    """Retain one resolved agent action as a custom event, live. Skips
     setup/skip phases (a non-roster actor) and empty actions. Returns 1 if emitted, else 0.
-    Agnostic to which game master produced the turn — it's just the engine's step data."""
+    Preserve the engine action verbatim; do not classify every action as speech."""
     if actor not in roster:
         return 0
     content = _strip_leading_name(actor, action)
     if not content:
         return 0
-    emit(Message(from_=actor, content=content, channel="world", meta={"step": step}))
+    emit(CustomEvent(kind="concordia.action", data={
+        "step": step, "actor": actor, "content": action,
+    }))
     return 1
 
 
@@ -92,16 +89,16 @@ _PERCEPTION_COMPONENTS = {
 
 
 class TurnEmitter:
-    """`play()`'s step_callback: emit each resolved turn as a live message, drain the
+    """`play()`'s step_callback: emit each resolved turn as a native action, drain the
     engine's raw_log into the semantic events (observations, per-turn perceptions),
     and count what landed. Concordia passes a StepData; only its (step, acting_entity,
     action) triple is read, so tests can feed any plain object. Pass `self.raw_log` to
     `play(raw_log=...)` and call `drain()` once after play returns.
 
-    Semantic tier, per acting turn: `message(channel="observation", to=<agent>)` for
+    Semantic tier, per acting turn: a concordia.observation custom event for
     each observation newly written to that agent's memory (the raw_log lists a rolling
     window, so a per-agent high-water mark emits each observation exactly once), and
-    one `agent.event(kind="perception")` with the agent's current self/situation/
+    one `concordia.perception` with the agent's current self/situation/
     dynamics readings (evolving state — each value emitted the turn it's computed)."""
 
     def __init__(self, roster: set[str]) -> None:
@@ -131,6 +128,7 @@ class TurnEmitter:
 
     def _emit_semantics(self, entry) -> None:
         step = entry.get("Step")
+        emit(CustomEvent(kind="concordia.observations_recorded", data={"step": step}))
         for key, components in entry.items():
             if not (isinstance(components, dict)
                     and key.startswith("Entity [") and key.endswith("]")):
@@ -146,19 +144,13 @@ class TurnEmitter:
                 content = str(text).removeprefix("[observation]").strip()
                 # `Event: ...` is event_resolution's record of the resolved public
                 # turn, copied by the engine into every agent's memory — the same
-                # text the step callback already emitted as the `world` message.
+                # action the step callback already retained as a native event.
                 # Bookkeeping, not perception: only narrated observations are
                 # semantic here.
                 if content and not content.startswith("Event:"):
-                    emit(
-                        Message(
-                            from_=GM_NAME,
-                            to=agent,
-                            content=content,
-                            channel="observation",
-                            meta={"step": step},
-                        )
-                    )
+                    emit(CustomEvent(kind="concordia.observation", data={
+                        "agent": agent, "text": content,
+                    }))
             self._obs_seen[agent] = max(seen, len(window))
 
             # the agent's current read of itself and the scene, this turn (perception
@@ -171,17 +163,16 @@ class TurnEmitter:
             }
             if perception:
                 emit(
-                    AgentEvent(
-                        agent=agent,
-                        kind="perception",
-                        data={"step": step, **perception},
+                    CustomEvent(
+                        kind="concordia.perception",
+                        data={"agent": agent, "step": step, **perception},
                     )
                 )
 
 
 def emit_summary(*, steps: int, agents: int,
                  world_events: int, model_calls: int) -> dict:
-    """Emit the scalar results (last-value-wins metrics) and return them as the summary
+    """Emit the declared scalar results and return them as the summary
     dict matching the experiment's `results` schema."""
     summary = {
         "steps": steps,
@@ -190,5 +181,5 @@ def emit_summary(*, steps: int, agents: int,
         "model_calls": model_calls,
     }
     for name, value in summary.items():
-        emit(Metric(name=name, value=value))
+        emit(Result(name=name, value=value))
     return summary

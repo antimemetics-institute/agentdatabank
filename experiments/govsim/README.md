@@ -40,12 +40,39 @@ how evenly they shared it, and how much remained. Equality alone is not success:
 agents who all collect nothing are also equal.
 
 The runner records launch parameters, seeds, source references and build
-information in `run.json` and `run.start`. GovSim adds the resolved simulation
-configuration in `config.yaml` (including its effective seed) and the raw
-simulation record in `log_env.json`. The config is saved before model setup;
-if simulation fails, any existing log checkpoint is retained as an artifact.
-Conversation event timestamps reflect post-run replay, not when agents spoke;
-their order follows the raw simulation record.
+information in `run.json` and `run.start`. GovSim adds its resolved configuration
+as `govsim.config` and every upstream simulation-log row under an action kind:
+`govsim.harvest`, `govsim.utterance`, `govsim.summary`, or `govsim.resource_limit`.
+Unrecognized actions remain `govsim.record`. These custom
+events preserve the original fields, including interaction HTML and nulls.
+Schema render hints label each row in sequence; facet filters narrow the stream.
+Summary interactions retain their original HTML on disk; the viewer strips tags
+and displays plain text. The resource series is `govsim.state.resource`.
+GovSim exports no artifact events; upstream working files are implementation details.
+
+Record timestamps reflect post-run ingestion, not when agents acted. Each
+`log_env.json` or `persona_N/nodes.json` file has one `govsim.upstream_log` marker
+before its rows: `source` is relative to the storage directory, `bytes` and
+`sha256` describe the original file bytes, and `records` counts ingested records.
+Environment rows retain their own round fields; there are no synthetic round
+or replay boundary events. Each node becomes `govsim.memory` with its `persona`
+ID and untouched `node`; the viewer shows the persona, node type and description.
+Embeddings are not ingested: they are recomputable from node text and the
+configured embedder (recorded as `govsim.config.data.embedder`).
+
+On failure, available environment and memory checkpoints are still ingested.
+Malformed files get a marker with zero ingested records and their text in
+`govsim.unparsed_log`. Missing files get an `unparsed_log` diagnostic with empty
+text, since there are no bytes to hash. Other files are captured before the
+error fails the run.
+
+Model calls identify personas by their upstream IDs (`persona_N`). Framework calls
+use `framework/summarize_conversation`, `framework/find_harvesting_limit`, or
+`framework/text_to_triple`; `govsim.phase` and `govsim.query` metadata retain the
+upstream context. Replay rows keep their original IDs and names. The config hint declares
+the persona roster as an actor registry, so the viewer labels silent personas too.
+Per-row labels are applied after roster labels; IDs remain visible on hover. The Mayor's utterances are templated framework output with no model call
+behind them.
 
 The packaged upstream source includes a small `seed.patch`: each scenario
 passes the effective run seed to environment reset, and perturbation environments

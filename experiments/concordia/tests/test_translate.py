@@ -12,17 +12,17 @@ def _events(event_capture):
 def test_scene_then_turns_stream_one_at_a_time(event_capture):
     roster = {"Alice", "Bob"}
     assert emit_scene("Alice and Bob meet at a cafe.") == 1
-    # the "-- " speech marker and wrapping quotes are cleaned into a plain spoken line
+    # the original action, including speech markers and quotes, is retained
     assert emit_turn(1, "Alice", 'Alice -- "Hi Bob!"', roster) == 1
     assert emit_turn(2, "Bob", "Bob Good to see you.", roster) == 1
 
     events = _events(event_capture)
-    assert [e["type"] for e in events] == ["message"] * 3
-    assert all(e["channel"] == "world" for e in events)
-    assert [e["from"] for e in events] == ["Game Master", "Alice", "Bob"]
-    assert events[0]["content"] == "Alice and Bob meet at a cafe."
-    assert events[1]["content"] == "Hi Bob!"
-    assert events[2]["content"] == "Good to see you."
+    assert [e["type"] for e in events] == ["custom", "custom", "custom"]
+    assert events[0]["data"]["narrator"] == "Game Master"
+    assert events[0]["data"]["text"] == "Alice and Bob meet at a cafe."
+    assert [e["data"]["actor"] for e in events[1:]] == ["Alice", "Bob"]
+    assert events[1]["data"]["content"] == 'Alice -- "Hi Bob!"'
+    assert events[2]["data"]["content"] == "Bob Good to see you."
 
 
 def test_non_roster_and_empty_turns_dropped(event_capture):
@@ -32,7 +32,7 @@ def test_non_roster_and_empty_turns_dropped(event_capture):
     assert emit_turn(2, "Alice", "Alice:   ", roster) == 0  # empty action
     assert emit_turn(3, "Bob", "Bob: hello", roster) == 1
     events = _events(event_capture)
-    assert [e["from"] for e in events] == ["Bob"]
+    assert [e["data"]["actor"] for e in events] == ["Bob"]
 
 
 def test_semantic_events_from_raw_log(event_capture):
@@ -65,11 +65,11 @@ def test_semantic_events_from_raw_log(event_capture):
     turns.drain()
     events = _events(event_capture)
 
-    obs = [e for e in events if e["type"] == "message" and e["channel"] == "observation"]
-    assert [(e["to"], e["content"]) for e in obs] == [
+    obs = [e for e in events if e["type"] == "custom" and e["kind"] == "concordia.observation"]
+    assert [(e["data"]["agent"], e["data"]["text"]) for e in obs] == [
         ("Alice", "Bob waves."), ("Alice", "Bob sits down.")]  # each exactly once
 
-    percs = [e for e in events if e["type"] == "agent.event" and e["kind"] == "perception"]
+    percs = [e for e in events if e.get("kind") == "concordia.perception"]
     assert [p["data"]["self"] for p in percs] == ["Alice is warm.", "Alice is curious."]
     assert percs[0]["data"]["situation"] == "Alice is in a cafe."
     # GM bookkeeping never becomes a semantic event
@@ -80,8 +80,8 @@ def test_provenance_is_an_agent_event(event_capture):
     emit_provenance(concordia_version="2.4.0", model="mock/model",
                     agents=2, python_version="3.13.0")
     (event,) = _events(event_capture)
-    assert event["type"] == "agent.event"
-    assert event["kind"] == "provenance"
+    assert event["type"] == "custom"
+    assert event["kind"] == "concordia.provenance"
     assert event["data"]["concordia"] == "2.4.0"
     assert event["data"]["agents"] == 2
 
@@ -92,5 +92,5 @@ def test_summary_emits_metrics_and_returns_dict(event_capture):
     assert summary == {"steps": 3, "agents": 2,
                        "world_events": 9, "model_calls": 14}
     events = _events(event_capture)
-    assert {e["type"] for e in events} == {"metric"}
+    assert {e["type"] for e in events} == {"result"}
     assert {e["name"]: e["value"] for e in events} == summary

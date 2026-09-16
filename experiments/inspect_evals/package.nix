@@ -37,15 +37,15 @@ let
     };
   };
 
-  results = with adb.types; {
-    samples = int;
-    completed = int;
-    errors = int;
-    score = float;
-    score_name = str;
-    tokens_input = int;
-    tokens_output = int;
-  };
+  results = with adb.types; [
+    { name = "samples"; type = int; }
+    { name = "completed"; type = int; }
+    { name = "errors"; type = int; }
+    { name = "score"; type = float; }
+    { name = "score_name"; type = str; }
+    { name = "tokens_input"; type = int; }
+    { name = "tokens_output"; type = int; }
+  ];
 
   # Experiment-specific EXTRA hints only — the shared model catalog is attached by
   # types.llm itself (mkExperiment), with extras prepended. The keyless mock leads:
@@ -55,6 +55,8 @@ let
   ];
 
   mkTask = name: { task, summary, keyless ? false, sandbox ? false, taskParams ? { }, paramKwargs ? { }, links ? [ ] }: adb.mkExperiment {
+    schemaPython = "${env}/bin/python";
+    sharedSrcs = adb.inspectSharedSrcs;
     inherit name summary links;
     # The declaration and environment pin define this family's source identity.
     # task_catalog.json is not included; catalog regeneration alone leaves it unchanged.
