@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "adb-testing"]
+dev = ["pytest>=8", "adb-testing", "duckdb>=1.4,<2"]
 
 [build-system]
 requires = ["hatchling"]
@@ -22,7 +22,7 @@ packages = ["adb_events"]
 # consumer's venv running (and typechecking) a stale copy until the next relock.
 # Keying the built wheel on the sources makes `uv sync`/`uv run` pick edits up.
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }, { file = "adb_events/py.typed" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }, { file = "adb_events/schema.json" }, { file = "adb_events/py.typed" }]
 
 [tool.uv.sources]
 adb-testing = { path = "../adb-testing", editable = true }

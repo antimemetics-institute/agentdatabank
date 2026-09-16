@@ -2,41 +2,40 @@
 
 from typing import Any
 
-from .emit import emit
+# Load the core models before the vendored snapshot imports models.base.
 from .models import (
     EVENT_ADAPTER,
     EVENT_MODELS,
     PRODUCER_ADAPTER,
     PRODUCER_MODELS,
-    AgentEvent,
-    Artifact,
     CapturedLine,
     CustomEvent,
     Envelope,
-    Instance,
-    InstanceData,
     Json,
     LLMCall,
-    LLMError,
-    LLMRequest,
-    LLMResponse,
-    LLMUsage,
     Log,
-    Message,
-    Metric,
+    Result,
     Payload,
     ProducerPayload,
     RunEnd,
     RunEnvironment,
     RunStart,
-    RunStatus,
     Scalar,
     Status,
-    UsageTotals,
     validate_event,
 )
+from .inspect_chat import (
+    ChatMessage,
+    ChatMessageAssistant,
+    ChatMessageSystem,
+    ChatMessageTool,
+    ChatMessageUser,
+    ModelCall, ModelOutput, ModelUsage, ChatCompletionChoice, ToolInfo, ToolFunction,
+)
+from .emit import emit
 from .transport import EventTransportError
 from .read import EventReadError, parse_event, read_events
+from .render import ActorRegistry, RenderHint, export_schema
 
 __all__ = [
     "emit",
@@ -53,28 +52,26 @@ __all__ = [
     "PRODUCER_MODELS",
     "validate_event",
     "json_schemas",
+    "RenderHint",
+    "ActorRegistry",
+    "export_schema",
     "Json",
     "Scalar",
     "Status",
     "Log",
     "CapturedLine",
-    "Metric",
-    "Message",
+    "Result",
     "LLMCall",
-    "LLMRequest",
-    "LLMResponse",
-    "LLMUsage",
-    "LLMError",
-    "AgentEvent",
-    "Instance",
-    "InstanceData",
-    "Artifact",
+    "ChatMessage",
+    "ChatMessageAssistant",
+    "ChatMessageSystem",
+    "ChatMessageTool",
+    "ChatMessageUser",
+    "ModelCall", "ModelOutput", "ModelUsage", "ChatCompletionChoice", "ToolInfo", "ToolFunction",
     "CustomEvent",
     "RunStart",
-    "RunStatus",
     "RunEnd",
     "RunEnvironment",
-    "UsageTotals",
 ]
 
 

@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
-from adb_events import Artifact, Metric, emit
+from adb_events import CustomEvent, Result, emit
 
 
 class SupportsModelValidate(Protocol):
@@ -45,7 +45,7 @@ def experiment_main(params_model: SupportsModelValidate,
     """The whole main(): read params (stdin, or a config file named on argv),
     validate them (any object with a pydantic-style ``model_validate``), default
     ``ADB_RUN_DIR``, call ``run(params)``. If `run` raises, the traceback goes
-    to stderr, each entry of `fallback_summary` is emitted as a metric, and
+    to stderr, each entry of `fallback_summary` is emitted as a result, and
     the exit code is 1. Successful execution returns 0."""
     parser = argparse.ArgumentParser(prog=prog, description=description)
     parser.add_argument(
@@ -66,26 +66,24 @@ def experiment_main(params_model: SupportsModelValidate,
     except Exception:
         traceback.print_exc()
         for name, value in (fallback_summary or {}).items():
-            emit(Metric(name=name, value=value))
+            emit(Result(name=name, value=value))
         return 1
     return 0
 
 
-def deposit_artifact(name: str, text: str, *, filename: str,
+def deposit_artifact(name: str, text: str, *, filename: str, kind: str,
                      media_type: str | None = None) -> Path:
-    """Write `text` into the run's ``artifacts/`` directory (layout.md) and emit
-    the ``artifact`` event pointing at it (run-dir-relative path). Returns the
+    """Write `text` into a producer-created ``artifacts/`` directory and emit
+    a caller-namespaced custom event pointing at it (run-dir-relative path). Returns the
     written path."""
     art_dir = Path(os.environ.get("ADB_RUN_DIR", ".")) / "artifacts"
-    art_dir.mkdir(parents=True, exist_ok=True)  # pre-created by the runner, not by bare CLI runs
+    art_dir.mkdir(parents=True, exist_ok=True)
     path = art_dir / filename
     path.write_text(text, encoding="utf-8")
     emit(
-        Artifact(
-            name=name,
-            path=f"artifacts/{filename}",
-            media_type=media_type,
-            bytes=path.stat().st_size,
-        )
+        CustomEvent(kind=kind, data={
+            "name": name, "path": f"artifacts/{filename}",
+            "media_type": media_type, "bytes": path.stat().st_size,
+        })
     )
     return path

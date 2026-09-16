@@ -20,6 +20,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.12,<3" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "adb-testing", editable = "../adb-testing" },
+    { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "pytest", specifier = ">=8" },
 ]
 
@@ -55,7 +56,7 @@ requires-dist = [
     { name = "azure-ai-inference", specifier = ">=1.0.0b4" },
     { name = "google-genai", specifier = ">=1.69.0" },
     { name = "groq", specifier = ">=0.28.0" },
-    { name = "inspect-ai", specifier = "~=0.3.60" },
+    { name = "inspect-ai", specifier = ">=0.3.184,<0.4" },
     { name = "mistralai", specifier = ">=2.0.1" },
     { name = "openai", specifier = ">=2.45.0" },
     { name = "pydantic", specifier = ">=2" },
@@ -115,14 +116,14 @@ requires-dist = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "0.11.0"
+version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/93/396d02c91b387b2678f23081869ca47bd495fc6c78789022c683180cf5f1/agent_client_protocol-0.11.0.tar.gz", hash = "sha256:8920a3b27bdcc852fd7c73066f47ab53257dbfbe57b505e20a40c69f80a5391c", size = 87402, upload-time = "2026-07-05T17:07:56.803Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/95/2c28ca34e545ce0282e88272aa3a8abdf8f3f926a0492f567ea11acd071b/agent_client_protocol-0.12.1.tar.gz", hash = "sha256:9963ccb590ed96d7dc542c9c023e90676fc76b1c6562e21a9ee112f4fbcb0095", size = 130605, upload-time = "2026-08-16T14:08:22.545Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/48/a1367dded7765f5489f9840389949d5aeac53a73aeb1b4e6c0ab61e1617a/agent_client_protocol-0.11.0-py3-none-any.whl", hash = "sha256:2d8570cd4911f8af9fbab4808f7b05f09204a756f346c7409ecdcae3f37cdb2f", size = 68089, upload-time = "2026-07-05T17:07:55.518Z" },
+    { url = "https://files.pythonhosted.org/packages/21/61/0a2186c8ca53cf464767d4c4fb7fd9e23f48ce4547c2fa0d1c83a4d52410/agent_client_protocol-0.12.1-py3-none-any.whl", hash = "sha256:aaf3cc301ed87d9e2c4ccb91adfe1cd58784355f6ce7e513f50e7ca2391862ef", size = 85929, upload-time = "2026-08-16T14:08:21.307Z" },
 ]
 
 [[package]]
@@ -962,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "inspect-ai"
-version = "0.3.249"
+version = "0.3.263"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -982,6 +983,7 @@ dependencies = [
     { name = "jsonpath-ng" },
     { name = "jsonref" },
     { name = "jsonschema" },
+    { name = "markdown-it-py" },
     { name = "mmh3" },
     { name = "nest-asyncio2" },
     { name = "numpy" },
@@ -1005,9 +1007,9 @@ dependencies = [
     { name = "zipp" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c6/2a/b994c824e233cbc2a7d6154013a0d01fbe7b1911da66646b2dc6ef19de3f/inspect_ai-0.3.249.tar.gz", hash = "sha256:e0b01e92a41c4fb13c006b59e6d0db4d1be0cd27060b909e34098169c0f10036", size = 49387023, upload-time = "2026-07-21T00:35:41.972Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/03/3bd61990e197e6e0a68ebd7f1496d0b80af6c1966eea0e48fcfc1ed3b793/inspect_ai-0.3.263.tar.gz", hash = "sha256:54553ca8bfe711853414b49d962e492a60fd4cac8df935be47287a4b719f92b1", size = 35796833, upload-time = "2026-09-04T01:38:04.104Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c9/a5/b93b5ebc7f82c04622b3955df7b3575eb935d73047f13b335725106a54ce/inspect_ai-0.3.249-py3-none-any.whl", hash = "sha256:e32907ec09b78b6ed6258233e259020d396b1532d12019231ed840c18e0df9fc", size = 36910040, upload-time = "2026-07-21T00:35:32.7Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/c0/c12e505462462d5cc2b3fa98b6b2142c9589ebc0308144498f6e9de0c70c/inspect_ai-0.3.263-py3-none-any.whl", hash = "sha256:503e7ff509d77fcdf65989027a19fea966fb668deb88a234468c3290964fd86a", size = 34294681, upload-time = "2026-09-04T01:37:58.013Z" },
 ]
 
 [[package]]

@@ -95,7 +95,7 @@ def test_provenance_emitted_from_real_log(inspect_ok, tmp_path, capsys, event_ca
     emit_all(_run_hello(tmp_path), "mockllm/model")
     events = event_capture.read()
     prov = [
-        e for e in events if e["type"] == "agent.event" and e["kind"] == "provenance"
+        e for e in events if e.get("kind") == "inspect.provenance"
     ]
     assert len(prov) == 1
     # inspect_ai always reports its own version in the log's packages
@@ -103,10 +103,7 @@ def test_provenance_emitted_from_real_log(inspect_ok, tmp_path, capsys, event_ca
 
 
 def test_llm_call_shape(inspect_ok, tmp_path, capsys, event_capture):
-    """llm.call carries the events.md-required fields (regression guard: the raw
-    provider payload — OpenAI Responses shape for reasoning models — must NOT be the
-    top-level request/response, which lacked request.messages/response.message and
-    the runner linted as malformed). Runs in a bare venv, unlike the adb-emit check."""
+    """llm.call carries typed input/output independently of the raw provider call."""
     from adb_inspect.translate import emit_all
 
     emit_all(_run_hello(tmp_path), "mockllm/model")
@@ -114,9 +111,32 @@ def test_llm_call_shape(inspect_ok, tmp_path, capsys, event_capture):
     calls = [e for e in events if e["type"] == "llm.call"]
     assert calls, "expected at least one llm.call"
     for c in calls:
-        assert isinstance(c["request"]["messages"], list)  # required by events.md
-        assert "params" in c["request"]
-        assert c["response"] is None or "message" in c["response"]
+        assert isinstance(c["input"], list) and c["input"]
+        assert all(isinstance(m, dict) and "role" in m and "content" in m for m in c["input"])
+        assert "input_refs" not in c
+        assert not {"params", "instance_id", "repeat", "role", "retries", "cache"} & c.keys()
+        assert "choices" in c["output"]
+
+
+def test_every_fixture_transcript_event_is_retained_raw(inspect_ok, tmp_path, event_capture):
+    from inspect_ai.event import ModelEvent
+    from adb_inspect.translate import emit_all
+
+    log = _run_hello(tmp_path)
+    emit_all(log, "mockllm/model")
+    events = event_capture.read()
+    native = [event for sample in log.samples for event in sample.events]
+    raw = [event["data"] for event in events if event.get("kind") == "inspect.event"]
+    assert len({event.event for event in native}) > 1
+    assert raw == [event.model_dump(mode="json", exclude_none=True) for event in native]
+    assert {event["event"] for event in raw} == {event.event for event in native}
+    assert sum(e["type"] == "llm.call" for e in events) == sum(isinstance(e, ModelEvent) for e in native)
+    for index, event in enumerate(events):
+        if event.get("kind") == "inspect.event" and event["data"]["event"] == "model":
+            assert events[index + 1]["type"] == "llm.call"
+            # Inspect's in-memory/log reader path expands the 0.3.200 pool form.
+            assert event["data"]["input"] and isinstance(event["data"]["input"][0], dict)
+            assert not event["data"].get("input_refs")
 
 
 def test_print_stream_buffers_lines(capsys, event_capture):
@@ -262,4 +282,64 @@ def test_eval_startup_failure_exits_nonzero(
     ) in captured.err
     events = event_capture.read()
     assert any(e["type"] == "log" and e["level"] == "error" for e in events)
-    assert not any(e["type"] == "metric" and e["name"] == "status" for e in events)
+    assert not any(e["type"] == "result" and e["name"] == "status" for e in events)
+
+
+def test_live_hook_receives_expanded_model_input(inspect_ok, tmp_path, monkeypatch, event_capture):
+    import importlib
+    from adb_inspect.models import Params
+    from inspect_ai.event import ModelEvent
+
+    class FutureModelEvent(ModelEvent):
+        future_live: str = "a future upstream field"
+
+    main_module = importlib.import_module("adb_inspect.main")
+    original_emit = main_module.SampleTranscript.emit_ready
+    inputs = []
+    logs = []
+
+    def observe(self, events, agent, *, final=False):
+        copied = list(events)
+        if not final:
+            for index in range(self.position, len(copied)):
+                ev = copied[index]
+                if ev.pending:
+                    break
+                if isinstance(ev, ModelEvent):
+                    inputs.append(ev.model_dump(mode="json"))
+                    copied[index] = FutureModelEvent.model_validate(ev.model_dump())
+        original_emit(self, copied, agent, final=final)
+
+    monkeypatch.setattr(main_module.SampleTranscript, "emit_ready", observe)
+    monkeypatch.setattr(main_module, "deposit_log", lambda log, _: logs.append(log))
+    monkeypatch.setattr(main_module, "resolve_task", lambda _: _hello_task())
+    monkeypatch.setenv("ADB_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.chdir(tmp_path)
+    assert main_module.run(Params(task="fixture", model="mockllm/model")) == 0
+    assert len(inputs) == 2, "expected both calls to pass through the live hook"
+    for payload in inputs:
+        assert payload["input_refs"] is None
+        assert payload["input"] and all(
+            isinstance(message, dict) and "role" in message and "content" in message
+            for message in payload["input"]
+        ), "live capture must see expanded ChatMessages, not .eval message-pool indices"
+    events = event_capture.read()
+    assert sum(e["type"] == "llm.call" for e in events) == 2
+    assert all(e["agent"] == "mockllm/model" for e in events if e["type"] == "llm.call")
+    raw = [e["data"] for e in events if e.get("kind") == "inspect.event"]
+    native = [e for sample in logs[0].samples for e in sample.events]
+    assert len(raw) == len(native)
+    assert {e["event"] for e in raw} == {e.event for e in native}
+    for sample in logs[0].samples:
+        ids = {e.uuid for e in sample.events}
+        observed = [e for e in raw if e["uuid"] in ids]
+        assert [{k: v for k, v in e.items() if k != "future_live"} for e in observed] == [
+            e.model_dump(mode="json", exclude_none=True) for e in sample.events
+        ]
+    assert all("future_live" in e for e in raw if e["event"] == "model")
+    for index, event in enumerate(events):
+        if event.get("kind") == "inspect.event" and event["data"]["event"] == "model":
+            assert events[index + 1]["type"] == "llm.call"
+    assert not any("emit failed" in e.get("message", "") for e in events)
+    [warning] = [e for e in events if "dropped unknown fields" in e.get("message", "")]
+    assert warning["level"] == "warn" and "future_live" in warning["message"]

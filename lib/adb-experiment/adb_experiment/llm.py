@@ -18,22 +18,31 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
   * ``<think>`` blocks are stripped from the content handed back (the event keeps
     the reply verbatim). Request-side reasoning settings are caller-owned.
 
-Needs the ``openai`` SDK — depend on ``adb-events[llm]``. Import stays inside this
+Needs the ``openai`` SDK — depend on ``adb-experiment[llm]``. Import stays inside this
 module so the base package adds no requirement.
 """
 
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timezone
 import hashlib
+import json
 import re
 import threading
 import time
 import types
 from collections.abc import Callable
 from typing import Any, cast
+from pydantic import JsonValue
 
-from adb_events import LLMCall, LLMError, LLMRequest, LLMResponse, LLMUsage, emit
+from adb_events import LLMCall, emit
+from adb_events.inspect_chat import (
+    ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageTool,
+    ChatMessageUser, Content, ContentAudio, ContentData, ContentDocument,
+    ContentImage, ContentReasoning, ContentText, ToolCall, ChatCompletionChoice,
+    Logprobs, ModelCall, ModelOutput, ModelUsage, StopReason, ToolChoice, ToolFunction, ToolInfo,
+)
 
 from .providers import resolve
 
@@ -67,6 +76,116 @@ def deterministic_pick(seed: int, text: str, n: int) -> int:
     return int.from_bytes(digest[:8], "big") % n
 
 
+def _content(value: Any) -> str | list[Content]:
+    """OpenAI content parts -> the shared Inspect content vocabulary."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    parts: list[Content] = []
+    for part in value:
+        match part["type"]:
+            case "text":
+                parts.append(ContentText(text=part["text"]))
+            case "refusal":
+                parts.append(ContentText(text=part["refusal"], refusal=True))
+            case "image_url":
+                image = part["image_url"]
+                parts.append(ContentImage(image=image["url"], detail=image.get("detail", "auto")))
+            case "input_audio":
+                audio = part["input_audio"]
+                parts.append(ContentAudio(audio=audio["data"], format=audio["format"]))
+            case "file":
+                file = part["file"]
+                if file.get("file_data"):
+                    parts.append(ContentDocument(document=file["file_data"], filename=file.get("filename", "")))
+                else:
+                    parts.append(ContentData(data=part))
+            case _:
+                parts.append(ContentData(data=part))
+    return parts
+
+
+def _tool_call(call: dict[str, Any]) -> ToolCall:
+    custom = call.get("type") == "custom"
+    function = call["custom" if custom else "function"]
+    if custom:
+        return ToolCall(id=call["id"], function=function["name"],
+                        arguments={"input": function["input"]}, type="custom")
+    try:
+        arguments: dict[str, Any] = json.loads(function["arguments"])
+        if not isinstance(arguments, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError("tool arguments must be a JSON object")
+    except (ValueError, TypeError) as exc:
+        # The exact arguments remain in raw; malformed calls are still evidence.
+        return ToolCall(id=call["id"], function=function["name"],
+                        arguments={}, parse_error=str(exc))
+    return ToolCall(id=call["id"], function=function["name"], arguments=arguments)
+
+
+def _assistant_message(message: dict[str, Any]) -> ChatMessageAssistant:
+    content = _content(message.get("content"))
+    reasoning = message.get("reasoning_content") or message.get("reasoning")
+    refusal = message.get("refusal")
+    if reasoning or refusal:
+        parts: list[Content] = []
+        if isinstance(reasoning, str):
+            parts.append(ContentReasoning(reasoning=reasoning))
+        parts.extend([ContentText(text=content)] if isinstance(content, str) and content else
+                     content if isinstance(content, list) else [])
+        if refusal:
+            parts.append(ContentText(text=refusal, refusal=True))
+        content = parts
+    return ChatMessageAssistant(
+        content=content,
+        tool_calls=([_tool_call(call) for call in message["tool_calls"]]
+                    if message.get("tool_calls") is not None else None),
+    )
+
+
+def _chat_message(message: dict[str, Any]) -> ChatMessage:
+    match message["role"]:
+        case "system" | "developer":
+            return ChatMessageSystem(content=_content(message.get("content")))
+        case "user":
+            return ChatMessageUser(content=_content(message.get("content")))
+        case "assistant":
+            return _assistant_message(message)
+        case "tool" | "function":
+            return ChatMessageTool(content=_content(message.get("content")),
+                                   tool_call_id=message.get("tool_call_id"),
+                                   function=message.get("name"))
+        case _:
+            raise ValueError(f"unsupported OpenAI message role: {message['role']!r}")
+
+
+def _tool_info(tool: dict[str, Any]) -> ToolInfo:
+    function = tool.get("function") or tool.get("custom") or tool
+    return ToolInfo(name=function["name"], description=function.get("description", ""),
+                    parameters=function.get("parameters", {}),
+                    options={k: v for k, v in function.items()
+                             if k not in ("name", "description", "parameters")} or None)
+
+
+def _tool_choice(value: Any) -> ToolChoice:
+    if isinstance(value, str):
+        if value == "required":
+            return "any"
+        if value in ("auto", "none"):
+            return value
+        raise ValueError(f"unsupported OpenAI tool choice: {value!r}")
+    return ToolFunction(name=(value.get("function") or value["custom"])["name"])
+
+
+def _stop_reason(value: str | None) -> StopReason:
+    match value:
+        case "stop" | "eos": return "stop"
+        case "length": return "max_tokens"
+        case "tool_calls" | "function_call": return "tool_calls"
+        case "content_filter" | "model_length" | "max_tokens": return value
+        case _: return "unknown"
+
+
 class ChatClient:
     """See module docstring. `mock_responder` (messages -> str) customizes the mock
     backend's reply; the default picks deterministically from a neutral line bank."""
@@ -76,6 +195,7 @@ class ChatClient:
         model_id: str,
         *,
         agent: str | None = None,
+        metadata: dict[str, JsonValue] | None = None,
         temperature: float | None = None,
         seed: int | None = None,
         max_tokens: int | None = None,
@@ -83,6 +203,7 @@ class ChatClient:
     ) -> None:
         self.model_id = model_id
         self.agent = agent
+        self.metadata: dict[str, JsonValue] = deepcopy(metadata or {})
         self.n_calls = 0
         self._count_lock = threading.Lock()
         self._temperature = temperature
@@ -135,47 +256,51 @@ class ChatClient:
             kw.pop("max_tokens", None)
         if self.is_mock:
             return self._mock_create(kw)
-        request = LLMRequest(
-            messages=deepcopy(kw["messages"]),
-            params=deepcopy(
-                {k: v for k, v in kw.items() if k not in ("messages", "model")}
-            ),
-            model=kw.get("model"),
-        )
+        event = self._event(kw)
         started = time.monotonic()
         try:
             response = self._request(kw)
         except Exception as exc:
-            self._emit(
-                request,
-                error=LLMError(kind="request_failed", message=str(exc)),
-                latency_ms=int((time.monotonic() - started) * 1000),
-            )
+            event.error = str(exc)
+            event.working_time = time.monotonic() - started
+            if event.call is not None:
+                event.call.error = True
+            self._emit(event)
             raise
-        latency = int((time.monotonic() - started) * 1000)
-        choice = response.choices[0]
-        raw = choice.message.content or ""
+        event.working_time = time.monotonic() - started
+        # Snapshot every choice before changing the text returned to the caller.
+        choices = [ChatCompletionChoice(
+            message=_assistant_message(choice.message.model_dump(mode="json")),
+            stop_reason=_stop_reason(choice.finish_reason),
+            logprobs=(Logprobs.model_validate({"content": [
+                token.model_dump(mode="json") for token in choice.logprobs.content
+            ]}) if choice.logprobs and choice.logprobs.content is not None else None),
+        ) for choice in response.choices]
         usage = response.usage
-        # Snapshot the SDK response before changing the text returned to the caller.
-        self._emit(
-            request,
-            response=LLMResponse(
-                message=choice.message.model_dump(mode="json"),
-                finish_reason=choice.finish_reason,
-                model=response.model,
-                raw=response.model_dump(mode="json"),
+        cached = (getattr(usage.prompt_tokens_details, "cached_tokens", None)
+                  if usage and usage.prompt_tokens_details else None)
+        event.output = ModelOutput(
+            model=response.model, choices=choices,
+            completion=choices[0].message.text if choices else "",
+            usage=None if usage is None else ModelUsage(
+                input_tokens=usage.prompt_tokens - (cached or 0),
+                output_tokens=usage.completion_tokens, total_tokens=usage.total_tokens,
+                input_tokens_cache_read=cached,
+                reasoning_tokens=(getattr(usage.completion_tokens_details, "reasoning_tokens", None)
+                                  if usage.completion_tokens_details else None),
             ),
-            usage=(
-                None
-                if usage is None
-                else LLMUsage(
-                    input_tokens=usage.prompt_tokens,
-                    output_tokens=usage.completion_tokens,
-                )
-            ),
-            latency_ms=latency,
         )
-        choice.message.content = strip_think(raw)
+        if event.call is not None:
+            event.call.response = response.model_dump(mode="json")
+        returned_text = ""
+        if response.choices:
+            original_text = response.choices[0].message.content or ""
+            returned_text = strip_think(original_text)
+            if returned_text != original_text:
+                event.metadata = {**(event.metadata or {}), "adb_experiment.returned_text_stripped": True}
+        self._emit(event)
+        if response.choices:
+            response.choices[0].message.content = returned_text
         return response
 
     # -- the mock backend -----------------------------------------------------
@@ -187,22 +312,19 @@ class ChatClient:
 
     def _mock_create(self, kw: dict[str, Any]) -> Any:
         text = self._mock_responder(kw.get("messages") or [])
-        self._emit(
-            LLMRequest(
-                messages=kw.get("messages") or [],
-                params={k: v for k, v in kw.items() if k not in ("messages", "model")},
-                model=kw.get("model"),
-            ),
-            response=LLMResponse(
-                message={"role": "assistant", "content": text},
-                finish_reason="stop",
-                model=self.served_model,
-            ),
+        event = self._event(kw)
+        event.output = ModelOutput(
+            model=self.served_model, completion=text,
+            choices=[ChatCompletionChoice(message=ChatMessageAssistant(content=text), stop_reason="stop")],
         )
+        returned_text = strip_think(text)
+        if returned_text != text:
+            event.metadata = {**(event.metadata or {}), "adb_experiment.returned_text_stripped": True}
+        self._emit(event)
         # the OpenAI response shape consumers read: choices[0].message.content
         return types.SimpleNamespace(
             choices=[types.SimpleNamespace(
-                message=types.SimpleNamespace(role="assistant", content=text),
+                message=types.SimpleNamespace(role="assistant", content=returned_text),
                 finish_reason="stop",
             )],
             usage=None,
@@ -211,26 +333,21 @@ class ChatClient:
 
     # -- event emission --------------------------------------------------------
 
-    def _emit(
-        self,
-        request: LLMRequest,
-        *,
-        response: LLMResponse | None = None,
-        usage: LLMUsage | None = None,
-        latency_ms: int | None = None,
-        error: LLMError | None = None,
-    ) -> None:
+    def _event(self, kw: dict[str, Any]) -> LLMCall:
+        snapshot = deepcopy(kw)
+        return LLMCall(
+            model=self.model_id, agent=self.agent,
+            input=[_chat_message(m) for m in snapshot.get("messages", [])],
+            tools=[_tool_info(t) for t in snapshot.get("tools", [])],
+            tool_choice=_tool_choice(snapshot.get("tool_choice", "auto")),
+            output=ModelOutput(model=self.served_model),
+            call=ModelCall(request=snapshot),
+            metadata={**deepcopy(self.metadata),
+                      "adb_experiment.backend": "mock" if self.is_mock else "openai-chat"},
+        )
+
+    def _emit(self, event: LLMCall) -> None:
         with self._count_lock:
             self.n_calls += 1
-        emit(
-            LLMCall(
-                agent=self.agent,
-                model=self.model_id,
-                request=request,
-                response=response,
-                usage=usage,
-                latency_ms=latency_ms,
-                error=error,
-                meta={"backend": "mock" if self.is_mock else "openai-chat"},
-            )
-        )
+        event.completed = datetime.now(timezone.utc)
+        emit(event)

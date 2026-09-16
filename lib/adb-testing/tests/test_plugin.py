@@ -6,7 +6,7 @@ def test_plugin_autoloads_without_conftest_and_restores_environment(pytester, mo
     pytester.makepyfile("""
 import os
 from pathlib import Path
-from adb_events import Metric, emit
+from adb_events import Result, emit
 
 socket_paths = []
 
@@ -17,7 +17,7 @@ def test_with_fixture(event_capture):
     path = os.environ["ADB_EVENT_SOCKET"]
     socket_paths.append(path)
     assert Path(path).exists()
-    emit(Metric(name="score", value=1))
+    emit(Result(name="score", value=1))
     assert event_capture.read()[0]["value"] == 1
     assert event_capture.read() == []
 

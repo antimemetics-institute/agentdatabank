@@ -10,10 +10,9 @@ version = "0.1.0"
 description = "Run an Inspect (inspect_ai) eval as an ADB experiment program — task spec + params in, ADB events out"
 requires-python = ">=3.13"
 dependencies = [
-    # bounded so a relock is a deliberate line-edit, not silent drift of the wrapped
-    # tool; the exact resolved versions are in each family's uv.lock and recorded per
-    # run as provenance covariates
-    "inspect-ai~=0.3.60",
+    # Since 0.3.184, input_tokens excludes cache reads/writes. Keep that semantic
+    # floor; exact versions are locked and recorded per run as provenance.
+    "inspect-ai>=0.3.184,<0.4",
     # Every API-backed inspect provider SDK, installed uniformly: one env serves all
     # providers (and mixed-provider multiagent runs), so the environment never varies
     # with the model param. Lower bounds mirror inspect's own runtime version checks

@@ -16,6 +16,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.12,<3" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "adb-testing", editable = "../adb-testing" },
+    { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "pytest", specifier = ">=8" },
 ]
 

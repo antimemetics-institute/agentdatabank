@@ -17,7 +17,7 @@ def test_crash_exits_nonzero_and_keeps_partial_events_and_fallback(tmp_path, eve
             sys.executable,
             "-c",
             """
-from adb_events import Metric, emit
+from adb_events import Result, emit
 from adb_experiment import experiment_main
 class Params:
     @classmethod
@@ -25,7 +25,7 @@ class Params:
         return raw
 
 def run(params):
-    emit(Metric(name="observations", value=params["observations"]))
+    emit(Result(name="observations", value=params["observations"]))
     raise RuntimeError("simulation crashed after observation")
 
 raise SystemExit(experiment_main(Params, run, prog="crashing-experiment",

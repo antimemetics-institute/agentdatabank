@@ -22,11 +22,11 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from adb_events import Artifact, CapturedLine, Log, Metric, Status, emit
+from adb_events import CustomEvent, CapturedLine, Log, Result, Status, emit
 from .models import Params, inspect_model
 from .sandbox_status import sandbox_provisioning_status
-from .translate import (emit_aggregate, emit_live_model_event, emit_provenance,
-                        emit_sample)
+from .translate import (emit_aggregate, emit_provenance,
+                        emit_sample, SampleTranscript, drift_warnings)
 
 _ZERO = {"samples": 0, "completed": 0, "errors": 0,
          "score": 0.0, "score_name": "", "tokens_input": 0, "tokens_output": 0}
@@ -83,12 +83,10 @@ def deposit_log(log_obj: Any, run_dir: Path) -> None:  # Any: EvalLog, whose imp
     dest = dest_dir / "run.eval"
     shutil.copyfile(src, dest)
     emit(
-        Artifact(
-            name="run.eval",
-            path="artifacts/run.eval",
-            media_type="application/octet-stream",
-            bytes=dest.stat().st_size,
-        )
+        CustomEvent(kind="inspect.artifact", data={
+            "name": "run.eval", "path": "artifacts/run.eval",
+            "media_type": "application/octet-stream", "bytes": dest.stat().st_size,
+        })
     )
 
 
@@ -134,6 +132,11 @@ class PrintStream(io.TextIOBase):
 
 
 def run(params: Params) -> int:
+    with drift_warnings():
+        return _run(params)
+
+
+def _run(params: Params) -> int:
     run_dir = Path(__import__("os").environ.get("ADB_RUN_DIR", "."))
     work = Path.cwd()
     log_dir = work / "inspect-logs"
@@ -144,20 +147,15 @@ def run(params: Params) -> int:
     # counts against anyone importing it — their gap, scoped suppression here
     from inspect_ai import eval as run_eval  # pyright: ignore[reportUnknownVariableType]
     from inspect_ai.hooks import Hooks, hooks
-    from inspect_ai.event import ModelEvent
+    from inspect_ai.log._samples import sample_active  # internal, pinned
 
     agent = params.model
     streamed: set[str] = set()
-    # per-sample live-stream state, keyed by inspect's sample execution uuid:
-    # the problem identity (id/epoch) plus the message/event ids already emitted
-    live: dict[str, dict[str, Any]] = {}
+    live: dict[str, SampleTranscript] = {}
 
     # STREAM: run_eval blocks through the whole eval, so emit as it goes — a status
-    # when each sample starts, its chat turns + llm.call after every completed model
-    # call (SampleEvent hook), and a reconciliation pass at sample end for whatever
-    # the live path didn't cover (scores, non-model turns). Every streamed event is
-    # tagged sample_id/epoch: one eval works through many problems, sequentially or
-    # in parallel, and untagged events are unattributable under interleaving.
+    # when each sample starts, each completed native transcript prefix, and a final
+    # reconciliation pass. A raw ModelEvent and its derived call stay adjacent.
     # hook `data` params are Any on purpose: their classes ride the pinned inspect
     # version and this bridge duck-types them (getattr-guarded) rather than binding
     # to one release's names. The decorator itself is untyped upstream.
@@ -165,34 +163,25 @@ def run(params: Params) -> int:
     class AdbStream(Hooks):
         async def on_sample_start(self, data: Any) -> None:
             s = data.summary
-            live[data.sample_id] = {"id": s.id, "epoch": s.epoch,
-                                    "msgs": set(), "evs": set()}
+            live[data.sample_id] = SampleTranscript(s.id, s.epoch)
             emit(Status(detail=f"instance {s.id} repeat {s.epoch}: running"))
 
         async def on_sample_event(self, data: Any) -> None:
             st = live.get(data.sample_id)
-            ev = data.event
-            # `output` is a required field — "no reply yet" is pending, or an
-            # output with no choices (the same gate translate.py applies)
-            if (st is None or not isinstance(ev, ModelEvent)
-                    or ev.pending or not ev.output.choices):
-                return
-            uid = getattr(ev, "uuid", None)
-            if uid is None or uid in st["evs"]:
+            active = sample_active()
+            if st is None or active is None:
                 return
             try:
-                emit_live_model_event(ev, agent, st["id"], st["epoch"], st["msgs"])
-                st["evs"].add(uid)
+                st.emit_ready(active.transcript.events, agent)
             except Exception as exc:  # a bad event must not kill the eval
                 emit(Log(message=f"stream: live emit failed: {exc}", level="warn"))
 
         async def on_sample_end(self, data: Any) -> None:
             if data.sample is None:
                 return
-            st = live.pop(data.sample_id, None) or {"msgs": set(), "evs": set()}
+            st = live.pop(data.sample_id, None)
             try:
-                emit_sample(data.sample, agent,
-                            seen_messages=st["msgs"], seen_events=st["evs"])
+                emit_sample(data.sample, agent, transcript=st)
                 streamed.add(data.sample.uuid)
             except Exception as exc:  # a bad sample must not kill the eval
                 emit(Log(message=f"stream: sample emit failed: {exc}", level="warn"))
@@ -240,7 +229,7 @@ def run(params: Params) -> int:
 
 def _emit_zero() -> None:
     for k, v in _ZERO.items():
-        emit(Metric(name=k, value=v))
+        emit(Result(name=k, value=v))
     emit(Status(detail="done: status=error (eval did not run)"))
 
 
