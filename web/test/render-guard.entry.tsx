@@ -1,8 +1,4 @@
-/* Render-quality guard, the fast one: server-render the REAL EventStream over the
-   committed fixture of REAL events (a qwen3.5-9b inspect-hello run — block-array
-   content, reasoning blocks, elisions: the shapes that once leaked
-   "[object Object]") and fail if any coercion artifact reaches the markup.
-   Built+run by test/render-check.mjs as part of `pnpm test`. */
+/* Render guards over saved GovSim envelopes plus focused model-content fixtures. */
 
 // minimal browser shims for module-scope references (lib/data reads
 // window.location at import time)
@@ -16,21 +12,47 @@
 };
 
 import { readFileSync } from "node:fs";
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LLMCallFailures } from "../src/components/llm-call-failures";
-import { EventStream } from "../src/components/event-stream";
+import { EventStream, RawEvent, deriveProfile } from "../src/components/event-stream";
+import { RunView } from "../src/pages/run";
+import { RunsTable } from "../src/pages/runs";
+import { OverviewView } from "../src/pages/overview";
+import { RunReader } from "../src/server/runs";
+import { copyBadRunCorpus, badRunNames } from "./bad-run-corpus";
+import { hashRoute } from "../src/lib/run-view";
+import { jsonTokens } from "../src/lib/json-text";
 import { ExperimentReadme } from "../src/pages/experiment";
-import { ResultChips, ResultRows, ExperimentResults, InstanceScoreChips } from "../src/components/results";
+import { AggChips, ResultChips, ResultFacts, ResultRows, ExperimentResults, InstanceScoreChips } from "../src/components/results";
 import type { ResultDecl } from "../src/shared/types";
-import { flattenEv } from "../src/lib/data";
+import { parseEnvelope, parseEventLine } from "../src/lib/envelope";
+import { envelope, fixtureMeta } from "./event-fixtures";
 import type { Ev } from "../src/shared/types";
 
+import { compileSchemas, renderHint, hintBody, hintValue, hintText } from "../src/lib/render-hints";
+import { readRunSchemas } from "../src/server/event-schemas";
+const sharedSchema = JSON.parse(readFileSync("../lib/adb-events/adb_events/schema.json", "utf8"));
+const govsimSchema = JSON.parse(readFileSync("test/fixtures/govsim-schema.json", "utf8"));
+const govsimDefinitions = compileSchemas([sharedSchema, govsimSchema]);
+if (process.env.ADB_TEST_MANIFESTS) {
+  const manifest = JSON.parse(readFileSync(join(process.env.ADB_TEST_MANIFESTS, "govsim.json"), "utf8"));
+  assert.deepEqual(JSON.parse(readFileSync(manifest.schema.path, "utf8")), govsimSchema,
+    "Refresh the GovSim schema fixture from the built export when hints change");
+}
+const hintDefinitions = compileSchemas([sharedSchema, {
+  oneOf: [{ properties: { type: { const: "custom" }, kind: { const: "test.message" } },
+    "x-adb-render": { icon: "message-circle", actor: "data.speaker", title: "data.speaker", body: "data.text", format: "markdown" } }],
+}]);
+
 const raw = readFileSync(process.env.FIXTURE!, "utf8"); // absolute path from render-check.mjs
-const events: Ev[] = raw.split("\n").filter(Boolean).map((l) => flattenEv(JSON.parse(l) as Ev));
+const events: Ev[] = raw.split("\n").filter(Boolean).map((l) => parseEventLine(l));
 
 const html = renderToStaticMarkup(
-  <EventStream events={events} state="completed" cid="fixturecid" rid="FIXTURERID" />,
+  <EventStream review events={events} definitions={govsimDefinitions} state="completed" cid="fixturecid" rid="FIXTURERID" />,
 );
 
 const leaks = ["[object Object]", "undefined,undefined", "NaN undefined"]
@@ -45,6 +67,115 @@ if (events.length < 10) {
 }
 console.log(`render guard ok — ${events.length} real events, ${html.length} chars of markup, no coercion leaks`);
 
+// The same generic row handles any declared kind, with no producer branches.
+const messages = [0, 1].map((seq) => envelope({ type: "custom", kind: "test.message",
+  data: { speaker: "Mayor", text: "Take **two**. <script>unsafe</script>" } }, seq,
+  `2026-09-15T12:00:00.12345${seq}Z`));
+const rendered = renderToStaticMarkup(<EventStream events={messages} definitions={hintDefinitions}
+  state="completed" cid="hints" rid="open" />);
+assert.match(rendered, /<b>two<\/b>/);
+assert.match(rendered, /lucide-message-circle/);
+assert.match(rendered, /id="ev-1"/);
+assert.ok(!rendered.includes("<script>"));
+assert.ok(!rendered.includes("[object Object]"));
+assert.deepEqual(deriveProfile(messages, hintDefinitions).agents.map((a) => a.name), ["Mayor"]);
+assert.equal(deriveProfile(messages, hintDefinitions).agents[0]!.calls, 0);
+assert.match(rendered, /from run start/);
+assert.ok(rendered.indexOf('id="ev-0"') < rendered.indexOf('id="ev-1"'));
+assert.ok(!rendered.includes("data-event-group"));
+assert.ok(!rendered.includes("data-group-tag"));
+
+// Historical run bytes carry identity, not schema files. Current build hints
+// label earlier calls even when the later replay is hidden by a facet filter.
+async function historicalRunWithCurrentHints() {
+  const root = await mkdtemp(join(tmpdir(), "adb-render-history-"));
+  try {
+    const run = join(root, "old-run");
+    const build = join(root, "current-build");
+    await Promise.all([mkdir(run), mkdir(build)]);
+    const schema = { oneOf: [{ properties: { type: { const: "custom" }, kind: { const: "test.message" } },
+      "x-adb-render": { icon: "message-circle", actor: "data.id", actor_label: "data.name", body: "data.text", format: "markdown" } }] };
+    const payloads = [
+      { type: "llm.call", agent: "persona_0", output: { choices: [{ message: { content: "A model reply" } }] } },
+      { type: "llm.call", agent: "framework" },
+      { type: "custom", kind: "test.message", data: { id: "persona_0", name: "John", text: "Current **hint**" } },
+      { type: "custom", kind: "test.message", data: { id: "framework", name: "Mayor", text: "Mayor line" } },
+      { type: "custom", kind: "test.message", data: { id: "framework", name: "framework", text: "Summary line" } },
+    ];
+    await Promise.all([
+      writeFile(join(run, "events.jsonl"), payloads.map((event, seq) => JSON.stringify({
+        v: 0, run: "20260916t120000z-012345abcdef", experiment: "example", schema: 0, seq, ts: "2026-09-14T12:00:00.000000Z", event,
+      })).join("\n")),
+      writeFile(join(build, "schema.json"), JSON.stringify(schema)),
+      writeFile(join(build, "shared-schema.json"), JSON.stringify(sharedSchema)),
+    ]);
+    assert.deepEqual(await readdir(run), ["events.jsonl"]);
+    const records = (await readFile(join(run, "events.jsonl"), "utf8")).split("\n").map((line) => JSON.parse(line));
+    const definitions = compileSchemas(await readRunSchemas([
+      { name: "example", params: {}, schema: { version: 0, models: "example:Payload", path: join(build, "schema.json") } },
+    ], records[0].experiment, records[0].schema));
+    const events = records.map(parseEnvelope);
+    const profile = deriveProfile(events, definitions);
+    assert.deepEqual(profile.agents.map((a) => [a.id, a.name]), [["persona_0", "John"], ["framework", "framework"]]);
+    const html = renderToStaticMarkup(<EventStream review events={events} definitions={definitions} state="completed" />);
+    assert.match(html, /Current <b>hint<\/b>/);
+    assert.match(html, /title="persona_0">John<\/span>/);
+    assert.match(html, /title="framework">framework<\/span>/);
+    assert.match(html, /title="framework">Mayor<\/span>/); // The row's own label wins over propagated names.
+    const filtered = renderToStaticMarkup(<EventStream events={events} visibleEvents={events.slice(0, 2)}
+      definitions={definitions} state="completed" />);
+    assert.match(filtered, /title="persona_0">John<\/span>/);
+    const group = renderToStaticMarkup(<EventStream events={events} visibleEvents={events.slice(2)}
+      definitions={definitions} state="completed" />);
+    assert.match(group, /title="agent persona_0 · 1 llm call\(s\)"><span class="font-semibold">John<\/span>/);
+    console.log("historical run renders with current build hints, row labels, and actor ID hovers");
+  } finally { await rm(root, { recursive: true }); }
+}
+historicalRunWithCurrentHints().catch((error) => { console.error(error); process.exitCode = 1; });
+
+// One speaking persona supplies a row label; every silent persona is named from
+// the config roster, including calls before the config and a calls-only filter.
+const rosterDefinitions = compileSchemas([sharedSchema, { oneOf: [
+  { properties: { type: { const: "custom" }, kind: { const: "govsim.config" } },
+    "x-adb-render": { icon: "settings", actor_registry: { path: "data.experiment.personas", label: "name" } } },
+  { properties: { type: { const: "custom" }, kind: { const: "govsim.utterance" } },
+    "x-adb-render": { icon: "message-circle", actor: "data.agent_id", actor_label: "data.agent_name", body: "data.utterance" } },
+] }]);
+const roster = ["John", "Kate", "Jack", "Emma", "Luke"];
+const rosterEvents = [
+  ...roster.map((_, i) => ({ type: "llm.call", agent: `persona_${i}` })),
+  { type: "custom", kind: "govsim.config", data: { experiment: {
+    personas: { ...Object.fromEntries(roster.map((name, i) => [`persona_${i}`, { name }])), num: 5 },
+  } } },
+  { type: "custom", kind: "govsim.utterance", data: { agent_id: "persona_0", agent_name: "John", utterance: "Only I speak." } },
+].map((event, seq) => envelope(event, seq));
+assert.deepEqual(deriveProfile(rosterEvents, rosterDefinitions).agents.map((actor) => actor.name), roster);
+const rosterHtml = renderToStaticMarkup(<RunView cid="roster" rid="one-speaker" events={rosterEvents} meta={fixtureMeta(rosterEvents)}
+  definitions={rosterDefinitions} query="tab=stream&filter=kind%3Allm.call" />);
+for (const [i, name] of roster.entries()) assert.match(rosterHtml, new RegExp(`title="persona_${i}">${name}</span>`));
+const rosterSummary = renderToStaticMarkup(<RunView cid="roster" rid="one-speaker" events={rosterEvents} meta={fixtureMeta(rosterEvents)}
+  definitions={rosterDefinitions} query="tab=summary" />);
+for (const name of roster) assert.ok(rosterSummary.includes(name));
+
+const customHtml = renderToStaticMarkup(<EventStream events={[envelope({
+  type: "custom", kind: "example.measurement", data: { nested: { value: 42 } },
+})]} state="completed" />);
+assert.match(customHtml, /example.measurement/);
+assert.match(customHtml, /Disk line unavailable/);
+assert.ok(!customHtml.includes("[object Object]"));
+
+// The new ModelEvent data shape renders through the same viewer as historical runs.
+const modelData = JSON.parse(readFileSync("../lib/adb-events/tests/fixtures/llm-call.json", "utf8"));
+const modelHtml = renderToStaticMarkup(<EventStream events={[envelope(modelData)]} state="completed" />);
+assert.match(modelHtml, /Answer/);
+assert.match(modelHtml, /lookup/);
+assert.match(modelHtml, /A short summary/);
+assert.ok(!modelHtml.includes("[object Object]"));
+const errorHtml = renderToStaticMarkup(<EventStream events={[envelope({
+  ...modelData, error: "connection refused", output: { model: "m", choices: [] },
+})]} state="completed" />);
+assert.match(errorHtml, /connection refused/);
+
 // Failure warnings derive solely from recorded call events, including live
 // streams without run.end. Other diagnostics are not failed model calls.
 const callEvents: Ev[] = [
@@ -52,13 +183,13 @@ const callEvents: Ev[] = [
   { type: "llm.call", error: null },
   { type: "llm.call", error: { kind: "RateLimitError", message: "busy" } },
   { type: "log", level: "error", message: "unrelated diagnostic" },
-];
+].map((event, seq) => envelope(event, seq));
 for (const ending of [[], [{ type: "run.end", state: "completed" }]]) {
-  const warning = renderToStaticMarkup(<LLMCallFailures events={[...callEvents, ...ending]} />);
+  const warning = renderToStaticMarkup(<LLMCallFailures events={[...callEvents, ...ending.map((event) => envelope(event))]} />);
   assert.match(warning, /2\/3 model calls failed/);
 }
 for (const healthy of [[], [{ type: "llm.call" }], [{ type: "llm.call", error: null }]]) {
-  assert.equal(renderToStaticMarkup(<LLMCallFailures events={healthy} />), "");
+  assert.equal(renderToStaticMarkup(<LLMCallFailures events={healthy.map((event) => envelope(event))} />), "");
 }
 
 // Optional catalog documentation uses the real safe renderer, including in old
@@ -82,11 +213,11 @@ assert.ok(!readmeHtml.includes('<script>'));
 assert.match(readmeHtml, /&lt;script&gt;/);
 console.log('experiment README render guard ok — optional, rendered Markdown, inert raw HTML');
 
-const definitions: Record<string, ResultDecl> = {
-  collapsed: { type: { kind: "bool" }, label: "Resource collapsed", description: "Simulation outcome, not execution failure.", details: "The resource fell below its threshold. <script>unsafe</script>" },
-  harvest: { type: { kind: "int" }, label: "Total harvest", unit: "resource units" },
-  absent: { type: { kind: "int" }, label: "Not emitted" },
-};
+const definitions: ResultDecl[] = [
+  { name: "collapsed", type: { kind: "bool" }, label: "Resource collapsed", description: "Simulation outcome, not execution failure.", details: "The resource fell below its threshold. <script>unsafe</script>" },
+  { name: "harvest", type: { kind: "int" }, label: "Total harvest", unit: "resource units" },
+  { name: "absent", type: { kind: "int" }, label: "Not emitted" },
+];
 const resultHtml = renderToStaticMarkup(<ResultChips definitions={definitions}
   summary={{ collapsed: false, harvest: 50, surprise: 2 }} metrics={[{ name: "harvest", value: 50, unit: "fish" }]} />);
 assert.match(resultHtml, /Resource collapsed/);
@@ -141,3 +272,388 @@ assert.ok(!/<details[^>]* open/.test(catalog));
 const scoresHtml = renderToStaticMarkup(<InstanceScoreChips scores={[{ refused: false }, { refused: true }]} />);
 assert.ok(!/emerald|red-|✓|✗/.test(scoresHtml));
 console.log("result rendering ok — labels, units, neutral booleans, undeclared outputs, unified rows, inline descriptions, optional details, deduplication and catalog");
+
+// The run page keeps summary content out of the full-height stream tab.
+const runDefinitions: ResultDecl[] = [
+  { name: "score", type: { kind: "int" }, label: "Score", description: "Recorded score.", details: "Details stay inline." },
+  { name: "collapsed", type: { kind: "bool" }, label: "Collapsed", description: "Simulation outcome." },
+];
+const runStart = { type: "run.start", seed: 37,
+  source: "source-fingerprint", tree_hash: "sha256-tree", params: { resolved: "actual-input" },
+  result_definitions: runDefinitions, runtime: { platform: "Linux",
+    runner_python_version: "3.13", endpoints: { openai: "https://api.example.invalid" } } };
+const partial = [runStart, { type: "log", level: "info", message: "Starting simulation" },
+  { type: "llm.call", agent: "Mayor", output: { choices: [{ message: { content: "Observed reply" } }],
+    usage: { input_tokens: 3, output_tokens: 5, input_tokens_cache_read: 4, input_tokens_cache_write: 2 } } },
+  { type: "llm.call", agent: "other", error: "offline" },
+  { type: "result", name: "score", value: 0 },
+  { type: "custom", kind: "test.message", data: { speaker: "Mayor", text: "A custom observation" } },
+  { type: "status", detail: "Negotiating round 2" },
+].map((event, seq) => envelope(event, seq, `2026-09-16T12:00:0${seq}.000000Z`));
+const completed = [...partial,
+  envelope({ type: "result", name: "collapsed", value: false }, 7, "2026-09-16T12:00:07.000000Z"),
+  envelope({ type: "run.end", state: "completed", duration_s: 8, exit_code: 0 }, 8, "2026-09-16T12:00:08.000000Z")];
+const now = Date.parse("2026-09-16T12:00:10Z");
+const renderRun = (events: Ev[], query = "", extra = {}) => renderToStaticMarkup(
+  <RunView cid="condition" rid="run" events={events} definitions={hintDefinitions}
+    query={query} now={now} {...extra} meta={{ ...fixtureMeta(events), ...(extra as { meta?: object }).meta }} />);
+for (const events of [completed, partial]) {
+  const summary = renderRun(events, "tab=summary");
+  assert.match(summary, /data-run-tab="summary"/);
+  assert.ok(!/replicate/i.test(summary));
+  assert.match(summary, /title="Recorded score\."/);
+  assert.match(summary, /data-result-facts/);
+  assert.ok(!summary.includes("Details stay inline"));
+  assert.match(summary, /data-result-name="score"/);
+  assert.match(summary, /data-result-name="collapsed"/);
+  assert.match(summary, /actual-input/);
+  assert.match(summary, /source-fingerprint/);
+  assert.match(summary, /no pinned revision/);
+  assert.match(summary, /sha256-tree/);
+  assert.match(summary, /https:\/\/api.example.invalid/);
+  assert.match(summary, /1 failed calls/);
+  const sections = ["Results", "Activity", "Inputs", "Provenance"].map((label) => summary.indexOf(`aria-label="${label}"`));
+  assert.ok(sections.every((at, i) => at >= 0 && (i === 0 || at > sections[i - 1]!)));
+  assert.ok(!summary.includes('aria-label="Stream filters"'));
+  const stream = renderRun(events, "tab=stream");
+  assert.match(stream, /data-run-tab="stream"/);
+  assert.ok(!/replicate/i.test(stream));
+  assert.match(stream, /aria-label="Stream filters"/);
+  assert.match(stream, /agent Mayor/); // legend remains inside the stream
+  assert.ok(!stream.includes('aria-label="Results"'));
+  assert.ok(!stream.includes('aria-label="Inputs"'));
+  assert.ok(!stream.includes("fullscreen"));
+  assert.ok(!stream.includes("fixed inset-3"));
+}
+assert.match(renderRun(completed), /data-run-tab="summary"/);
+assert.match(renderRun(partial), /data-run-tab="stream"/);
+assert.match(renderRun(completed, "", { preferredTab: "stream" }), /data-run-tab="stream"/);
+const progress = renderRun(partial, "tab=summary");
+assert.match(progress, /aria-label="Progress"/);
+assert.match(progress, /elapsed 10s/);
+assert.match(progress, /Negotiating round 2/);
+assert.match(progress, /9\+5 tokens/);
+assert.match(progress, /last event 4s ago/);
+assert.match(progress, /pending/);
+assert.match(renderRun(completed, "tab=summary"), /9\+5 tokens/);
+assert.ok(!renderRun(completed, "tab=summary").includes("pending"));
+const stale = renderRun(partial, "tab=summary", { meta: { state: "running", heartbeat_at: "2026-09-16T11:59:00Z" } });
+assert.match(stale, /possibly interrupted/);
+assert.match(stale, /interrupted\?/);
+// A terminal card can render a summary before the stream has finished loading.
+assert.match(renderRun(partial, "tab=summary", { meta: { state: "completed", heartbeat_at: "2026-09-16T11:59:00Z" } }), /aria-label="Outcome"/);
+const noStart = renderRun(partial.slice(1), "tab=summary", { meta: fixtureMeta(partial) });
+assert.match(noStart, /data-result-name="collapsed"/);
+assert.match(noStart, /actual-input/);
+const cached = fixtureMeta(completed);
+cached.derived!.results = { score: 12345, collapsed: false };
+cached.derived!.counts.llm_calls = 987;
+cached.derived!.counts.llm_calls_by_agent = { "card-only-agent": 987 };
+cached.derived!.usage = { input_tokens: 876, output_tokens: 765 };
+const cachedView = renderRun(completed, "tab=summary", { meta: cached });
+assert.match(cachedView, />12345</);
+assert.match(cachedView, /987 calls/);
+assert.match(cachedView, /876\+765 tokens/);
+// Actor activity comes from loaded records and hints, including custom-only actors.
+const customActor = envelope({ type: "custom", kind: "test.message",
+  data: { speaker: "Observer", text: "No model calls from this actor" } }, 9);
+const actorView = renderRun([...completed, customActor], "tab=summary", { meta: cached });
+assert.ok(!actorView.includes("card-only-agent"));
+const observerLink = [...actorView.matchAll(/href="([^"]+)"/g)].map(match => match[1]!.replaceAll("&amp;", "&"))
+  .find(href => new URLSearchParams(hashRoute(href).query).get("filter") === "actor:Observer");
+assert.ok(observerLink);
+const observerStream = renderRun([...completed, customActor], hashRoute(observerLink).query, { meta: cached });
+assert.match(observerStream, /id="ev-9"/);
+assert.ok(!observerStream.includes('id="ev-2"'));
+// Follow actual links rendered by the activity section, then inspect the filtered stream.
+const activityHtml = renderRun(completed, "tab=summary").split('aria-label="Activity"')[1]!.split("</section>")[0]!;
+for (const [filter, expected, absent] of [["kind:llm.call", [2, 3], [0, 1, 4, 5, 6, 7, 8]],
+  ["actor:Mayor", [2, 5], [0, 1, 3, 4, 6, 7, 8]]] as const) {
+  const link = [...activityHtml.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!.replaceAll("&amp;", "&"))
+    .find((href) => new URLSearchParams(hashRoute(href).query).get("filter") === filter)!;
+  assert.ok(link);
+  const destination = renderRun(completed, hashRoute(link).query);
+  assert.match(destination, /data-run-tab="stream"/);
+  assert.match(destination, new RegExp(`data-filter="${filter}" aria-current="true"`));
+  for (const seq of expected) assert.ok(destination.includes(`id="ev-${seq}"`));
+  for (const seq of absent) assert.ok(!destination.includes(`id="ev-${seq}"`));
+}
+console.log("run page guard ok — completed/partial tabs, pending results, progress, provenance, and activity links");
+
+// Namespace chips disclose only their own second row and retain deep links.
+const allKinds = renderRun(completed, "tab=stream");
+assert.match(allKinds, /data-filter="namespace:run"/);
+assert.match(allKinds, /data-filter="namespace:llm"/);
+assert.match(allKinds, /data-filter="kind:status"/);
+assert.ok(!allKinds.includes('data-facet-level="kinds"'));
+assert.ok(!allKinds.includes('data-filter="kind:llm.call"'));
+const namespaced = renderRun(completed, "tab=stream&filter=namespace%3Arun");
+assert.match(namespaced, /data-facet-level="kinds" aria-label="run kinds"/);
+for (const kind of ["run.start", "run.end"])
+  assert.ok(namespaced.includes(`data-filter="kind:${kind}"`));
+assert.ok(!namespaced.includes('id="ev-2"'));
+assert.match(renderRun(completed, "tab=stream&filter=kind%3Allm.call"), /data-filter="namespace:llm" aria-current="true"/);
+
+const facts = renderToStaticMarkup(<ResultFacts definitions={[
+  ...runDefinitions, { name: "rate", type: { kind: "float" }, unit: "fish/month", description: "Monthly harvest" },
+  { name: "pending", type: { kind: "int" } }, { name: "survived", type: { kind: "bool" } },
+]} summary={{ rate: 1.23456, collapsed: false, score: 0, survived: true, undeclared: 999 }} />);
+assert.deepEqual([...facts.matchAll(/data-result-name="([^"]+)"/g)].map((m) => m[1]), ["score", "collapsed", "rate", "pending", "survived"]);
+assert.match(facts, />0<\/dd>/);
+assert.match(facts, />no<\/dd>/);
+assert.match(facts, />yes<\/dd>/);
+assert.match(facts, /1\.235<span class="[^"]*text-muted-foreground">fish\/month<\/span>/);
+assert.match(facts, /aria-label="pending"[^>]*>—<\/span>/);
+assert.match(facts, /title="Monthly harvest"/);
+// All result views use declaration order, independently of names and arrival order.
+const orderedDefinitions: ResultDecl[] = [
+  { name: "zulu", type: { kind: "int" }, label: "Zebra" },
+  { name: "alpha", type: { kind: "int" }, label: "Ant" },
+  { name: "middle", type: { kind: "int" }, label: "Monkey" },
+];
+const outOfOrderValues = { middle: 3, alpha: 2, zulu: 1 };
+for (const view of [
+  <ResultFacts definitions={orderedDefinitions} summary={outOfOrderValues} />,
+  <ResultRows definitions={orderedDefinitions} summary={outOfOrderValues} />,
+  <ResultRows definitions={orderedDefinitions} catalog />,
+  <ResultChips definitions={orderedDefinitions} summary={outOfOrderValues} />,
+  <ResultChips definitions={orderedDefinitions} summary={{ middle: 3 }}
+    metrics={[{ name: "alpha", value: 2 }, { name: "zulu", value: 1 }]} />,
+]) {
+  const html = renderToStaticMarkup(view);
+  assert.ok(html.indexOf("Zebra") < html.indexOf("Ant"));
+  assert.ok(html.indexOf("Ant") < html.indexOf("Monkey"));
+}
+console.log("namespace facets, roster labels, sequential rows and result facts render correctly");
+
+const htmlText = (markup: string) => markup.replace(/<[^>]*>/g, "")
+  .replaceAll("&quot;", '"').replaceAll("&#x27;", "'").replaceAll("&#39;", "'")
+  .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+
+// Formatting preserves tokens; the disk-line toggle preserves the original bytes.
+async function rawLineRoundTrip() {
+  const root = await mkdtemp(join(tmpdir(), "adb-raw-render-"));
+  try {
+    const line = '  {"event" : {"type":"custom","kind":"clock","ts":"1999-01-01T00:00:00Z","data":{"value":1e0,"text":"<é>&\\u0041"}},"seq":9,"schema":0,"experiment":"example","run":"20260916t120000z-012345abcdef","v":0,"ts":"2026-09-16T12:34:56.123456Z"}\r\n';
+    const path = join(root, "events.jsonl");
+    await writeFile(path, line);
+    const disk = await readFile(path);
+    const markup = renderToStaticMarkup(<RawEvent line={disk.toString("utf8")} />);
+    const panel = (mode: string) => htmlText(markup.match(new RegExp(`<pre data-raw-event="${mode}"[^>]*>([\\s\\S]*?)</pre>`))![1]!);
+    assert.match(markup, /aria-pressed="true"[^>]*>formatted<\/button>/);
+    assert.deepEqual(Buffer.from(panel("disk line")), disk);
+    assert.deepEqual(jsonTokens(panel("formatted")), jsonTokens(line));
+    assert.ok(panel("formatted").startsWith('{\n  "event": {'));
+    assert.match(markup, /class="tok-num">1e0<\/span>/);
+    const record = parseEventLine(line);
+    const view = renderToStaticMarkup(<EventStream events={[record]} state="completed" />);
+    assert.match(view, /2026-09-16T12:34:56.123456Z · \+00:00:00.000000 from run start/);
+    assert.ok(!view.includes('title="1999'));
+    assert.match(renderRun(completed, "tab=stream", { readError: "Unreadable record: missing envelope" }), /role="alert"/);
+    console.log("raw formatting preserves tokens; disk-line toggle preserves bytes; capture time ignores payload ts");
+  } finally { await rm(root, { recursive: true }); }
+}
+rawLineRoundTrip().catch((error) => { console.error(error); process.exitCode = 1; });
+
+// Dedicated shared rows use stream context even when facets hide that context.
+const sharedRows = [
+  { ...runStart, condition: "0123456789abcdef", fetch_ref: "github:owner/repo/abc123?dir=packaging",
+    params: { enabled: true, count: 2, nested: { values: [false, 1.25] } },
+    runtime: { ...runStart.runtime,
+      experiment_bin: "/nix/store/0123456789abcdefghijklmnpqrsvwxyz-govsim-adapter/bin/govsim",
+      runner_bin: "/nix/store/0123456789abcdefghijklmnpqrsvwxyz-adb-runner/bin/adb-runner" },
+    result_definitions: [{ name: "yield", label: "Harvest", unit: "fish", type: { kind: "float" } }, ...runDefinitions] },
+  { type: "status", detail: "Old progress" },
+  { type: "log", level: "warn", message: "First line\nSecond line" },
+  { type: "stdout", line: "\x1b[31mterminal output\x1b[0m" },
+  { type: "stderr", line: "\x1b]8;;https://example.org\x07linked error\x1b]8;;\x07" },
+  { type: "result", name: "yield", value: 1.23456 },
+  { type: "result", name: "yield", value: 2 },
+  { type: "result", name: "collapsed", value: false },
+  { type: "llm.call", output: { choices: [{ message: { content: "A reply" } }], usage: { input_tokens: 17, output_tokens: 5 } } },
+  { type: "custom", kind: "test.message", data: { speaker: "Mayor", text: "Custom **hint**" } },
+  { type: "status", detail: "Latest progress" },
+  // These obsolete fields must never supply the derived figures.
+  { type: "run.end", state: "interrupted", duration_s: 65, exit_code: -15,
+    usage_totals: { llm_calls: 999999, input_tokens: 999999 }, summary: { ignored: 999999 } },
+].map((event, seq) => envelope(event, seq));
+const diskRows = new Map(sharedRows.map((record) => [record.seq, { record, line: JSON.stringify(record) + "\n" }]));
+const sharedView = (record: Ev) => renderToStaticMarkup(<EventStream review events={sharedRows}
+  visibleEvents={[record]} definitions={hintDefinitions} state="interrupted" cid="condition" rid="run"
+  diskRecords={diskRows} paramDeclarations={{ count: { type: { kind: "int" } } }} />);
+const beforeRaw = (html: string) => html.slice(0, html.indexOf('<details data-raw-disclosure=""'));
+assert.deepEqual([...new Set(sharedRows.map((r) => r.event.type))].sort(),
+  ["custom", "llm.call", "log", "result", "run.end", "run.start", "status", "stderr", "stdout"]);
+for (const record of sharedRows) {
+  const view = sharedView(record);
+  assert.match(view, new RegExp(`data-event-renderer="${record.event.type === "custom" ? "hint" : record.event.type}"`));
+  assert.ok(!view.includes('data-event-renderer="raw"'));
+  assert.match(view, /data-raw-disclosure/);
+  if (record.event.type === "run.start" || record.event.type === "run.end") {
+    // SSR includes the expanded contents even while <details> is closed. This
+    // also checks the opened snapshot: toggling only changes the open attribute.
+    for (const state of [view, view.replace(`<details id="ev-${record.seq}"`, `<details open="" id="ev-${record.seq}"`)]) {
+      assert.ok(!beforeRaw(state).includes("<pre"));
+      assert.match(state.slice(state.indexOf('data-raw-disclosure')), /<pre data-raw-event="formatted"/);
+    }
+  }
+}
+const startCard = beforeRaw(sharedView(sharedRows[0]!));
+for (const field of ["Identity", "Provenance", "Runtime", "Inputs", "3 declared results", "govsim-adapter", "adb-runner", "3.13", "https://api.example.invalid"])
+  assert.ok(startCard.includes(field), field);
+for (const label of ["condition", "source", "tree hash", "experiment_bin", "runner_bin"])
+  assert.match(startCard, new RegExp(`aria-label="Copy ${label}"`));
+assert.match(startCard, /href="https:\/\/github.com\/owner\/repo\/tree\/abc123\/packaging"/);
+assert.match(startCard, /href="#\/run\/condition\/run\?tab=summary"/);
+assert.ok(!htmlText(startCard).includes("/nix/store/"));
+const endFacts = beforeRaw(sharedView(sharedRows.at(-1)!));
+for (const text of ["1m 5s", "exit -15 (SIGTERM)", "Derived from stream:", "1 model calls", "17 input tokens", "5 output tokens", "3 results reported"])
+  assert.ok(htmlText(endFacts).includes(text), text);
+assert.ok(!endFacts.includes("999999"));
+assert.match(beforeRaw(sharedView(sharedRows[2]!)), /First line\nSecond line/);
+assert.match(beforeRaw(sharedView(sharedRows[2]!)), /text-amber-700/);
+for (const index of [3, 4]) {
+  const line = beforeRaw(sharedView(sharedRows[index]!));
+  assert.ok(!line.includes("\x1b"));
+  assert.match(line, /font-mono/);
+}
+assert.match(beforeRaw(sharedView(sharedRows[5]!)), /title="yield"/);
+assert.match(htmlText(beforeRaw(sharedView(sharedRows[5]!))), /Harvest1\.235fish/);
+assert.match(htmlText(beforeRaw(sharedView(sharedRows[7]!))), /Collapsedno/);
+assert.ok(!beforeRaw(sharedView(sharedRows[1]!)).includes("data-latest-status"));
+assert.match(beforeRaw(sharedView(sharedRows[10]!)), /data-latest-status/);
+console.log("shared row guard ok — structured lifecycle, derived totals, typed results, latest status, log levels, clean terminal lines");
+
+// Native rows use the actual exported templates and never the unhinted fallback.
+const govsimRows = events.filter((e) => e.event.kind?.startsWith("govsim."));
+assert.ok(!govsimDefinitions.some((d) => d.kind === "govsim.pool"));
+for (const record of govsimRows) {
+  const view = beforeRaw(renderToStaticMarkup(<EventStream review events={events} visibleEvents={[record]}
+    definitions={govsimDefinitions} state="completed" />));
+  const hint = renderHint(record.event, govsimDefinitions)!;
+  assert.ok(hint, record.event.kind);
+  assert.match(view, /data-event-renderer="hint"/);
+  assert.ok(!view.includes('data-event-renderer="raw"'));
+  const text = htmlText(view);
+  const title = hintText(hintValue(record.event, hint.title));
+  if (title) assert.ok(text.includes(title), `${record.event.kind}: ${title}`);
+  if (hint.format === "html-text") {
+    assert.ok(text.includes(hintBody(record.event, hint)));
+    assert.ok(!view.includes("<img") && !view.includes("<script"));
+    assert.ok(!text.includes("<div") && !text.includes("</span>"));
+  }
+  if (record.event.kind === "govsim.state") assert.equal(view.includes("data-hint-badge"), record.event.data.final);
+  if (record.event.kind === "govsim.memory") {
+    for (const path of hint.fields!) assert.ok(view.includes(`title="${path}"`), path);
+    assert.ok(view.indexOf('title="data.node.created"') < view.indexOf('title="data.node.expiration"'));
+  }
+}
+// Missing optional fields vanish; zero, false, and explicit null remain evidence.
+const fieldDefinitions = compileSchemas([{ oneOf: [{ properties: { type: { const: "custom" }, kind: { const: "test.fields" } },
+  "x-adb-render": { icon: "info", title: "value {data.value} {data.missing}", badge: "data.final", format: "html-text",
+    body: "data.html", fields: ["data.missing", "data.value", "data.final", "data.nullable"] } }] }]);
+const fieldRow = envelope({ type: "custom", kind: "test.fields", data: {
+  value: 0, final: true, nullable: null, html: '<p>Safe &amp; plain</p><script>alert(1)</script><img src=x onerror="alert(2)">',
+} });
+const fieldHtml = beforeRaw(renderToStaticMarkup(<EventStream events={[fieldRow]} definitions={fieldDefinitions} state="completed" />));
+assert.match(htmlText(fieldHtml), /value 0/);
+assert.match(fieldHtml, /data-hint-badge/);
+assert.match(fieldHtml, /Safe &amp; plain/);
+assert.ok(!fieldHtml.includes("alert(") && !fieldHtml.includes("<img") && !fieldHtml.includes('title="data.missing"'));
+for (const field of ["value", "final", "nullable"]) assert.match(fieldHtml, new RegExp(`title="data.${field}"`));
+console.log(`GovSim hint guard ok — ${govsimRows.length} native rows, templates, fields, final badges and inert HTML text`);
+
+// Hidden earlier calls still supply history, and only an exact strict prefix is elided.
+const input = [
+  { role: "system", content: "First rule\nSecond rule" },
+  { role: "user", content: "Old **question**" },
+];
+const continued = [...input,
+  { role: "assistant", content: [{ type: "reasoning", reasoning: "Think briefly." }, { type: "text", text: "Using **lookup**." }],
+    tool_calls: [{ id: "call-1", function: "lookup", arguments: { query: "fish" } }] },
+  { role: "tool", tool_call_id: "call-1", content: "**Found** fish." },
+  { role: "user", content: "Next **question**" },
+];
+const llmRows = [
+  envelope({ type: "llm.call", agent: "a", input }, 0),
+  envelope({ type: "llm.call", agent: "b", input: [] }, 1),
+  envelope({ type: "llm.call", agent: "a", input: continued, model: "requested", output: {
+    model: "served", usage: { input_tokens_cache_read: 12 }, choices: [{ stop_reason: "max_tokens", message: { role: "assistant", content: "New **answer**" } }],
+  } }, 2),
+  envelope({ type: "llm.call", agent: "a", input }, 3),
+];
+const llmView = (seq: number) => beforeRaw(renderToStaticMarkup(<EventStream review events={llmRows}
+  visibleEvents={[llmRows[seq]!]} definitions={hintDefinitions} state="completed" />));
+const deltaView = llmView(2);
+assert.match(deltaView, /show all 5 messages/);
+assert.ok(!deltaView.includes("Old <b>question</b>") && !deltaView.includes("First rule"));
+assert.match(deltaView, /Next <b>question<\/b>/);
+assert.match(deltaView, /Using <b>lookup<\/b>/);
+assert.match(deltaView, /New <b>answer<\/b>/);
+assert.match(deltaView, /<details data-reasoning="" class=/); // No open attribute.
+assert.match(htmlText(deltaView), /reasoning · 14 characters/);
+assert.match(deltaView, /data-tool-call="call-1"[\s\S]*data-tool-arguments[\s\S]*data-tool-result="call-1"[\s\S]*<b>Found<\/b>/);
+for (const text of ["requested requested", "served served", "stop reason: max_tokens", "cache read: 12 tokens"])
+  assert.ok(htmlText(deltaView).includes(text), text);
+const resetView = llmView(3);
+assert.match(resetView, /history differs from the previous call/);
+assert.match(resetView, /<details data-message-role="system" class=/);
+assert.match(resetView, /<b>system<\/b> · First rule<\/summary>/);
+assert.match(resetView, /Old <b>question<\/b>/);
+assert.ok(!llmView(0).includes("history differs"));
+console.log("model message guard ok — strict per-agent history, role formatting, tool result links and call metadata");
+
+async function unreadableCorpusGuard() {
+  const root = await copyBadRunCorpus();
+  try {
+    const reader = new RunReader(root, () => {});
+    const rows = await reader.list();
+    const badgeCount = (html: string) => html.match(/data-unreadable-badge=""/g)?.length ?? 0;
+    const overview = renderToStaticMarkup(<OverviewView runs={rows} manifests={[{ name: "corpus", params: {} }]} />);
+    const listing = renderToStaticMarkup(<RunsTable runs={rows} />);
+    for (const view of [overview, listing]) {
+      assert.equal(badgeCount(view), badRunNames.length);
+      for (const name of badRunNames) {
+        assert.match(view, new RegExp(`data-run="${name}"`));
+        assert.ok(htmlText(view).includes(rows.find((r) => r.run === name)!.reason!));
+      }
+    }
+    assert.match(listing, /data-run="20260916t120000z-000000000000"/);
+    assert.match(listing, /Score/);
+    assert.match(listing, /42/);
+    assert.match(htmlText(overview), /1 completed/);
+    for (const row of rows) {
+      const snapshot = (await reader.read(row.condition, row.run, true))!;
+      const rawRunJson = await reader.raw(row.condition, row.run);
+      for (const tab of ["summary", "stream"]) {
+        const page = renderToStaticMarkup(<RunView cid={row.condition} rid={row.run} query={`tab=${tab}`}
+          events={snapshot.records?.map(({ record }) => record) ?? []} meta={row} rawRunJson={rawRunJson} />);
+        assert.equal(badgeCount(page), row.readable ? 0 : 1);
+        if (!row.readable) {
+          assert.ok(htmlText(page).includes(row.reason!));
+          assert.match(page, /data-raw-run-json/);
+          assert.equal(htmlText(page.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)![1]!), rawRunJson);
+        } else assert.match(page, new RegExp(`data-run-tab="${tab}"`));
+      }
+    }
+    const empty = renderToStaticMarkup(<RunView cid="corpus" rid="20260916t120000z-000000000005" events={[]}
+      readError="no parseable run.json" rawRunJson={null} />);
+    assert.equal(badgeCount(empty), 1);
+    assert.match(empty, /No run.json recorded/);
+
+    // Defense in depth: direct component callers cannot turn a foreign dict into
+    // .map/.find/.some calls. Its values can still display as undeclared results.
+    for (const foreign of [{ score: { type: { kind: "int" } } }, null, "score", [null]]) {
+      const definitions = foreign as unknown as ResultDecl[];
+      for (const view of [
+        <ResultFacts definitions={definitions} summary={{ score: 42 }} />,
+        <ResultRows definitions={definitions} summary={{ score: 42 }} />,
+        <ResultChips definitions={definitions} summary={{ score: 42 }} />,
+        <InstanceScoreChips definitions={definitions} scores={[{ score: 42 }]} />,
+        <AggChips runs={[{ ...rows.find((r) => r.run === "20260916t120000z-000000000000")!, result_definitions: definitions }]} />,
+      ]) assert.match(htmlText(renderToStaticMarkup(view)), /42/);
+    }
+    console.log("unreadable corpus guard ok — overview, runs list, both run tabs, exact raw metadata, all result guards; good run remains visible");
+  } finally { await rm(root, { recursive: true }); }
+}
+unreadableCorpusGuard().catch((error) => { console.error(error); process.exitCode = 1; });

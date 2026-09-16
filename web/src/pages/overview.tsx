@@ -6,6 +6,8 @@
    experiment page. */
 
 import { useState } from "react";
+import type { RunMeta, Manifest } from "@/shared/types";
+import { RenderBoundary, UnreadableRunLink, displayRun } from "@/components/read-errors";
 import { ArrowRight } from "lucide-react";
 import { displayState, groupBy, useManifests, useRunsPoll } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,11 +27,16 @@ type Sort = keyof typeof SORTS;
 export function OverviewPage() {
   const runs = useRunsPoll();
   const manifests = useManifests();
+  if (runs === null) return <PageLoading />;
+  return <OverviewView runs={runs} manifests={manifests ?? []} />;
+}
+
+export function OverviewView({ runs: suppliedRuns, manifests }: { runs: RunMeta[]; manifests: Manifest[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("runs");
-  if (runs === null) return <PageLoading />;
+  const runs = (Array.isArray(suppliedRuns) ? suppliedRuns : []).map(displayRun);
   const byExp = groupBy(runs, (r) => r.experiment);
-  const byName = new Map((manifests ?? []).map((m) => [m.name, m]));
+  const byName = new Map((Array.isArray(manifests) ? manifests : []).map((m) => [m.name, m]));
   /* every catalog experiment (all known experiments), plus any experiment that only
      exists as runs (e.g. its manifest dir is missing in this deployment) */
   const names = [
@@ -37,7 +44,7 @@ export function OverviewPage() {
     ...Object.keys(byExp).filter((n) => !byName.has(n)),
   ];
   const lastOf = (n: string) =>
-    (byExp[n] ?? []).map((r) => r.started_at ?? "").sort().at(-1) ?? "";
+    (byExp[n] ?? []).map((r) => typeof r.started_at === "string" ? r.started_at : "").sort().at(-1) ?? "";
   const q = query.trim().toLowerCase();
   const shown = (q
     ? names.filter((n) =>
@@ -90,38 +97,44 @@ export function OverviewPage() {
           for (const r of rs) counts[displayState(r)] = (counts[displayState(r)] ?? 0) + 1;
           const last = lastOf(exp);
           return (
-            <a key={exp} href={`#/experiments/${encodeURIComponent(exp)}`} className="block no-underline">
-              <Card className="flex h-full min-h-40 flex-col transition-colors hover:border-primary/50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-start justify-between gap-1.5 text-sm">
-                    <span className="flex min-w-0 items-start gap-1.5">
-                      <span className="break-all font-mono">{exp}</span>
-                    </span>
-                    <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-1 flex-col gap-2">
-                  {summary && (
-                    <p className="line-clamp-3 text-xs text-muted-foreground">{summary}</p>
-                  )}
-                  <div className="mt-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {rs.length ? (
-                      <>
-                        <span className="font-medium text-foreground">
-                          {rs.length} {rs.length === 1 ? "run" : "runs"}
-                        </span>
-                        {STATES.filter((p) => counts[p]).map((p) => (
-                          <span key={p} className={stateText[p]}>{counts[p]} {p}</span>
-                        ))}
-                        {last && <span>last {last.replace("T", " ").slice(5, 16)}</span>}
-                      </>
-                    ) : (
-                      <span>no runs yet</span>
+            <div key={exp} className="space-y-2">
+              <a href={`#/experiments/${encodeURIComponent(exp)}`} className="block no-underline">
+                <Card className="flex h-full min-h-40 flex-col transition-colors hover:border-primary/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-start justify-between gap-1.5 text-sm">
+                      <span className="flex min-w-0 items-start gap-1.5">
+                        <span className="break-all font-mono">{exp}</span>
+                      </span>
+                      <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col gap-2">
+                    {summary && (
+                      <p className="line-clamp-3 text-xs text-muted-foreground">{summary}</p>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            </a>
+                    <div className="mt-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {rs.length ? (
+                        <>
+                          <span className="font-medium text-foreground">
+                            {rs.length} {rs.length === 1 ? "run" : "runs"}
+                          </span>
+                          {STATES.filter((p) => counts[p]).map((p) => (
+                            <span key={p} className={stateText[p]}>{counts[p]} {p}</span>
+                          ))}
+                          {last && <span>last {last.replace("T", " ").slice(5, 16)}</span>}
+                        </>
+                      ) : (
+                        <span>no runs yet</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </a>
+              {rs.filter((run) => run.readable === false).map((run) => <RenderBoundary key={`${run.condition}/${run.run}`} resetKey={run}
+                fallback={(reason) => <UnreadableRunLink run={run} reason={reason} />}>
+                <UnreadableRunLink run={run} reason={run.reason!} />
+              </RenderBoundary>)}
+            </div>
           );
         })}
       </div>

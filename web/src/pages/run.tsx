@@ -1,185 +1,272 @@
-/* Run page — consumes ONLY the event stream (incremental /events?after=N polls, 2s),
-   rendered as ONE view: the flat event feed (components/event-stream.tsx,
-   independently scrollable with auto-follow). Filter chips narrow it to a single
-   event family (messages / llm calls / metrics / …) — filters over the ground
-   truth, not separate projections. */
+/* Run summary and stream share one event snapshot and URL navigation state. */
 
-import { useEffect, useReducer, useRef, useState } from "react";
-import type { Ev } from "@/shared/types";
-import { api, conds, displayState, flattenEv, fmtVal, runCache, uiState, useManifests, useRunsPoll } from "@/lib/data";
-import type { RunMeta } from "@/shared/types";
-import { Chip, ExitBadge, ExtLinks, LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
-import { ResultRows } from "@/components/results";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import type { Condition, Ev, FullEvent, Manifest, RunMeta } from "@/shared/types";
+import { api, conds, displayState, fmtVal, loadRunEvents, runCache, useManifests, useRunSchemas, useRunsPoll } from "@/lib/data";
+import { LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
+import { RunResults } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
-import { LLMCallFailures } from "@/components/llm-call-failures";
+import { RenderBoundary, UnreadableRunPanel } from "@/components/read-errors";
+import { oneLineReason, resultDeclarations } from "@/lib/run-readability";
 import { ParamChip } from "@/components/param-value";
 import { cn } from "@/lib/utils";
+import { compileSchemas, kindNamespace, schemaKinds, type EventDefinition } from "@/lib/render-hints";
+import { duration, elapsedSeconds, matchesRunFilter, readRunTab, readRunView, rememberRunTab,
+  runActivity, runHref, selectRunTab, type RunTab, type StreamFilter } from "@/lib/run-view";
 
-/* the filterable event families; a chip only appears when the run has any */
-const FILTERS: { key: string; label: string; pred: (e: Ev) => boolean }[] = [
-  { key: "messages", label: "messages", pred: (e) => e.type === "message" },
-  { key: "llm-calls", label: "llm calls", pred: (e) => e.type === "llm.call" },
-  { key: "metrics", label: "metrics", pred: (e) => e.type === "metric" },
-  /* instance close-outs only — the per-row results overview for dataset-style
-     runs (kind=sample is the legacy pre-spec name) */
-  { key: "instances", label: "instances",
-    pred: (e) => e.type === "agent.event" && (e.kind === "instance" || e.kind === "sample") },
-  { key: "agent-events", label: "agent events", pred: (e) => e.type === "agent.event" },
-  { key: "logs", label: "logs", pred: (e) => e.type === "log" || e.type === "stdout" || e.type === "stderr" },
-];
+export function RunPage(props: { cid: string; rid: string; query?: string }) {
+  return <RenderBoundary key={`${props.cid}/${props.rid}`} fallback={(reason) => <UnreadableRunPanel {...props} reason={reason} />}>
+    <RunPageData {...props} />
+  </RenderBoundary>;
+}
 
-export function RunPage({ cid, rid }: { cid: string; rid: string }) {
-  /* seeded from the session cache (a prefetch or a previous visit) so mounting never
-     flashes an empty page; the component is keyed by cid/rid, so refs re-init per run */
+function RunPageData({ cid, rid, query = "" }: { cid: string; rid: string; query?: string }) {
   const key = `${cid}/${rid}`;
   const eventsRef = useRef<Ev[]>(runCache[key]?.events ?? []);
   const lastSeqRef = useRef(runCache[key]?.lastSeq ?? -1);
   const [, bump] = useReducer((x: number) => x + 1, 0);
-  const [filter, setFilter] = useState<string>("all");
-  /* run.json meta rides the same 2s poll — carries the runner's heartbeat
-     (heartbeat_at), which decides running vs interrupted? in the header */
+  const [readError, setReadError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const [preferredTab, setPreferredTab] = useState(() => readRunTab(localStorage));
+  const explicitTab = readRunView(query).tab;
+  useEffect(() => {
+    if (!explicitTab) return;
+    rememberRunTab(localStorage, explicitTab);
+    setPreferredTab(explicitTab);
+  }, [explicitTab]);
   const meta = useRunsPoll()?.find((r) => r.condition === cid && r.run === rid) ?? null;
+  const manifests = useManifests();
 
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | null = null;
-    const done = () => eventsRef.current.some((ev) => ev.type === "run.end");
+    const done = () => eventsRef.current.some((ev) => ev.event.type === "run.end");
     const poll = async () => {
       let fresh: Ev[];
       try {
-        fresh = (await api<Ev[]>(`/api/runs/${cid}/${rid}/events?after=${lastSeqRef.current}`)).map(flattenEv);
-      } catch { return; }
+        fresh = await loadRunEvents(cid, rid, lastSeqRef.current);
+      } catch (error) { if (!stopped) setReadError(oneLineReason(error)); return; }
+      setReadError(null);
       if (stopped) return;
       if (fresh.length) {
         eventsRef.current = [...eventsRef.current, ...fresh];
         lastSeqRef.current = fresh[fresh.length - 1]!.seq ?? lastSeqRef.current;
-        runCache[`${cid}/${rid}`] = { events: eventsRef.current, lastSeq: lastSeqRef.current };
+        runCache[key] = { events: eventsRef.current, lastSeq: lastSeqRef.current };
         bump();
       }
-      /* terminal streams are immutable — only live runs keep polling */
       if (done() && timer !== null) { clearInterval(timer); timer = null; }
     };
     void poll().then(() => {
       if (!stopped && !done()) timer = setInterval(() => void poll(), 2000);
     });
     return () => { stopped = true; if (timer !== null) clearInterval(timer); };
-  }, [cid, rid]);
+  }, [cid, rid, key]);
 
   useEffect(() => {
     if (cid in conds) return;
-    api(`/api/conditions/${cid}`)
-      .then((c) => { conds[cid] = c as never; bump(); })
+    api<Condition>(`/api/conditions/${cid}`)
+      .then((c) => { conds[cid] = c; bump(); })
       .catch(() => { /* not written yet */ });
   }, [cid]);
 
   const events = eventsRef.current;
-
-  /* chips only for families this run actually has; a stale pick falls back to all */
-  const filters = FILTERS.filter((f) => events.some(f.pred));
-  const activeFilter = filters.find((f) => f.key === filter);
-  const visible = activeFilter ? events.filter(activeFilter.pred) : events;
-
-  const end = events.find((e) => e.type === "run.end");
-  /* one display state for the whole page: run.end wins; otherwise run.json's
-     heartbeat decides running vs interrupted?; event-derived fallback */
-  const state = end ? end.state
-    : meta ? displayState(meta)
-    : events.some((e) => e.type === "run.status") ? "running" : "provisioning";
-  if (!events.length)
-    return (
-      <div className="space-y-3 pt-1">
-        <LoadingBar />
-        <Skeleton className="h-16" />
-        <Skeleton className="h-8 w-72" />
-        <Skeleton className="h-64" />
-      </div>
-    );
-  return (
-    <div className="flex h-full flex-col gap-3">
-      <RunHead cid={cid} rid={rid} events={events} state={state} />
-      {filters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-muted-foreground">filter:</span>
-          {[{ key: "all", label: "all" }, ...filters].map((f) => (
-            <button key={f.key} type="button" data-filter={f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5",
-                (activeFilter ? filter : "all") === f.key
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-ring hover:text-foreground",
-              )}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="min-h-0 flex-1">
-        <EventStream events={visible} state={state} cid={cid} rid={rid} />
-      </div>
-    </div>
-  );
+  const ended = events.some((e) => e.event.type === "run.end");
+  useEffect(() => {
+    if (ended) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [ended]);
+  const schemas = useRunSchemas(cid, rid, events.length > 0);
+  const definitions = useMemo(() => compileSchemas(schemas), [schemas]);
+  const experiment = events.find((e) => typeof e.experiment === "string")?.experiment
+    ?? meta?.experiment ?? conds[cid]?.experiment;
+  if (!events.length && !meta && !readError)
+    return <div className="space-y-3 pt-1"><LoadingBar /><Skeleton className="h-16" />
+      <Skeleton className="h-8 w-72" /><Skeleton className="h-64" /></div>;
+  return <RunView cid={cid} rid={rid} query={query} preferredTab={preferredTab} events={events}
+    definitions={definitions} meta={meta} condition={conds[cid]} now={now}
+    manifest={manifests?.find((m) => m.name === experiment)} readError={readError} />;
 }
 
-/* ---------------- header ---------------- */
+/* Data-only view is also rendered by the regression guard and review exporter. */
+export function RunView(props: Parameters<typeof ReadableRunView>[0]) {
+  const fallback = (reason: string) => <UnreadableRunPanel cid={props.cid} rid={props.rid} reason={reason} rawRunJson={props.rawRunJson} />;
+  const reason = props.meta?.readable === false ? props.meta.reason ?? "Run could not be read" : props.readError;
+  if (reason) return fallback(reason);
+  if (!Array.isArray(props.events)) return fallback("Events must be an array");
+  return <RenderBoundary resetKey={props.events} fallback={fallback}><ReadableRunView {...props} /></RenderBoundary>;
+}
 
-function RunHead({ cid, rid, events, state }: {
-  cid: string; rid: string; events: Ev[]; state: string;
+function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, definitions = [],
+  meta, manifest, condition, now = Date.now(), review = false, readError, diskRecords }: {
+  cid: string; rid: string; query?: string; preferredTab?: RunTab | null;
+  events: Ev[]; definitions?: EventDefinition[]; meta?: RunMeta | null;
+  manifest?: Manifest; condition?: Condition; now?: number; review?: boolean; readError?: string | null;
+  diskRecords?: ReadonlyMap<number, FullEvent>; rawRunJson?: string | null;
 }) {
-  const start = events.find((e) => e.type === "run.start") ?? {};
-  const definitions = start.result_definitions;
-  /* the experiment's external references (paper / source / datasets) from its
-     manifest — absent for runs of experiments this build doesn't ship */
-  const links = useManifests()?.find((m) => m.name === start.experiment)?.links;
-  const end = events.find((e) => e.type === "run.end");
-  const lastStatus = [...events].reverse().find((e) => e.type === "status");
-  const summary: Record<string, unknown> = end ? end.summary ?? {} : {};
-  /* metric events collapse last-value-wins per name (docs/book/src/reference/events.md);
-     summary keys win over same-named metrics as before */
-  const metrics = events
-    .filter((e) => e.type === "metric")
-    .map((e) => ({ name: String(e.name), value: e.value as unknown, unit: e.unit as string | null }));
-  /* per-instance scores → read-time aggregate chips (legacy kind=sample included) */
-  const instScores = events
-    .filter((e) => e.type === "agent.event" && (e.kind === "instance" || e.kind === "sample")
-      && e.data?.scores && Object.keys(e.data.scores).length > 0)
-    .map((e) => e.data.scores as Record<string, unknown>);
-  const usage = end?.usage_totals;
-  const params = (conds[cid]?.params ?? start.realized_params) as Record<string, unknown> | undefined;
-  const nParams = params ? Object.keys(params).length : 0;
-  return (
-    <div className="shrink-0 space-y-2">
-      <h2 className="flex items-center gap-3 text-lg font-semibold">
-        {start.experiment ?? "run"}
+  const startRecord = events.find((e) => e.event.type === "run.start");
+  const start = startRecord?.event;
+  const end = events.find((e) => e.event.type === "run.end")?.event;
+  const state = end?.state ?? (meta ? displayState(meta, now) : "running");
+  const terminal = !!end || ["completed", "failed", "interrupted"].includes(state);
+  const experiment = events.find((e) => typeof e.experiment === "string")?.experiment
+    ?? meta?.experiment ?? condition?.experiment ?? manifest?.name ?? "run";
+  const options = readRunView(query);
+  const tab = selectRunTab(options, preferredTab, terminal);
+  const activity = {
+    kinds: new Map(Object.entries(meta?.derived?.counts.by_kind ?? {})),
+    actors: runActivity(events, definitions).actors,
+  };
+  const visible = events.filter((e) => matchesRunFilter(e, options.filter, definitions));
+  const href = (nextTab: RunTab, filter = options.filter) => runHref(cid, rid, { tab: nextTab, filter });
+  const resultDefinitions = resultDeclarations(meta?.result_definitions ?? manifest?.results);
+  const summary = meta?.derived?.results ?? {};
+  const usage = { calls: meta?.derived?.counts.llm_calls ?? 0, failed: meta?.derived?.counts.failed_calls ?? 0,
+    input: meta?.derived?.usage.input_tokens ?? 0, output: meta?.derived?.usage.output_tokens ?? 0 };
+  const runtime = start?.runtime ?? meta?.runtime ?? {};
+  const params = start?.params ?? meta?.params;
+  const lastStatus = meta?.derived?.last_status;
+  const elapsed = end?.duration_s ?? meta?.duration_s ?? elapsedSeconds(startRecord?.ts ?? meta?.started_at ?? events[0]?.ts, now);
+  const age = elapsedSeconds(meta?.derived?.last_event_at, now);
+  const failedCalls = <span className={usage.failed ? "font-medium text-destructive" : "text-muted-foreground"}>
+    {usage.failed} failed calls</span>;
+  return <div className="flex h-full min-h-0 flex-col gap-3" data-run-page="">
+    <header className="shrink-0 space-y-1" data-run-header="">
+      <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold">
+        <a href={`#/experiments/${encodeURIComponent(experiment)}`} className="hover:underline">{experiment}</a>
         <StateBadge state={state} />
-        <LLMCallFailures events={events} />
       </h2>
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
-        <span className="font-mono text-xs text-muted-foreground">{cid.slice(0, 12)} · {rid}</span>
-        <ExtLinks links={links} />
-        <span>seed <b className="font-semibold">{fmtVal(start.seed)}</b></span>
-        <span>replicate <b className="font-semibold">{fmtVal(start.replicate)}</b></span>
-        {usage && (
-          <span>{fmtVal(usage.llm_calls)} calls · {fmtVal(usage.input_tokens)}+{fmtVal(usage.output_tokens)} tok</span>
-        )}
-        {!end && lastStatus && <span className="text-muted-foreground">{lastStatus.detail}</span>}
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span title={cid}>condition <span className="font-mono">{cid.slice(0, 12)}</span></span>
+        <span>run <span className="break-all font-mono">{rid}</span></span>
+        <span>seed <b className="font-medium text-foreground">{fmtVal(start?.seed ?? meta?.seed)}</b></span>
       </div>
-      <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
-        {(Object.keys(summary).length > 0 || instScores.length > 0 || metrics.length > 0) && (
-          <section aria-label="Results" className="rounded-lg border bg-card px-3 py-2.5">
-            <h3 className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Results</h3>
-            <ResultRows summary={summary} metrics={metrics} scores={instScores} definitions={definitions} />
-          </section>
-        )}
-        {nParams > 0 && (
-          <details className="rounded-lg border px-3 py-2">
-            <summary className="cursor-pointer text-xs text-muted-foreground">Parameters ({nParams})</summary>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {Object.entries(params!).map(([k, v]) => <ParamChip key={k} name={k} value={v} />)}
-            </div>
-          </details>
-        )}
-      </div>
+    </header>
+    {readError && <p role="alert" className="text-sm text-destructive">{readError}</p>}
+    <nav aria-label="Run tabs" className="flex shrink-0 gap-4 border-b">
+      {(["summary", "stream"] as const).map((name) => <a key={name} href={href(name)}
+        aria-current={tab === name ? "page" : undefined} data-tab={name}
+        className={cn("border-b-2 px-1 pb-2 text-sm", tab === name
+          ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+        {name === "summary" ? "Summary" : "Stream"}
+      </a>)}
+    </nav>
+    {tab === "summary" ? <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pb-6 pr-1" data-run-tab="summary">
+      <section aria-label={terminal ? "Outcome" : "Progress"} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <StateBadge state={state} />
+        <span>{terminal ? "duration" : "elapsed"} {duration(elapsed)}</span>
+        {!terminal && lastStatus && <span>{lastStatus}</span>}
+        <span>{usage.calls} calls</span><span>{usage.input}+{usage.output} tokens</span>
+        {failedCalls}
+        {!terminal && <><LiveDot state={state} /><span className="text-muted-foreground">
+          {age === null ? "waiting for first event" : `last event ${duration(age)} ago`}</span>
+          {state === "interrupted?" && <span className="text-amber-700 dark:text-amber-400">possibly interrupted</span>}</>}
+      </section>
+      <section aria-label="Results">
+        <SectionTitle>Results</SectionTitle>
+        {Object.keys(resultDefinitions).length || Object.keys(summary).length
+          ? <RunResults definitions={resultDefinitions} summary={summary} />
+          : <p className="text-sm text-muted-foreground">No results declared.</p>}
+      </section>
+      <section aria-label="Activity">
+        <SectionTitle>Activity</SectionTitle>
+        <div className="space-y-3 text-sm">
+          <ActivityLinks label="By kind" entries={[...activity.kinds].map(([kind, count]) => ({ id: kind, label: kind, count }))}
+            link={(id) => href("stream", { by: "kind", value: id })} />
+          <ActivityLinks label="By actor" entries={activity.actors}
+            link={(id) => href("stream", { by: "actor", value: id })} />
+        </div>
+      </section>
+      <section aria-label="Inputs">
+        <SectionTitle>Inputs</SectionTitle>
+        {params && Object.keys(params).length ? <Facts values={params} />
+          : <p className="text-sm text-muted-foreground">Parameters have not been recorded.</p>}
+      </section>
+      <section aria-label="Provenance">
+        <SectionTitle>Provenance</SectionTitle>
+        <Facts values={{ source: start?.source ?? meta?.source ?? condition?.source ?? "not recorded",
+          fetch_ref: start?.fetch_ref ?? meta?.fetch_ref ?? "no pinned revision",
+          tree_hash: start?.tree_hash ?? meta?.tree_hash ?? "not recorded" }} />
+        <h4 className="mb-2 mt-4 text-xs font-medium">Runtime</h4>
+        <Facts values={Object.fromEntries(Object.entries(runtime).filter(([key]) => key !== "endpoints"))} />
+        <h4 className="mb-2 mt-4 text-xs font-medium">Endpoint origins</h4>
+        {Object.keys(runtime.endpoints ?? {}).length ? <Facts values={runtime.endpoints} />
+          : <p className="text-sm text-muted-foreground">No endpoint origins recorded.</p>}
+      </section>
+    </div> : <div className="min-h-0 flex-1" data-run-tab="stream">
+      <EventStream events={events} visibleEvents={visible} definitions={definitions} state={state} cid={cid} rid={rid} review={review}
+        paramDeclarations={manifest?.params}
+        diskRecords={diskRecords}
+        facets={<RunFacets events={events} activity={activity} definitions={definitions} filter={options.filter}
+          link={(filter) => href("stream", filter)} />} />
+    </div>}
+  </div>;
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{children}</h3>;
+}
+
+function Facts({ values }: { values: Record<string, unknown> }) {
+  return <dl className="space-y-2 text-sm">{Object.entries(values).map(([key, value]) =>
+    <div key={key} className="grid items-baseline gap-1 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-3">
+      <dt className="font-mono text-xs text-muted-foreground">{key}</dt>
+      <dd className="min-w-0 break-words"><ParamChip value={value} /></dd>
+    </div>)}</dl>;
+}
+
+function ActivityLinks({ label, entries, link }: {
+  label: string; entries: { id: string; label: string; count: number }[]; link: (id: string) => string;
+}) {
+  return <div><h4 className="mb-1.5 text-xs text-muted-foreground">{label}</h4>
+    <div className="flex flex-wrap gap-2">{(Array.isArray(entries) ? entries : []).map((entry) =>
+      <a key={entry.id} href={link(entry.id)} title={entry.id} className="rounded border px-2 py-1 hover:bg-accent">
+        {entry.label} <span className="ml-1 font-mono tabular-nums text-muted-foreground">{entry.count}</span>
+      </a>)}{!entries.length && <span className="text-muted-foreground">None recorded.</span>}</div>
+  </div>;
+}
+
+function RunFacets({ events, activity, definitions, filter, link }: {
+  events: Ev[]; activity: ReturnType<typeof runActivity>; definitions: EventDefinition[];
+  filter: StreamFilter; link: (filter: StreamFilter) => string;
+}) {
+  const kinds = schemaKinds(Array.isArray(definitions) ? definitions : []).filter((kind) => events.some((event) =>
+    matchesRunFilter(event, { by: "kind", value: kind }, definitions)));
+  if (filter?.by === "kind" && !kinds.includes(filter.value)) kinds.push(filter.value);
+  const namespace = filter?.by === "namespace" ? filter.value
+    : filter?.by === "kind" ? kindNamespace(filter.value) : null;
+  type Facet = { filter: StreamFilter; label: string };
+  const roots = new Map<string, Facet>();
+  for (const kind of kinds) {
+    const prefix = kindNamespace(kind);
+    const facet = prefix ? { filter: { by: "namespace", value: prefix } as const, label: prefix }
+      : { filter: { by: "kind", value: kind } as const, label: kind };
+    roots.set(`${facet.filter.by}:${facet.filter.value}`, facet);
+  }
+  if (namespace && !roots.has(`namespace:${namespace}`))
+    roots.set(`namespace:${namespace}`, { filter: { by: "namespace", value: namespace }, label: namespace });
+  const actors: Facet[] = (Array.isArray(activity.actors) ? activity.actors : []).map((actor) => ({ filter: { by: "actor", value: actor.id }, label: actor.label }));
+  if (filter?.by === "actor" && !activity.actors.some((a) => a.id === filter.value))
+    actors.push({ filter, label: filter.value });
+  const chip = (facet: Facet) => {
+    const key = facet.filter ? `${facet.filter.by}:${facet.filter.value}` : "all";
+    const active = (facet.filter?.by === filter?.by && facet.filter?.value === filter?.value)
+      || (facet.filter?.by === "namespace" && facet.filter.value === namespace);
+    return <a key={key} href={link(facet.filter)} data-filter={key} aria-current={active ? "true" : undefined}
+      title={facet.filter ? `${facet.filter.by}: ${facet.filter.value}` : "All events"}
+      className={cn("rounded-full border px-2.5 py-0.5", active ? "border-primary bg-primary/10 text-foreground"
+        : "border-transparent text-muted-foreground hover:border-ring hover:text-foreground")}>
+      {facet.filter?.by === "actor" && <span className="text-muted-foreground">actor: </span>}{facet.label}
+    </a>;
+  };
+  return <nav aria-label="Stream filters" className="max-h-48 shrink-0 space-y-1.5 overflow-y-auto border-b px-2.5 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-1.5" data-facet-level="namespaces">
+      {[{ filter: null, label: "all" }, ...roots.values()].map(chip)}
     </div>
-  );
+    {namespace && <div className="flex flex-wrap items-center gap-1.5 border-l-2 pl-2" data-facet-level="kinds" aria-label={`${namespace} kinds`}>
+      {kinds.filter((kind) => kindNamespace(kind) === namespace)
+        .map((kind) => chip({ filter: { by: "kind", value: kind }, label: kind }))}
+    </div>}
+    {!!actors.length && <div className="flex flex-wrap items-center gap-1.5" aria-label="Actor filters">{actors.map(chip)}</div>}
+  </nav>;
 }

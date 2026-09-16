@@ -297,7 +297,7 @@ test("required blanks retain defaults and missing-value validation", () => {
    this list and shared/types.ts must move together, and THIS test is what makes
    forgetting that loud. */
 
-const MANIFEST_KEYS = new Set(["name", "params", "schema_version", "summary",
+const MANIFEST_KEYS = new Set(["name", "params", "schema_version", "schema", "summary",
   "origin", "results", "env", "links", "readme"]);
 const DECL_KEYS = new Set(["type", "initial", "description", "nullable", "order",
   "group", "suggestions", "minLen", "maxLen", "fields", "depends_on", "variants"]);
@@ -339,9 +339,15 @@ test("every shipped manifest uses only declared keys", (t) => {
     if ("readme" in doc) assert.equal(typeof doc.readme, "string", `${f}:readme`);
     for (const [name, decl] of Object.entries(doc.params as Record<string, Record<string, unknown>>))
       checkDecl(decl, `${f}:params.${name}`);
-    for (const [name, decl] of Object.entries((doc.results ?? {}) as Record<string, Record<string, unknown>>)) {
+    assert.equal(doc.schema_version, 1, `${f}:schema_version`);
+    assert.ok(Array.isArray(doc.results), `${f}:results`);
+    const declarations = doc.results as Record<string, unknown>[];
+    assert.equal(new Set(declarations.map((decl) => decl.name)).size, declarations.length);
+    for (const decl of declarations) {
+      const name = decl.name;
+      assert.equal(typeof name, "string", `${f}:result name`);
       const path = `${f}:results.${name}`;
-      checkSubset(decl, new Set(["type", "label", "description", "details", "unit"]), path);
+      checkSubset(decl, new Set(["name", "type", "label", "description", "details", "unit"]), path);
       checkType(decl.type as Record<string, unknown>, `${path}.type`);
       for (const field of ["label", "description", "details", "unit"])
         if (field in decl) assert.equal(typeof decl[field], "string", `${path}.${field}`);

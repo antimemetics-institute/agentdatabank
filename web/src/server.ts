@@ -7,9 +7,8 @@
    - /api/conditions/<cid> replaces large param values (> ~2 KB) with
      {__param_ref: {size, preview, ref}} descriptors; /api/params/<cid>/<key>
      serves one full value on demand;
-   - the events endpoint ELIDES the quadratic parts (request.messages,
-     response.raw, any string > ~4 KB) into {__elided: {bytes, preview}} markers;
-     /api/runs/<cid>/<rid>/event/<seq> serves one full event on demand. The disk
+   - the events endpoint may elide payload fields into typed transport markers;
+     /api/runs/<cid>/<rid>/event/<seq> serves the verbatim JSONL line as text. The disk
      record stays untouched — "truncation is strictly a viewer concern"
      (docs/book/src/reference/events.md);
    - immutable data (conditions, params, terminal runs' events) is served with
@@ -21,16 +20,21 @@
    does this); `dev.sh` runs this file directly via node's type stripping. */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { existsSync, realpathSync } from "node:fs";
 import { spawn, execFile } from "node:child_process";
 import { join, extname, normalize, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { LocalExecutor } from "./server/executor";
 import { readReadmeAsset } from "./server/readme-assets";
+import { elideEvent, UnreadableRecord } from "./server/events";
+import { RunReader } from "./server/runs";
+import { oneLineReason } from "./lib/run-readability";
+import { readRunSchemas } from "./server/event-schemas";
 import { parseArgs } from "node:util";
-import type { Ev, Manifest, RunMeta } from "./shared/types";
+import type { Condition, Manifest } from "./shared/types";
 import {
   claim, done, getJob, initJobs, listJobs, report, flushJobs, interruptJobs,
   stopJob, submit,
@@ -101,7 +105,6 @@ let shuttingDown = false;
 const startupAbort = new AbortController();
 
 const PARAM_REF_LIMIT = 2048; /* param values above this become descriptors */
-const ELIDE_LIMIT = 4096;     /* event string fields above this become markers */
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -155,52 +158,7 @@ function withEtag(
 
 /* ---------------- runs list: thin summaries + store fingerprint ---------------- */
 
-interface RunsScan { runs: RunMeta[]; maxMtimeMs: number; count: number }
-
-async function scanRuns(): Promise<RunsScan> {
-  const runs: RunMeta[] = [];
-  let maxMtimeMs = 0;
-  const runsDir = join(HOME, "runs");
-  let cids: string[] = [];
-  try { cids = await readdir(runsDir); } catch { return { runs, maxMtimeMs, count: 0 }; }
-  for (const cid of cids) {
-    let rids: string[] = [];
-    try { rids = await readdir(join(runsDir, cid)); } catch { continue; }
-    for (const rid of rids) {
-      try {
-        const path = join(runsDir, cid, rid, "run.json");
-        const full: Ev = JSON.parse(await readFile(path, "utf8"));
-        /* THIN summary: no params (realized or spec) — params belong to the
-           condition/run detail endpoints */
-        const meta: RunMeta = {
-          run: full.run,
-          condition: full.condition,
-          experiment: full.experiment,
-          state: full.state,
-          replicate: full.replicate,
-          seed: full.seed,
-          started_at: full.started_at,
-          finished_at: full.finished_at,
-          duration_s: full.duration_s,
-          summary: full.summary,
-          result_definitions: full.result_definitions,
-        };
-        /* server-enriched liveness signal: the runner heartbeats by touching
-           run.json's mtime every 10s while alive (events spec, Ordering &
-           integrity) — a stale heartbeat on a `running` run displays as
-           `interrupted?` in the GUI */
-        try {
-          const st = await stat(path);
-          meta.heartbeat_at = st.mtime.toISOString();
-          if (st.mtimeMs > maxMtimeMs) maxMtimeMs = st.mtimeMs;
-        } catch { /* raced */ }
-        runs.push(meta);
-      } catch { /* half-written or foreign file — skip, garbage is data but not here */ }
-    }
-  }
-  runs.sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
-  return { runs, maxMtimeMs, count: runs.length };
-}
+const runReader = new RunReader(HOME);
 
 /* ---------------- param descriptors ---------------- */
 
@@ -222,104 +180,8 @@ function thinParams(cid: string, params: Record<string, unknown>): Record<string
   return out;
 }
 
-async function readCondition(cid: string): Promise<Ev | null> {
-  try { return JSON.parse(await readFile(join(HOME, "conditions", `${cid}.json`), "utf8")); }
-  catch { return null; }
-}
-
-/* ---------------- event elision (viewer concern; disk record untouched) ---------------- */
-
-const elideMarker = (v: unknown, pv: string): Ev => {
-  const s = typeof v === "string" ? v : JSON.stringify(v);
-  return { __elided: { bytes: s.length, preview: pv } };
-};
-
-/* cheap walk: request.messages and response.raw always elide (that's the
-   quadratic conversation fold), any string > ELIDE_LIMIT elides anywhere */
-function elideEvent(e: Ev): Ev {
-  let changed = false;
-  const walk = (v: unknown): unknown => {
-    if (typeof v === "string") {
-      if (v.length > ELIDE_LIMIT) { changed = true; return elideMarker(v, v.slice(0, 200)); }
-      return v;
-    }
-    if (Array.isArray(v)) {
-      const arr = v.map(walk);
-      return changed ? arr : v;
-    }
-    if (v && typeof v === "object") {
-      const out: Record<string, unknown> = {};
-      for (const [k, val] of Object.entries(v)) out[k] = walk(val);
-      return out;
-    }
-    return v;
-  };
-  const out: Ev = { ...e };
-  /* the quadratic parts live inside the payload (`event` per the envelope spec);
-     fall back to the line itself for pre-envelope streams */
-  const body: Ev = out.event && typeof out.event === "object"
-    ? (out.event = { ...(out.event as Ev) })
-    : out;
-  if (body.request && typeof body.request === "object" && body.request.messages !== undefined) {
-    const msgs = body.request.messages;
-    body.request = {
-      ...body.request,
-      messages: elideMarker(msgs, `${Array.isArray(msgs) ? msgs.length : "?"} messages`),
-    };
-    changed = true;
-  }
-  if (body.response && typeof body.response === "object" && body.response.raw !== undefined) {
-    body.response = { ...body.response, raw: elideMarker(body.response.raw, "raw provider response") };
-    changed = true;
-  }
-  const walked = walk(out) as Ev;
-  // Result explanations are presentation metadata used directly by the run header.
-  // Keep their strings intact rather than replacing them with elision objects.
-  if (body.type === "run.start" && body.result_definitions)
-    (walked.event ?? walked).result_definitions = body.result_definitions;
-  return changed ? walked : e;
-}
-
-async function runEvents(cid: string, rid: string, after: number): Promise<Ev[] | null> {
-  const dir = join(HOME, "runs", cid, rid);
-  let files: string[] = [];
-  try { files = (await readdir(dir)).filter((f) => /^events-\d+\.jsonl$/.test(f)).sort(); }
-  catch { return null; }
-  const events: Ev[] = [];
-  for (const file of files) {
-    for (const line of (await readFile(join(dir, file), "utf8")).split("\n")) {
-      if (!line) continue;
-      try {
-        const ev = JSON.parse(line);
-        if ((ev.seq ?? 0) > after) events.push(elideEvent(ev));
-      } catch { /* torn tail line of a live run — next poll gets it */ }
-    }
-  }
-  return events;
-}
-
-/* one FULL event by seq — what the client fetches when it hits an __elided marker */
-async function fullEvent(cid: string, rid: string, seq: number): Promise<Ev | null> {
-  const dir = join(HOME, "runs", cid, rid);
-  let files: string[] = [];
-  try { files = (await readdir(dir)).filter((f) => /^events-\d+\.jsonl$/.test(f)).sort(); }
-  catch { return null; }
-  for (const file of files) {
-    for (const line of (await readFile(join(dir, file), "utf8")).split("\n")) {
-      if (!line) continue;
-      try {
-        const ev = JSON.parse(line);
-        if (ev.seq === seq) return ev;
-      } catch { /* torn tail */ }
-    }
-  }
-  return null;
-}
-
-async function runState(cid: string, rid: string): Promise<string | null> {
-  try {
-    return JSON.parse(await readFile(join(HOME, "runs", cid, rid, "run.json"), "utf8")).state ?? null;
-  } catch { return null; }
+async function readCondition(cid: string): Promise<Condition | null> {
+  return runReader.condition(cid);
 }
 
 /* Catalog evaluated from the configured execution source at startup. */
@@ -442,9 +304,9 @@ const server = createServer(async (req, res) => {
     if (parts[0] === "api") {
       if (parts[1] === "runs" && parts.length === 2) {
         /* thin list + store-fingerprint ETag: 2s polls are 304s when nothing moved */
-        const scan = await scanRuns();
-        return withEtag(req, res, `"runs-${scan.count}-${Math.round(scan.maxMtimeMs)}"`,
-          "no-cache", () => scan.runs);
+        const scan = await runReader.list();
+        return withEtag(req, res, `"runs-${createHash("sha256").update(JSON.stringify(scan)).digest("hex")}"`,
+          "no-cache", () => scan);
       }
       if (parts[1] === "ping" && parts.length === 2) {
         /* identity probe: the runner walks the ports this server might have bound to
@@ -584,24 +446,44 @@ const server = createServer(async (req, res) => {
         }
         return json(req, res, 404, { error: "unknown endpoint" });
       }
-      if (parts[1] === "runs" && parts.length === 5 && parts[4] === "events") {
+      if (parts[1] === "runs" && parts.length >= 4) {
         const [, , cid, rid] = parts as [string, string, string, string];
-        const events = await runEvents(cid, rid, Number(url.searchParams.get("after") ?? "-1"));
-        if (events === null) return json(req, res, 404, { error: "no such run" });
-        const state = await runState(cid, rid);
-        if (state && TERMINAL.has(state)) {
-          /* terminal runs' streams never change — immutable */
-          return withEtag(req, res, `"ev-${rid}-${state}-${events.length}"`, IMMUTABLE, () => events);
+        if (!/^[A-Za-z0-9_-]+$/.test(cid) || !/^[A-Za-z0-9_-]+$/.test(rid))
+          return json(req, res, 400, { error: "bad run identity" });
+        if (parts.length === 5 && parts[4] === "run.json") {
+          try {
+            const raw = await runReader.raw(cid, rid);
+            res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+            return res.end(raw);
+          } catch (error) { return json(req, res, 404, { error: `run.json unavailable: ${oneLineReason(error)}` }); }
         }
-        return json(req, res, 200, events, { "cache-control": "no-store" });
-      }
-      if (parts[1] === "runs" && parts.length === 6 && parts[4] === "event") {
-        const [, , cid, rid, , seqStr] = parts as [string, string, string, string, string, string];
-        const ev = await fullEvent(cid, rid, Number(seqStr));
-        if (ev === null) return json(req, res, 404, { error: "no such event" });
-        const state = await runState(cid, rid);
-        const cc = state && TERMINAL.has(state) ? IMMUTABLE : "no-cache";
-        return withEtag(req, res, `"evt-${rid}-${seqStr}"`, cc, () => ev);
+        const snapshot = await runReader.read(cid, rid, true);
+        if (!snapshot) return json(req, res, 404, { error: "no parseable run.json" });
+        if (snapshot.meta.readable === false)
+          return json(req, res, 422, { readable: false, reason: snapshot.meta.reason, error: snapshot.meta.reason });
+        const records = snapshot.records!;
+        const state = snapshot.meta.state;
+        if (parts.length === 5 && parts[4] === "schemas") {
+          const first = records[0];
+          if (!first) return json(req, res, 200, []);
+          const schemas = await readRunSchemas(
+            await readManifests() as Manifest[], first.record.experiment, first.record.schema);
+          return json(req, res, 200, schemas, { "cache-control": "no-cache" });
+        }
+        if (parts.length === 5 && parts[4] === "events") {
+          const after = Number(url.searchParams.get("after") ?? "-1");
+          const events = records.filter(({ record }) => record.seq > after).map(({ record }) => elideEvent(record));
+          if (state && TERMINAL.has(state))
+            return withEtag(req, res, `"ev-${rid}-${state}-${events.length}"`, IMMUTABLE, () => events);
+          return json(req, res, 200, events, { "cache-control": "no-store" });
+        }
+        if (parts.length === 6 && parts[4] === "event") {
+          const ev = records.find(({ record }) => record.seq === Number(parts[5]));
+          if (!ev) return json(req, res, 404, { error: "no such event" });
+          const cc = state && TERMINAL.has(state) ? IMMUTABLE : "no-cache";
+          res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": cc });
+          return res.end(ev.line);
+        }
       }
       if (parts[1] === "conditions" && parts.length === 3) {
         const cid = parts[2]!;
@@ -625,7 +507,7 @@ const server = createServer(async (req, res) => {
     if (await serveStatic(req, res, url.pathname)) return;
     json(req, res, 404, { error: "not found" });
   } catch (err) {
-    json(req, res, 500, { error: String(err) });
+    json(req, res, err instanceof UnreadableRecord ? 422 : 500, { error: oneLineReason(err) });
   }
 });
 

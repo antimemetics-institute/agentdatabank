@@ -43,6 +43,7 @@ function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
     void apiPost("/api/jobs", {
       experiment: j.experiment, sets: j.sets, profiles: j.profiles, replicates: j.replicates,
     }).then(() => setErr(null)).catch((e: Error) => setErr(e.message));
+  jobs = Array.isArray(jobs) ? jobs : [];
   const cols = ["job", "experiment", "state", "runs", "created", ""];
   return (
     <section className="space-y-1.5">
@@ -102,11 +103,11 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabl
         <TableCell><StateBadge state={j.state} /></TableCell>
         <TableCell className="text-xs">
           <span className="flex flex-wrap gap-1.5">
-            {j.runs.length === 0 && <span className="text-muted-foreground">—</span>}
-            {j.runs.map((rid) => (
+            {(!Array.isArray(j.runs) || j.runs.length === 0) && <span className="text-muted-foreground">—</span>}
+            {(Array.isArray(j.runs) ? j.runs : []).map((rid) => (
               <a key={rid} href={`#/runs/${rid}`} onClick={(e) => e.stopPropagation()}
                 className="font-mono underline decoration-dotted">
-                {rid.slice(-6)}
+                {rid}
               </a>
             ))}
           </span>
@@ -135,7 +136,7 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabl
           <TableCell colSpan={colSpan} className="bg-muted/20">
             <div className="max-w-3xl space-y-1.5 py-1">
               <p className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
-                {j.sets.length ? j.sets.map((s) => `--set ${s}`).join(" ") : "(no --set args)"}
+                {Array.isArray(j.sets) && j.sets.length ? j.sets.map((s) => `--set ${s}`).join(" ") : "(no --set args)"}
                 {j.replicates > 1 && ` × ${j.replicates} replicates`}
               </p>
               <JobPanel job={j} onStop={onStop} />

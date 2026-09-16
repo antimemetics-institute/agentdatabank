@@ -12,6 +12,7 @@ import { ExperimentPage } from "@/pages/experiment";
 import { RunResolver, RunsPage } from "@/pages/runs";
 import { RunPage } from "@/pages/run";
 import { JobsPage } from "@/pages/jobs";
+import { hashRoute } from "@/lib/run-view";
 
 function useHash(): string {
   return useSyncExternalStore(
@@ -36,7 +37,7 @@ function useTheme() {
 export function App() {
   const hash = useHash();
   const { dark, toggle } = useTheme();
-  const parts = hash.slice(2).split("/").filter(Boolean);
+  const { parts, query } = hashRoute(hash);
 
   let section = "experiments";
   let page: ReactNode;
@@ -44,13 +45,13 @@ export function App() {
   if (parts[0] === "run" && parts.length === 3) {
     section = "runs";
     fullHeight = true;
-    page = <RunPage key={`${parts[1]}/${parts[2]}`} cid={parts[1]!} rid={parts[2]!} />;
+    page = <RunPage key={`${parts[1]}/${parts[2]}`} cid={parts[1]!} rid={parts[2]!} query={query} />;
   } else if (parts[0] === "experiments" && parts.length === 2) {
     page = <ExperimentPage key={parts[1]} name={decodeURIComponent(parts[1]!)} />;
   } else if (parts[0] === "runs" && parts.length === 2) {
     /* bare run id (lineage links) — resolve to the full #/run/<cid>/<rid> route */
     section = "runs";
-    page = <RunResolver key={parts[1]} rid={parts[1]!} />;
+    page = <RunResolver key={parts[1]} rid={parts[1]!} query={query} />;
   } else if (parts[0] === "runs") {
     section = "runs";
     page = <RunsPage />;

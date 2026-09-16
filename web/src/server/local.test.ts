@@ -3,10 +3,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { once } from "node:events";
+
+import { fixtureCard } from "../../test/event-fixtures.ts";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function until<T>(fn: () => Promise<T | null>): Promise<T> {
@@ -122,21 +124,58 @@ process.on('SIGTERM', async () => {
     await until(async () => (await (await fetch(b.url + "/api/executor")).json()).error || null);
     assert.equal((await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).state, "orphaned");
     assert.equal((await fetch(b.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) })).status, 503);
-    const runDir = join(dir, "read-only", "runs", "condition", "run");
+    const runDir = join(dir, "read-only", "runs", "condition-hello", "20260916t120000z-012345abcdef");
     mkdirSync(runDir, { recursive: true });
-    const definitions = { value: { type: { kind: "int" }, label: "Recorded value", description: "Explanation. ".repeat(400) } };
-    writeFileSync(join(runDir, "run.json"), JSON.stringify({
-      run: "run", condition: "condition", experiment: "hello", state: "completed",
-      result_definitions: definitions, summary: { value: 1 },
-    }));
-    writeFileSync(join(runDir, "events-00001.jsonl"), JSON.stringify({
-      seq: 0, event: { type: "run.start", result_definitions: definitions },
-    }) + "\n");
+    const definitions = [{ name: "value", type: { kind: "int" }, label: "Recorded value", description: "Explanation. ".repeat(400) }];
+    const startRecord = {
+      v: 0, ts: "2026-09-16T12:00:00.000000Z", run: "20260916t120000z-012345abcdef", experiment: "hello", schema: 0,
+      seq: 0, event: { type: "run.start", condition: "condition", result_definitions: definitions },
+    };
+    const card = fixtureCard([startRecord]);
+    writeFileSync(join(runDir, "run.json"), JSON.stringify(card));
+    writeFileSync(join(runDir, "events.jsonl"), JSON.stringify(startRecord) + "\n");
     const readonly = await launch(join(dir, "read-only"), 0, false, false);
-    const rows = await (await fetch(readonly.url + "/api/runs")).json();
+    const initial = await fetch(readonly.url + "/api/runs");
+    const rows = await initial.json();
     assert.deepEqual(rows[0].result_definitions, definitions);
-    const stream = await (await fetch(readonly.url + "/api/runs/condition/run/events")).json();
-    assert.deepEqual(stream[0].event.result_definitions, definitions);
+    const stream = await (await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/events")).json();
+    assert.equal(typeof stream[0].event.result_definitions[0].description.__elided.bytes, "number");
+    const disk = readFileSync(join(runDir, "events.jsonl"));
+    const response = await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/event/0");
+    assert.match(response.headers.get("content-type")!, /^text\/plain/);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), disk);
+    const rawLine = ' \t{"event":{"type":"custom","kind":"clock","ts":"1999-01-01T00:00:00Z","data":{"unicode":"é\\u0041","n":1e0}},"seq":1,"schema":0,"experiment":"hello","run":"20260916t120000z-012345abcdef","ts":"2026-09-16T12:00:01.000001Z","v":0} \r\n';
+    appendFileSync(join(runDir, "events.jsonl"), rawLine);
+    const exact = await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/event/1");
+    assert.deepEqual(Buffer.from(await exact.arrayBuffer()), Buffer.from(rawLine));
+    const captured = await (await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/events?after=0")).json();
+    assert.equal(captured[0].ts, "2026-09-16T12:00:01.000001Z");
+    assert.equal(captured[0].event.ts, "1999-01-01T00:00:00Z");
+    // Stream growth alone does not update results: only the runner writes the card.
+    appendFileSync(join(runDir, "events.jsonl"), [
+      { type: "result", name: "value", value: 1 },
+      { type: "result", name: "unknown", value: 999 },
+      { type: "result", name: "value", value: 0 },
+      { type: "run.end", state: "completed", duration_s: 5, exit_code: 0 },
+    ].map((event, i) => JSON.stringify({ v: 0, ts: "2026-09-16T12:00:05.000000Z",
+      run: "20260916t120000z-012345abcdef", experiment: "hello", schema: 0, seq: i + 2, event })).join("\n") + "\n");
+    const unchanged = await fetch(readonly.url + "/api/runs", { headers: { "if-none-match": initial.headers.get("etag")! } });
+    assert.equal(unchanged.status, 304);
+    card.derived.results = { value: 0 };
+    card.derived.counts.llm_calls = 23;
+    writeFileSync(join(runDir, "run.json"), JSON.stringify(card));
+    const updated = await fetch(readonly.url + "/api/runs", { headers: { "if-none-match": initial.headers.get("etag")! } });
+    assert.equal(updated.status, 200); // The runner refreshed its card.
+    const derived = await updated.json();
+    assert.deepEqual(derived[0].summary, { value: 0 });
+    assert.equal(derived[0].derived.counts.llm_calls, 23);
+    assert.equal((await fetch(readonly.url + "/api/runs", { headers: { "if-none-match": updated.headers.get("etag")! } })).status, 304);
+    // A bare payload is not an envelope, even if its seq looks plausible.
+    writeFileSync(join(runDir, "events.jsonl"), '{"type":"log","seq":1}\n');
+    const invalid = await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/events");
+    assert.equal(invalid.status, 422);
+    assert.match((await invalid.json()).error, /events.jsonl:1.*Unreadable/);
+    assert.equal((await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/event/1")).status, 422);
     assert.equal(await (await fetch(readonly.url + "/")).text(), "test frontend");
     assert.equal((await (await fetch(readonly.url + "/api/experiments")).json())[0].name, "hello");
     assert.equal((await fetch(readonly.url + "/api/jobs", { method: "POST" })).status, 403);

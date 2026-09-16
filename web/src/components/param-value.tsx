@@ -19,6 +19,7 @@ import { highlightJson } from "@/lib/markdown";
 import { Chip, MdView, Segmented } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { RUN_ID_RE } from "@/lib/identity";
 
 export type ParamWidget =
   | "inline" | "text" | "markdown" | "json"   /* shape-inferred */
@@ -43,8 +44,6 @@ const parseJson = (s: string): unknown | undefined => {
 
 /* ---------------- registry-type heuristics (see TODO above) ---------------- */
 
-/* 26-char Crockford base32 — a ULID, i.e. a run id (`run` registry type) */
-const RUN_ID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 /* provider/model shape for the `llm` registry type; reject file-path lookalikes */
 const LLM_RE = /^[a-z0-9][\w.-]*\/[\w.:/-]+$/i;
 const FILEY_RE = /\.(md|ya?ml|json|txt|csv|py|ts|js|log)$/i;
@@ -284,7 +283,7 @@ function RunRefChip({ name, value, active, onToggle }: {
     <>
       <GitBranch className="size-3 shrink-0 text-primary" />
       {name !== undefined && <span className="shrink-0 font-mono font-medium">{name}</span>}
-      <span className="truncate font-mono">…{value.slice(-8)}</span>
+      <span className="truncate font-mono">{value}</span>
     </>
   );
   const title = `run ${value} — open lineage${target ? "" : " (not in local store yet)"}`;

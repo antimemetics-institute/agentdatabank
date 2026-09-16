@@ -44,6 +44,7 @@ test("submit → claim → report → stop-via-report → done, durably", async 
   await flushJobs();
   const disk = JSON.parse(readFileSync(join(home, "jobs", `${id}.json`), "utf8"));
   assert.equal(disk.state, "stopped");
+  assert.equal(disk.replicates, 2); // Batch facts stay in the local job.
   assert.ok(!("stopRequested" in disk)); /* server-private state never persists */
 });
 

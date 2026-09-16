@@ -28,17 +28,17 @@ test("inspect-style content block lists extract their text", () => {
   assert.equal(elStr([{ type: "image", image: "data:…" }]), "[image]");
 });
 
-test("elision markers render their preview", () => {
-  assert.equal(elStr({ __elided: { bytes: 9999, preview: "long tex…" } }), "long tex…");
+test("elision markers are transport state, never rendered content", () => {
+  assert.equal(elStr({ __elided: { bytes: 9999, preview: "long tex…" } }), "");
   assert.equal(elStr({ __elided: { bytes: 9999 } }), "");
 });
 
-test("elision INSIDE a content block surfaces the preview, not [text]", () => {
+test("nested elision requires the full record instead of rendering a preview", () => {
   // the wire elides long strings anywhere — including the text of a typed block
   const blocks = [{ type: "text", text: { __elided: { bytes: 9000, preview: "first 200 chars" } } }];
-  assert.equal(elStr(blocks), "first 200 chars…");
+  assert.equal(elStr(blocks), "");
   const rblocks = [{ type: "reasoning", reasoning: { __elided: { bytes: 9000, preview: "thinking" } } }];
-  assert.equal(elStr(rblocks), "thinking…");
+  assert.equal(elStr(rblocks), "");
 });
 
 test("containsElision finds nested markers where isElided misses", () => {
@@ -70,18 +70,18 @@ test("splitContent: reasoning-only turns land in the reasoning lane, not text", 
 
 test("splitContent reads the OpenAI-compatible reasoning_content field too", () => {
   assert.deepEqual(splitContent({ content: "hi", reasoning_content: "hmm" }), plain("hi", "hmm"));
-  // elided reasoning_content surfaces its preview
+  // Elided reasoning is fetched before it can be displayed.
   assert.deepEqual(
     splitContent({ content: "hi", reasoning_content: { __elided: { bytes: 9000, preview: "first bit" } } }),
-    plain("hi", "first bit…"));
+    plain("hi", ""));
 });
 
-test("splitContent: elision inside a reasoning block surfaces its preview", () => {
+test("splitContent: elided reasoning waits for the full record", () => {
   const msg = { content: [
     { type: "reasoning", reasoning: { __elided: { bytes: 9000, preview: "deep thought" } } },
     { type: "text", text: "answer" },
   ] };
-  assert.deepEqual(splitContent(msg), plain("answer", "deep thought…"));
+  assert.deepEqual(splitContent(msg), plain("answer", ""));
 });
 
 /* The ContentReasoning contract (inspect_ai): redacted=true means `reasoning`
@@ -121,8 +121,8 @@ test("splitContent: redacted check beats elision — an elided opaque payload st
     { type: "text", text: "done" },
   ] };
   const r = splitContent(msg);
-  assert.equal(r.reasoning, "Let me break down…");
-  assert.equal(r.summarized, true);
+  assert.equal(r.reasoning, "");
+  assert.equal(r.summarized, false);
   assert.ok(!r.reasoning.includes("EoZ6"));
 });
 

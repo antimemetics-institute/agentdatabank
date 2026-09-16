@@ -4,7 +4,11 @@
    (filters, agent pick). */
 
 import { useEffect, useState } from "react";
-import type { Condition, Ev, JobInfo, Manifest, RunMeta, ExecutorInfo } from "@/shared/types";
+import type { Condition, Ev, FullEvent, JobInfo, Manifest, RunMeta, ExecutorInfo } from "@/shared/types";
+import { parseEnvelope, parseEventLine } from "./envelope";
+import { needsDisplayRecord } from "./event-transport";
+import type { JsonSchema } from "./render-hints";
+import { object } from "./run-readability";
 
 /* Resolve "/api/..." against the directory the app is served from, not the origin
    root: behind a path-stripping proxy (code-server's /proxy/8340/) the browser must
@@ -17,7 +21,10 @@ function withBase(path: string): string {
 
 export async function api<T>(path: string): Promise<T> {
   const r = await fetch(withBase(path));
-  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error ?? `${r.status} ${path}`);
+  }
   return r.json() as Promise<T>;
 }
 
@@ -39,6 +46,24 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 /* experiment manifests (schema for the run-config builder). Per-build-immutable, so
    fetched once per session. null before the first response; [] if the server has no
    manifests dir (bare dev.sh). */
+const schemaCache = new Map<string, Promise<JsonSchema[]>>();
+export function useRunSchemas(cid: string, rid: string, ready: boolean): JsonSchema[] {
+  const [schemas, setSchemas] = useState<JsonSchema[]>([]);
+  useEffect(() => {
+    if (!ready) return;
+    let stopped = false;
+    const key = `${cid}/${rid}`;
+    if (!schemaCache.has(key)) schemaCache.set(key,
+      api<JsonSchema[]>(`/api/runs/${cid}/${rid}/schemas`).catch(() => {
+        schemaCache.delete(key);
+        return [];
+      }));
+    void schemaCache.get(key)!.then((value) => { if (!stopped) setSchemas(value); });
+    return () => { stopped = true; };
+  }, [cid, rid, ready]);
+  return schemas;
+}
+
 let manifestsCache: Manifest[] | null = null;
 export function useManifests(): Manifest[] | null {
   const [ms, setMs] = useState<Manifest[] | null>(manifestsCache);
@@ -46,7 +71,7 @@ export function useManifests(): Manifest[] | null {
     if (manifestsCache) { setMs(manifestsCache); return; }
     let stopped = false;
     void api<Manifest[]>("/api/experiments")
-      .then((m) => { manifestsCache = m; if (!stopped) setMs(m); })
+      .then((m) => { manifestsCache = Array.isArray(m) ? m : []; if (!stopped) setMs(manifestsCache); })
       .catch(() => { if (!stopped) setMs([]); });
     return () => { stopped = true; };
   }, []);
@@ -66,6 +91,7 @@ export function useRunsPoll(): RunMeta[] | null {
     const load = async () => {
       let fresh: RunMeta[];
       try { fresh = await api<RunMeta[]>("/api/runs"); } catch { return; }
+      if (!Array.isArray(fresh)) return;
       notePollOk();
       await fetchConds(fresh);
       runsCache = fresh;
@@ -138,16 +164,27 @@ export function usePollHealth(): { live: boolean; lastOkAt: number } {
   return state;
 }
 
-/* stale-running detection (events spec, Ordering & integrity): the runner touches
-   run.json every 10s while alive; a `running` run whose heartbeat is older than 45s
+/* stale-running detection (events spec, Ordering & integrity): the runner refreshes
+   the card every 10s while alive; its mtime is the server-provided heartbeat.
+   A `running` run whose heartbeat is older than 45s
    is displayed as `interrupted?` — never silently `running` forever. Terminal
-   states are untouched (pre-heartbeat stores freeze mtime at the final write). */
+   states stay terminal. */
 const HEARTBEAT_STALE_MS = 45_000;
-export function displayState(r: RunMeta): string {
+export function displayState(r: RunMeta, now = Date.now()): string {
+  if (r.readable === false) return "unreadable";
   if (r.state === "running" && r.heartbeat_at
-      && Date.now() - Date.parse(r.heartbeat_at) > HEARTBEAT_STALE_MS)
+      && now - Date.parse(r.heartbeat_at) > HEARTBEAT_STALE_MS)
     return "interrupted?";
-  return r.state;
+  return r.state ?? "unreadable";
+}
+
+export async function fetchRunJson(cid: string, rid: string): Promise<string> {
+  const response = await fetch(withBase(`/api/runs/${encodeURIComponent(cid)}/${encodeURIComponent(rid)}/run.json`));
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error ?? `run.json unavailable (${response.status})`);
+  }
+  return response.text();
 }
 
 /* run-reference lookup (lineage navigation): resolve a bare run id to its run */
@@ -158,39 +195,44 @@ export const findRun = (rid: string): RunMeta | undefined =>
    the stream immediately; the run page's incremental poll keeps it current */
 export const runCache: Record<string, { events: Ev[]; lastSeq: number }> = {};
 
-/* The wire format is envelope + payload: {v, ts, run, seq, event: {...}} (specs/
-   events.md). The GUI's internal view model stays flat — payload fields with the
-   envelope's seq/run/v spread over them (envelope wins; a payload's own ts is
-   preferred for display, it's the experiment's internal timestamp). Flattening
-   happens ONLY here, at the ingress. */
-export function flattenEv(raw: Ev): Ev {
-  if (raw == null || typeof raw !== "object" || !("event" in raw)) return raw;
-  const { event, ...envelope } = raw;
-  return { ...(event as Ev), ...envelope, ts: (event as Ev)?.ts ?? raw.ts };
+export async function loadRunEvents(cid: string, rid: string, after: number): Promise<Ev[]> {
+  const values = await api<unknown[]>(`/api/runs/${cid}/${rid}/events?after=${after}`);
+  if (!Array.isArray(values)) throw new Error("Unreadable event list");
+  return Promise.all(values.map(async (value) => {
+    const record = parseEnvelope(value);
+    return needsDisplayRecord(record) ? (await fetchFullEvent(cid, rid, record.seq)).record : record;
+  }));
 }
 
 export async function prefetchRun(cid: string, rid: string): Promise<void> {
   const key = `${cid}/${rid}`;
   if (runCache[key]) return;
   try {
-    const events = (await api<Ev[]>(`/api/runs/${cid}/${rid}/events?after=-1`)).map(flattenEv);
+    const events = await loadRunEvents(cid, rid, -1);
     runCache[key] = { events, lastSeq: events[events.length - 1]?.seq ?? -1 };
   } catch { /* run page will fetch on mount */ }
 }
 
 /* ------------- wire-diet fetch-on-demand caches (round 7) ------------- */
 
-/* full single events, fetched when the UI expands into an __elided marker */
-const fullEventCache = new Map<string, Ev>();
-export async function fetchFullEvent(cid: string, rid: string, seq: unknown): Promise<Ev | null> {
-  const k = `${cid}/${rid}/${String(seq)}`;
-  const hit = fullEventCache.get(k);
-  if (hit) return hit;
-  try {
-    const ev = flattenEv(await api<Ev>(`/api/runs/${cid}/${rid}/event/${String(seq)}`));
-    fullEventCache.set(k, ev);
-    return ev;
-  } catch { return null; }
+/* Parsed records and their exact disk lines share a request, never a flattened object. */
+const fullEventCache = new Map<string, Promise<FullEvent>>();
+export function fetchFullEvent(cid: string, rid: string, seq: number): Promise<FullEvent> {
+  const key = `${cid}/${rid}/${seq}`;
+  let request = fullEventCache.get(key);
+  if (!request) {
+    request = (async () => {
+      const response = await fetch(withBase(`/api/runs/${cid}/${rid}/event/${seq}`));
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? `Could not read event ${seq}: ${response.status}`);
+      }
+      const line = await response.text();
+      return { record: parseEventLine(line), line };
+    })().catch((error) => { fullEventCache.delete(key); throw error; });
+    fullEventCache.set(key, request);
+  }
+  return request;
 }
 
 /* full param values behind {__param_ref} descriptors (immutable — cache forever) */
@@ -207,23 +249,25 @@ export async function fetchParamValue(ref: string): Promise<unknown> {
 export const conds: Record<string, Condition> = {};
 
 export async function fetchConds(runs: RunMeta[]): Promise<void> {
-  const missing = [...new Set(runs.map((r) => r.condition))].filter((c) => c && !(c in conds));
+  const missing = [...new Set(runs.filter((r) => object(r) && typeof r.condition === "string").map((r) => r.condition))].filter((c) => c && !(c in conds));
   await Promise.all(missing.map(async (c) => {
     try { conds[c] = await api<Condition>(`/api/conditions/${c}`); }
     catch { /* not written yet or unreadable — retried next poll */ }
   }));
 }
 
-/* condition params, with run.json's realized_params as a fallback so a run is
+/* condition params, with run.json's params as a fallback so a run is
    renderable even before its condition file lands */
-export const paramsOf = (r: RunMeta): Record<string, unknown> | undefined =>
-  conds[r.condition]?.params ?? (r.realized_params as Record<string, unknown> | undefined);
+export const paramsOf = (r: RunMeta): Record<string, unknown> | undefined => {
+  const value = conds[r.condition]?.params ?? r.params;
+  return object(value) ? value : undefined;
+};
 
 export const fmtVal = (v: unknown): string =>
   v === undefined ? "∅" : typeof v === "object" ? JSON.stringify(v) : String(v);
 
 export function groupBy<T>(xs: T[], key: (x: T) => string): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
+  const out: Record<string, T[]> = Object.create(null);
   for (const x of xs) (out[key(x)] ??= []).push(x);
   return out;
 }

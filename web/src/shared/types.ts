@@ -2,12 +2,41 @@
    The authoritative wire format is docs/book/src/reference/events.md (the runner, in Python,
    is the producer); these types mirror it for TS consumers. */
 
-/* one event. On the wire: envelope + payload, {v, ts, run, seq, event: {...}} per the
-   spec. The server passes wire shape through; the browser flattens at ingress
-   (lib/data.ts flattenEv) so components see payload fields + seq/run/ts flat. */
-export type Ev = Record<string, any>;
+/* The envelope stays intact from disk to component. Payload paths are relative
+   to `event`; capture identity and time are always read from the envelope. */
+export interface EventPayload { type: string; kind?: string; [field: string]: any }
+export interface Ev {
+  v: number;
+  ts: string;
+  run: string;
+  experiment: string;
+  schema: number;
+  seq: number;
+  event: EventPayload;
+}
+export interface FullEvent { record: Ev; line: string }
 
-/* run.json as written by the runner */
+/** The runner's rebuildable index card, exactly as written in run.json. */
+export interface RunDerived {
+  results: Record<string, unknown>;
+  usage: { input_tokens: number; output_tokens: number };
+  counts: { llm_calls: number; failed_calls: number;
+    by_kind: Record<string, number>; llm_calls_by_agent: Record<string, number> };
+  last_seq: number;
+  last_event_at: string;
+  last_status?: string;
+}
+export interface RunCard {
+  identity: { run: string; condition: string; experiment: string; schema: number };
+  inputs: { params: Record<string, unknown>; seed: number };
+  lifecycle: { state: RunState; started_at: string; finished_at?: string;
+    duration_s?: number; exit_code?: number };
+  provenance: { source: string; fetch_ref?: string; tree_hash?: string; runtime: Record<string, unknown> };
+  definitions: { results: ResultDecl[] };
+  derived: RunDerived;
+}
+
+/* UI projection of the card; diagnostic identity keeps damaged cards navigable. */
 export type RunState = "provisioning" | "running" | "completed" | "failed" | "interrupted";
 export type JobState = "queued" | "claimed" | "building" | "running"
   | "completed" | "failed" | "stopped" | "orphaned" | "error";
@@ -16,18 +45,21 @@ export interface RunMeta {
   run: string;
   condition: string;
   experiment: string;
-  state: RunState;
-  replicate: number;
+  state?: RunState;
+  /* Viewer diagnostics, never written back into run.json. Directory identity
+     keeps unreadable metadata navigable even when its own IDs are missing. */
+  readable?: boolean;
+  reason?: string;
   seed?: number;
   started_at?: string;
   finished_at?: string;
   duration_s?: number;
+  /* Copied from card.derived.results; never computed by the server. */
   summary?: Record<string, unknown>;
-  result_definitions?: Record<string, ResultDecl>;
-  usage_totals?: Record<string, number>;
-  /* NOT in run.json — server-enriched: run.json's mtime. The runner heartbeats by
-     touching the file every 10s while alive; a stale heartbeat on a `running` run
-     renders as `interrupted?` (events spec, Ordering & integrity). */
+  result_definitions?: ResultDecl[];
+  derived?: RunDerived;
+  schema?: number;
+  /* Server-provided run.json mtime for liveness; never stored in the card. */
   heartbeat_at?: string;
   [k: string]: unknown;
 }
@@ -43,7 +75,7 @@ export interface ElidedMarker {
   __elided: { bytes: number; preview?: string };
 }
 
-/* conditions/<cid>.json as written by the runner; immutable once written */
+/* conditions/<cid>-<experiment>.json as written by the runner; immutable once written */
 export interface Condition {
   experiment: string;
   params: Record<string, unknown>;
@@ -151,6 +183,7 @@ export interface ExecutorInfo {
 }
 
 export interface ResultDecl {
+  name: string;
   type: ParamType;
   details?: string;
   label?: string;
@@ -164,9 +197,10 @@ export interface Manifest {
   readme?: string; /* package-directory README Markdown; presentation only */
   links?: ExtLink[];
   schema_version?: number;
+  schema?: { version: number; models: string; path?: string };
   /* Packaging repository, independent of experiment content identity. */
   origin?: string;
   params: Record<string, ParamDecl>;
-  results?: Record<string, ResultDecl>;
+  results?: ResultDecl[];
   env?: Record<string, unknown>;
 }

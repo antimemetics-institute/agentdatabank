@@ -7,28 +7,19 @@
    content.test.ts holds the no-[object Object] invariant; the docs-clip recorder
    asserts it against the live UI on real run data. */
 
-export const isElided = (v: unknown): v is { __elided: { bytes: number; preview?: string } } =>
-  !!v && typeof v === "object" && "__elided" in (v as object);
+import { containsElision, isElided } from "./event-transport.ts";
+export { containsElision, isElided } from "./event-transport.ts";
 
-/* a string-or-elided field → its readable form (elided → preview), else null */
+/* Only actual strings are content. Elision requires fetching the disk record. */
 const readable = (v: unknown): string | null =>
-  typeof v === "string" ? v : isElided(v) ? `${v.__elided.preview ?? ""}…` : null;
+  typeof v === "string" ? v : null;
 
-/* one content block → its text (or reasoning, kept separate so text blocks win).
-   The wire elides long strings ANYWHERE, including inside a block ({type:"text",
-   text:{__elided}}), so an elided text/reasoning surfaces its preview instead of
-   degrading to the opaque "[text]" type label.
-
-   Reasoning blocks follow inspect_ai's ContentReasoning contract (its .text
-   property in _util/content.py is the canonical rendering rule): `redacted` is
-   the discriminator — when true, `reasoning` is an OPAQUE replay payload
-   (Anthropic signature, Google thought_signature, OpenAI encrypted blob) and
-   `summary` holds the only readable text (absent on fully-redacted blocks).
-   The redacted check runs BEFORE the elision fallback: the preview of an
-   opaque blob is still opaque. */
+/* Inspect reasoning blocks may contain opaque replay bytes. Only a redacted
+   block's summary is readable. Transport markers never become content. */
 const blockText = (
   b: unknown,
 ): { text?: string; reasoning?: string; summarized?: boolean; redactedStub?: boolean } => {
+  if (isElided(b)) return {};
   if (typeof b === "string") return { text: b };
   if (b && typeof b === "object") {
     const o = b as Record<string, unknown>;
@@ -44,18 +35,14 @@ const blockText = (
       const r = readable(o.reasoning);
       if (r !== null) return { reasoning: r };
     }
+    if (containsElision(o)) return {};
     if (typeof o.type === "string") return { text: `[${o.type}]` };
   }
   return { text: JSON.stringify(b) };
 };
 
-/* an elision marker anywhere inside v (top level or nested in a content block) —
-   drives the "load full event" affordance where isElided's top-level check misses */
-export const containsElision = (v: unknown): boolean =>
-  v !== undefined && (JSON.stringify(v) ?? "").includes('"__elided"');
-
 export const elStr = (v: unknown): string => {
-  if (isElided(v)) return String(v.__elided.preview ?? "");
+  if (containsElision(v)) return "";
   if (v == null) return "";
   if (typeof v === "string") return v;
   if (Array.isArray(v)) {

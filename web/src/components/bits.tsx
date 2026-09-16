@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtVal } from "@/lib/data";
 import { md } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
-import type { Ev, ExtLink } from "@/shared/types";
+import type { ExtLink } from "@/shared/types";
 
 /* tiny segmented toggle (rendered|source, rendered|raw, …) */
 export function Segmented({ options, value, onChange }: {
@@ -20,6 +20,7 @@ export function Segmented({ options, value, onChange }: {
           key={o}
           type="button"
           onClick={() => onChange(o)}
+          aria-pressed={o === value}
           className={cn(
             "px-2 py-0.5",
             o === value
@@ -85,16 +86,6 @@ export function LiveDot({ state }: { state: string }) {
   return null;
 }
 
-/* the documented convention (run-references.md): a child run re-emits its parent's
-   message prefix marked meta.inherited — render it visibly second-hand */
-export function InheritedBadge({ ev }: { ev: Ev }) {
-  if (!ev.meta?.inherited) return null;
-  const from = ev.meta.parent_run
-    ? `inherited · ${String(ev.meta.parent_run).slice(-8)}#${fmtVal(ev.meta.parent_seq)}`
-    : "inherited";
-  return <Badge variant="outline" className="text-[10px] text-muted-foreground">{from}</Badge>;
-}
-
 /* "interrupted?" is a DISPLAY state, not a stored one: a `running` run whose
    heartbeat went stale (lib/data.ts displayState, per the events spec) */
 export const STATES =
@@ -118,7 +109,7 @@ const stateClasses: Record<string, string> = {
 };
 
 const STALE_TIP =
-  "no run.end, and the runner's heartbeat (run.json mtime, touched every 10s while alive) went stale — likely crash-orphaned (events spec: Ordering & integrity)";
+  "no run.end, and the runner's heartbeat (run.json heartbeat, refreshed every 10s while alive) went stale — likely crash-orphaned (events spec: Ordering & integrity)";
 
 /* text-only variant for inline use (matrix cells, counts) */
 export const stateText: Record<string, string> = {

@@ -24,6 +24,6 @@ await build({
 
 const res = spawnSync(process.execPath, [out], {
   stdio: "inherit",
-  env: { ...process.env, FIXTURE: join(here, "fixtures", "qwen-hello-events.jsonl") },
+  env: { ...process.env, FIXTURE: join(here, "fixtures", "govsim-mock-events.jsonl") },
 });
 process.exit(res.status ?? 1);

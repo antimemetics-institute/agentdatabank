@@ -209,7 +209,7 @@ export function JobPanel({ job, onStop, queueLink }: {
         <span className={`${tone} ${live ? "animate-pulse" : ""}`}>{chip}</span>
         {job.runs.map((rid) => (
           <a key={rid} href={`#/runs/${rid}`} className="font-mono underline decoration-dotted">
-            {rid.slice(-6)}
+            {rid}
           </a>
         ))}
         {queueLink && (
