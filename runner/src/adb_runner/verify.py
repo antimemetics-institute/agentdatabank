@@ -31,6 +31,7 @@ class Verification:
     credential_values: int
     model_mismatches: tuple[tuple[str, str], ...]
     max_tokens_stops: int
+    content_filter_stops: int
 
 
 # Invoke only the current build's interpreter and declared union, never code paths

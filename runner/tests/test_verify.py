@@ -76,7 +76,9 @@ def rewrite_stream(directory, change):
 def test_all_served_models_checked_once_per_pair_and_truncated_calls_counted(saved, monkeypatch, capsys, mismatch):
     directory, manifest = saved
     choice = ChatCompletionChoice(message=ChatMessageAssistant(content="partial"), stop_reason="max_tokens")
-    calls = [LLMCall(model="azure/gpt-5-nano", input=[], output=ModelOutput(model="gpt-5-nano-2025-08-07"))]
+    filtered = ChatCompletionChoice(message=ChatMessageAssistant(content=""), stop_reason="content_filter")
+    calls = [LLMCall(model="azure/gpt-5-nano", input=[], output=ModelOutput(
+        model="GPT-5-Nano-2025-08-07", choices=[filtered, filtered]))]
     for served in (["gpt-5-mini", "gpt-5-mini", "gpt-4.1"] if mismatch else ["gpt-5-nano"]):
         calls.append(LLMCall(model="azure/gpt-5-nano", input=[], output=ModelOutput(model=served, choices=[choice, choice])))
 
@@ -88,12 +90,13 @@ def test_all_served_models_checked_once_per_pair_and_truncated_calls_counted(sav
     (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
     result = verify_run(directory, manifest=manifest, environment={})
     assert result.max_tokens_stops == len(calls) - 1  # once per call, not per choice
+    assert result.content_filter_stops == 1
     expected = (("azure/gpt-5-nano", "gpt-4.1"), ("azure/gpt-5-nano", "gpt-5-mini")) if mismatch else ()
     assert result.model_mismatches == expected
     monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
     assert cli.main() == int(mismatch)
     output = capsys.readouterr()
-    assert f"max_tokens stops: {len(calls) - 1} llm.call records" in output.out
+    assert f"max_tokens stops: {len(calls) - 1}; content_filter stops: 1 (llm.call records)" in output.out
     assert output.err.count("WARN: served model mismatch") == (2 if mismatch else 0)
 
 

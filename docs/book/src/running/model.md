@@ -59,13 +59,14 @@ its built interpreter imports the declared union. A missing interpreter or union
 fails verification rather than falling back to untyped custom records.
 
 Verification also checks every `llm.call`'s served model against its requested
-name, warns once per distinct mismatch and exits non-zero if any mismatch exists.
-Snapshot suffixes are allowed: `gpt-5-nano-2025-08-07` matches
+name and each request seed when present against `run.start.seed`. It warns once
+per distinct model mismatch and exits non-zero on either kind of mismatch.
+Comparison ignores case and allows snapshot suffixes: `gpt-5-nano-2025-08-07` matches
 `azure/gpt-5-nano`. The shared client checks its first successful response and
 stops a misrouted run after recording the response and an error log. The audit
-reports how many calls stopped with `max_tokens`, counting calls rather than
-completion choices; that count is informational, so inspect truncated replies
-before launching more.
+reports how many calls stopped with `max_tokens` or `content_filter`, counting
+calls rather than completion choices; those counts are informational, so inspect
+truncated or filtered replies before launching more.
 
 ## Azure
 
