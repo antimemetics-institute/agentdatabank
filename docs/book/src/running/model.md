@@ -131,6 +131,18 @@ Intermediate response bodies and headers are not retained. The card's
 `derived.served_models` lists the endpoint-returned names across the run; the
 runs list shows them beside the requested model when they differ.
 
+## Sweeps
+
+Pilot each configuration for one round and verify its saved run before starting
+a sweep. Review the served model, retries, stop counts and any provider rejection.
+Keep generation settings explicit; changing settings creates a different condition.
+
+Use one runner process per condition and stagger starts to spread provider traffic
+and local resource use. Replicates can run sequentially within that process.
+
+Evidence stays in each run directory: the event stream and its index card. Keep
+operational terminal logs separate from the evidence.
+
 ## How do I keep the source version?
 
 A run records `source`, the experiment's declared content identity, and `fetch_ref`, a repository reference intended for fetching the source. The reference is omitted when no pinned clean revision is known. The launcher also records `tree_hash`, the packaging tree’s NAR hash, when available for either clean or dirty trees; a hash alone cannot recover unsaved working-tree content. Preserve your working tree separately when running local modifications.
