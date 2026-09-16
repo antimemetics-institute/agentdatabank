@@ -115,10 +115,9 @@ def _compose(root: str, params: Params, seed: int):
 
 
 def run(params: Params) -> None:
-    # the runner derives wide per-replicate seeds; numpy's global RNG (via
-    # transformers.set_seed, mirrored from upstream) only takes 32 bits — mask
-    # once and use the same value everywhere (cfg.seed, RNGs, ChatClient)
-    seed = int(os.environ.get("ADB_SEED", "0")) & 0xFFFFFFFF
+    # Match the launcher's non-negative 31-bit range for provider seeds and
+    # local RNGs; use this same value in cfg.seed, RNGs and ChatClient.
+    seed = int(os.environ.get("ADB_SEED", "0")) & 0x7FFFFFFF
     # belt and braces on top of AdbLogger's debug=True: wandb must never leave
     # the run dir or touch the network — set before simulation.utils imports it
     os.environ.setdefault("WANDB_MODE", "disabled")

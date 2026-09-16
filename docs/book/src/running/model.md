@@ -10,7 +10,7 @@ For several runs in one invocation, add `--replicates N`. Each gets a new run ID
 
 ## How do seeds work?
 
-The CLI chooses a random base seed unless you supply `--seed`. It derives a different run seed for each replicate from the base seed, condition ID and replicate number.
+The CLI chooses a random base seed unless you supply `--seed`. It derives a different run seed for each replicate from the base seed, condition ID and replicate number, masked to a non-negative 31-bit integer so signed 32-bit provider fields accept it. The recorded seed is the seed sent on the wire.
 
 This complete keyless command fixes the base seed and makes three runs:
 

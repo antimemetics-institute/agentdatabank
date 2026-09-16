@@ -109,17 +109,13 @@ def _parse_kv(raw: str, flag: str) -> tuple[str, str]:
 
 
 def _derive_seed(base_seed: int, cid: str, replicate: int) -> int:
-    """A uint32 — every backend that reads $ADB_SEED accepts one.
+    """A non-negative 31-bit seed, forwarded unchanged to every consumer.
 
-    The width is the constraint, not the entropy: this seed is forwarded verbatim
-    into provider request bodies (inspect's GenerateConfig.seed -> the OpenAI-shaped
-    `seed` field) and into local-inference RNGs, and those bind it narrowly — numpy
-    rejects >= 2**32 outright, and provider validators commonly cap at int64. Taking
-    8 bytes unsigned put half of all derived seeds above int64 max and ALL of them
-    above 2**32, so validation was a coin flip per run. 4 bytes is the intersection
-    of every consumer's accepted range; 2**32 values is ample for replicate spread."""
+    Signed 32-bit provider fields (including xAI's seed) and local RNGs both
+    accept this range. Seeds are outside condition identity.
+    """
     digest = hashlib.sha256(f"{base_seed}:{cid}:{replicate}".encode()).digest()
-    return int.from_bytes(digest[:4], "big")
+    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
 
 
 def build_parser() -> argparse.ArgumentParser:

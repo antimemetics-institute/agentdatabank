@@ -1,9 +1,8 @@
 """Seed derivation — the value the runner hands every experiment as $ADB_SEED.
 
 The bound is the point. This seed is forwarded verbatim into provider request
-bodies and local-inference RNGs, which bind it narrowly (numpy rejects >= 2**32;
-provider validators commonly cap at int64), so a seed that overflows is not a
-degraded run — it is a 400 or a ValueError at generation time. These tests hold
+bodies and local-inference RNGs. The narrowest provider accepts signed 32-bit
+integers, so a seed that overflows is not a degraded run — it is a 400 or a ValueError at generation time. These tests hold
 the width; the derivation itself may change.
 """
 
@@ -11,7 +10,7 @@ import pytest
 
 from adb_runner.cli import _derive_seed
 
-UINT32_MAX = 2**32 - 1
+INT32_MAX = 2**31 - 1
 CID = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685"
 
 
@@ -23,10 +22,13 @@ def _sweep(n: int = 2000):
             for rep in (1, 2)]
 
 
-def test_seed_fits_uint32():
-    # the binding constraint: numpy's seeding (local HF inference) rejects
-    # anything >= 2**32, and it is the narrowest consumer
-    assert all(0 <= s <= UINT32_MAX for s in _sweep())
+def test_seed_fits_nonnegative_int32():
+    # xAI rejects seeds above signed int32 max.
+    assert all(0 <= s <= INT32_MAX for s in _sweep())
+
+
+def test_seed_that_xai_rejected_is_masked_at_derivation():
+    assert _derive_seed(42, "3da6efb04688d1cc9d58c9ce3b64cd5f7101ed42", 1) == (4054925867 & 0x7FFFFFFF)
 
 
 @pytest.mark.parametrize("ref", [
@@ -127,10 +129,10 @@ def test_seed_is_deterministic():
 
 def test_seed_spreads_across_the_range():
     # a narrowed width must still be a real hash, not a small-integer counter:
-    # both halves of the uint32 range get used
+    # both halves of the non-negative int32 range get used
     seeds = _sweep()
-    assert any(s > UINT32_MAX // 2 for s in seeds)
-    assert any(s < UINT32_MAX // 2 for s in seeds)
+    assert any(s > INT32_MAX // 2 for s in seeds)
+    assert any(s < INT32_MAX // 2 for s in seeds)
 
 
 @pytest.mark.parametrize("base_seed", [42, -1, None])

@@ -167,13 +167,20 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
     for section in expected:
         if json.dumps(card[section], sort_keys=True) != json.dumps(expected[section], sort_keys=True):
             raise VerificationError(f"run.json.{section} differs from the stream projection")
+    for record in records:
+        event = record.event
+        if event.type == "llm.call" and event.call is not None and "seed" in event.call.request:
+            seed = event.call.request["seed"]
+            if type(seed) is not int or seed != records[0].event.seed:
+                raise VerificationError(f"call.request.seed differs from run.start.seed at events.jsonl:{record.seq + 1}")
     calls = [record.event for record in records if record.event.type == "llm.call"]
     mismatches = {(call.model, call.output.model) for call in calls
                   if (call.output.model or call.output.choices)
                   and not served_model_matches(call.model, call.output.model)}
     stops = sum(any(choice.stop_reason == "max_tokens" for choice in call.output.choices) for call in calls)
+    filtered = sum(any(choice.stop_reason == "content_filter" for choice in call.output.choices) for call in calls)
     return Verification(len(records), len({value for value in values.values() if value}),
-                        tuple(sorted(mismatches)), stops)
+                        tuple(sorted(mismatches)), stops, filtered)
 
 
 def verify_cli(argv: list[str]) -> int:
@@ -194,8 +201,9 @@ def verify_cli(argv: list[str]) -> int:
         return 1
     for requested, served in result.model_mismatches:
         print(f"verify: WARN: served model mismatch: requested {requested!r}, served {served!r}", file=sys.stderr)
-    print(f"verify: max_tokens stops: {result.max_tokens_stops} llm.call records")
+    print(f"verify: max_tokens stops: {result.max_tokens_stops}; "
+          f"content_filter stops: {result.content_filter_stops} (llm.call records)")
     state = "FAIL" if result.model_mismatches else "PASS"
     print(f"verify: {state}: {result.records} records; experiment union, secrets scan "
-          f"({result.credential_values} known credential values), and card match")
+          f"({result.credential_values} known credential values), card match, and request seeds match")
     return int(bool(result.model_mismatches))

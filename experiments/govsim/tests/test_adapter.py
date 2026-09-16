@@ -143,7 +143,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params(experiment=experiment, temperature=None,
                                         top_p=None, reasoning_effort="low")))
-    env = dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED=str(2**48 + 37),
+    env = dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED=str(2**31 + 37),
                HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
     proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=120)

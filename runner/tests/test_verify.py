@@ -192,3 +192,29 @@ def test_catalog_lookup_and_built_interpreter(saved, tmp_path):
     (catalog / "python").unlink()
     with pytest.raises(VerificationError, match="interpreter is unavailable"):
         verify_run(directory, catalog=catalog, environment={})
+
+
+@pytest.mark.parametrize("seed", ["matching", "absent", 999, None, True, "7"])
+def test_every_request_seed_matches_the_recorded_run_seed(saved, monkeypatch, capsys, seed):
+    directory, manifest = saved
+
+    def insert(rows):
+        run_seed = rows[0]["event"]["seed"]
+        requests = [{"seed": run_seed}, {} if seed == "absent" else {
+            "seed": run_seed if seed == "matching" else seed}]
+        rows[-1:-1] = [{**rows[0], "event": {
+            "type": "llm.call", "model": "mock/model", "input": [], "output": {},
+            "call": {"request": request, "response": {}},
+        }} for request in requests]
+        for seq, row in enumerate(rows):
+            row["seq"] = seq
+
+    rewrite_stream(directory, insert)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+    before = digest_files(directory)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    valid = seed in ("matching", "absent")
+    assert cli.main() == (0 if valid else 1)
+    output = capsys.readouterr()
+    assert ("request seeds match" in output.out) if valid else ("call.request.seed differs" in output.err)
+    assert digest_files(directory) == before
