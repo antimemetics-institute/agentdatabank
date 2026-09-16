@@ -19,11 +19,19 @@ class ReplayTests(unittest.TestCase):
         self.source.mkdir()
         self.dest.mkdir()
         self.params = {'model': 'openai/captured-model'}
-        (self.source / 'run.json').write_text(json.dumps({'run': 'old', 'state': 'completed', 'realized_params': self.params}))
+        (self.source / 'run.json').write_text(json.dumps({'run': 'old', 'state': 'completed', 'params': self.params}))
 
     def capture(self, payloads):
-        (self.source / 'events-00001.jsonl').write_text('\n'.join(json.dumps({
-            'run': 'old', 'seq': n, 'ts': f'2026-01-01T00:00:{n * 2:02d}Z', 'event': event,
+        payloads = [dict(p) for p in payloads]
+        if not payloads or payloads[0].get('type') != 'run.start':
+            payloads.insert(0, {'type': 'run.start'})
+        payloads[0].update(params=self.params)
+        if payloads[-1].get('type') not in ('run.end', 'run.finish'):
+            payloads.append({'type': 'run.end', 'state': 'completed'})
+        else:
+            payloads[-1].update(type='run.end', state='completed')
+        (self.source / 'events.jsonl').write_text('\n'.join(json.dumps({
+            'run': 'old', 'experiment': 'fixture', 'seq': n, 'ts': f'2026-01-01T00:00:{n * 2:02d}Z', 'event': event,
         }) for n, event in enumerate(payloads)))
 
     def test_timing_order_lifecycle_artifacts_and_unchanged_capture(self):
@@ -47,7 +55,7 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(provenance['original_run']['run'], 'old')
 
     def test_capture_preserves_metadata_and_progress(self):
-        metadata = {'run': 'old', 'state': 'completed', 'realized_params': self.params}
+        metadata = {'run': 'old', 'state': 'completed', 'params': self.params}
         path = self.source / 'run.json'
         path.write_text(json.dumps(metadata))
         original = path.read_bytes()
@@ -58,17 +66,26 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(emitted[1:], payloads)
         self.assertEqual(path.read_bytes(), original)
         provenance = json.loads((self.dest / emitted[0]['path']).read_text())
-        self.assertEqual(provenance['original_run'], metadata)
+        self.assertEqual(provenance['original_run']['params'], self.params)
+        self.assertEqual(provenance['original_run']['state'], 'completed')
 
     def test_reject_incomplete_capture(self):
-        self.capture([{'type': 'metric'}])
-        path = self.source / 'run.json'
+        self.capture([{'type': 'result'}])
+        path = self.source / 'events.jsonl'
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
         for state in ('failed', None):
             with self.subTest(state=state):
-                path.write_text(json.dumps({'run': 'old', 'state': state,
-                                            'realized_params': self.params}))
+                rows[-1]['event']['state'] = state
+                path.write_text('\n'.join(json.dumps(row) for row in rows))
                 with self.assertRaisesRegex(ValueError, 'completed saved run'):
                     replay.load_capture(self.source)
+
+    def test_card_is_not_a_replay_input(self):
+        self.capture([{'type': 'log', 'message': 'evidence'}])
+        (self.source / 'run.json').write_text('not even JSON')
+        emitted = []
+        replay.replay(self.source, self.dest, 10000, self.params, emitted.append)
+        self.assertEqual(emitted[-1], {'type': 'log', 'message': 'evidence'})
 
     def test_unknown_types_preserved(self):
         payloads = [{'type': None}, {'type': 42}, {'custom': 'payload'}]

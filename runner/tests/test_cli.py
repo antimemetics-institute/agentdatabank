@@ -12,14 +12,14 @@ import pytest
 from adb_runner.cli import _derive_seed
 
 UINT32_MAX = 2**32 - 1
-CID = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685ceeea0bf4a1186a0d8da9809"
+CID = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685"
 
 
 def _sweep(n: int = 2000):
     """Seeds across the three axes the derivation mixes."""
     return [_derive_seed(base, cid, rep)
             for base in range(n // 4)
-            for cid in (CID, "0" * 64)
+            for cid in (CID, "0" * 40)
             for rep in (1, 2)]
 
 
@@ -27,6 +27,77 @@ def test_seed_fits_uint32():
     # the binding constraint: numpy's seeding (local HF inference) rejects
     # anything >= 2**32, and it is the narrowest consumer
     assert all(0 <= s <= UINT32_MAX for s in _sweep())
+
+
+@pytest.mark.parametrize("ref", [
+    "https://user:token@example.org/repo/revision",
+    "git+https://user:token@example.org/repo?rev=abc",
+    "ssh://user:token@example.org/repo?rev=abc",
+    "git@example.org:repo",
+])
+def test_launch_rejects_fetch_ref_userinfo_before_writing_a_run(tmp_path, monkeypatch, capsys, ref):
+    import json
+    import sys
+    from adb_runner import cli
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    marker = tmp_path / "child-started"
+    experiment = tmp_path / "experiment"
+    experiment.write_text(f"#!/bin/sh\ntouch '{marker}'\n")
+    experiment.chmod(0o755)
+    monkeypatch.setenv("ADB_MANIFEST", str(manifest))
+    monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.setenv("ADB_FETCH_REF", ref)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(tmp_path / "runs")])
+    assert cli.main() == 2
+    assert not marker.exists()
+    assert not (tmp_path / "runs").exists()
+    captured = capsys.readouterr()
+    assert "userinfo" in captured.err
+    assert "token" not in captured.err and ref not in captured.err
+
+
+@pytest.mark.parametrize("ref", ["", "github:owner/repo/" + "a" * 40])
+def test_launch_forwards_optional_revision_and_tree_hash(tmp_path, monkeypatch, ref):
+    import json
+    import sys
+    from adb_runner import cli
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    experiment = tmp_path / "experiment"
+    experiment.write_text("#!/bin/sh\n")
+    experiment.chmod(0o755)
+    monkeypatch.setenv("ADB_MANIFEST", str(manifest))
+    monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.setenv("ADB_FETCH_REF", ref)
+    monkeypatch.setenv("ADB_TREE_HASH", "sha256-launcher-tree")
+    monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
+    home = tmp_path / "data"
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(home)])
+    assert cli.main() == 0
+    [path] = home.glob("runs/*/*/run.json")
+    metadata = json.loads(path.read_text())
+    [events] = path.parent.glob("events.jsonl")
+    start = json.loads(events.read_text().splitlines()[0])["event"]
+    from adb_runner.canonical import condition_id
+    from adb_runner.store import condition_name, find_run
+    from adb_events import read_events
+    cid = condition_id(metadata["identity"]["experiment"], metadata["provenance"]["source"], metadata["inputs"]["params"])
+    assert len(cid) == 40 and cid == metadata["identity"]["condition"] == start["condition"]
+    name = condition_name(cid, metadata["identity"]["experiment"])
+    assert path.parent.parent.name == name
+    assert find_run(home, metadata["identity"]["run"]) == path.parent
+    assert all(record.run == path.parent.name == metadata["identity"]["run"] for record in read_events(path.parent))
+    [condition_file] = (home / "conditions").glob("*.json")
+    assert condition_file.name == name + ".json"
+    assert json.loads(condition_file.read_text()) == {
+        "experiment": metadata["identity"]["experiment"], "source": metadata["provenance"]["source"], "params": metadata["inputs"]["params"],
+    }
+    for saved in (start, metadata["provenance"]):
+        assert saved["tree_hash"] == "sha256-launcher-tree"
+        assert saved.get("fetch_ref") == (ref or None)
 
 
 def test_seed_is_json_and_jq_safe():
@@ -46,11 +117,11 @@ def test_seed_varies_across_replicates():
 def test_seed_varies_across_conditions_and_base():
     base = _derive_seed(7, CID, 1)
     assert _derive_seed(8, CID, 1) != base          # base seed
-    assert _derive_seed(7, "0" * 64, 1) != base     # condition
+    assert _derive_seed(7, "0" * 40, 1) != base     # condition
 
 
 def test_seed_is_deterministic():
-    # the recorded base seed + cid + replicate must reproduce the run's seed
+    # The invocation's base seed + cid + ordinal must reproduce the run's seed.
     assert _derive_seed(7, CID, 3) == _derive_seed(7, CID, 3)
 
 
@@ -68,6 +139,7 @@ def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch,
     import sys
     from adb_runner import cli
 
+    monkeypatch.setattr(cli.random.SystemRandom, "getrandbits", lambda self, bits: 2026)
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
     marker = tmp_path / "first-run"
@@ -85,19 +157,20 @@ def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch,
         argv += ["--seed", str(base_seed)]
     monkeypatch.setattr(sys, "argv", argv)
     assert cli.main() == 1
-    states = [json.loads(path.read_text())["state"]
+    states = [json.loads(path.read_text())["lifecycle"]["state"]
               for path in home.glob("runs/*/*/run.json")]
     assert sorted(states) == ["completed", "failed"]
     records = [json.loads(path.read_text()) for path in home.glob("runs/*/*/run.json")]
-    assert len({record["base_seed"] for record in records}) == 1
-    assert {record["replicate"] for record in records} == {1, 2}
-    for record in records:
-        if base_seed is not None:
-            assert record["base_seed"] == base_seed
-        assert record["replicates"] == 2
-        assert record["seed"] == _derive_seed(
-            record["base_seed"], record["condition"], record["replicate"]
+    assert all("base_seed" not in record and "replicates" not in record for record in records)
+    records.sort(key=lambda record: record["lifecycle"]["started_at"])
+    for ordinal, record in enumerate(records, start=1):
+        assert set(record["inputs"]) == {"params", "seed"}
+        assert record["inputs"]["seed"] == _derive_seed(
+            base_seed if base_seed is not None else 2026, record["identity"]["condition"], ordinal
         )
+    for path in home.glob("runs/*/*/events.jsonl"):
+        start = json.loads(path.read_text().splitlines()[0])["event"]
+        assert not {"replicate", "replicates", "base_seed"} & start.keys()
 
 
 @pytest.mark.parametrize("json_output", [False, True])

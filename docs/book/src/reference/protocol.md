@@ -12,8 +12,8 @@ The runner invokes the executable without additional arguments, sets its working
 
 | Environment variable | Meaning |
 | --- | --- |
-| `ADB_RUN_ID` | This run's ULID. |
-| `ADB_RUN_DIR` | Run directory containing `artifacts/` and `workspace/`. |
+| `ADB_RUN_ID` | This run's whole execution ID (UTC launch label plus random suffix). |
+| `ADB_RUN_DIR` | Run directory containing metadata, the event stream and `workspace/`. |
 | `ADB_SEED` | Derived run seed as a decimal string. |
 | `ADB_EVENT_SOCKET` | Per-run Unix stream socket for structured events. |
 
@@ -29,7 +29,7 @@ authors should not implement socket clients. For example, an experiment
 can invoke:
 
 ```sh
-adb-emit metric --name count --value 3
+adb-emit result --name count --value 3
 ```
 
 Both helpers validate the payload and wait for the runner to acknowledge it.
@@ -48,7 +48,7 @@ is recorded as an error and makes the run fail.
 
 ## How does the run finish?
 
-The runner drains captured output and waits for the process. Exit code zero produces `completed`; a nonzero code produces `failed`; a signal exit or handled interrupt produces `interrupted`. It then emits `run.end` and writes final metadata and summary values.
+The runner drains captured output and waits for the process. Exit code zero produces `completed`; a nonzero code produces `failed`; a signal exit or handled interrupt produces `interrupted`. It then emits `run.end` and writes final process metadata. Readers derive results and usage from the event stream.
 
 The state reports the process outcome. An adapter that catches errors and returns zero should emit metrics, logs or instance errors that make the research outcome clear. A hard runner crash may leave an active state and an incomplete stream.
 
@@ -57,40 +57,49 @@ The state reports the process outcome. An adapter that catches errors and return
 Construct models from `adb-events` and pass them to `emit`:
 
 ```python
-from adb_events import Message, Metric, emit
+from adb_events import CustomEvent, Result, emit
 
-emit(Message(from_="agent-1", channel="discussion", content="I choose option A."))
-emit(Metric(name="choices", value=1))
+emit(CustomEvent(kind="govsim.record", data={
+    "action": "utterance", "agent_id": "agent-1", "utterance": "I choose option A.",
+}))
+emit(Result(name="choices", value=1))
 ```
 
 Models validate at construction: wrong types and unknown fields raise a Pydantic
-`ValidationError`. Use the declared `meta`, `data`, `params`, and provider `raw`
+`ValidationError`. Use the declared `metadata`, `meta`, `data`, `params`, and raw `call`
 objects for open JSON metadata. They preserve their contents, including nulls.
 `emit` serializes once, validates that JSON with strict mode, and writes the
-exact same JSON. Validation uses the public `ProducerPayload` union and can reject the event but cannot rewrite its payload. Model defaults and explicit nulls are serialized. Only the public producer classes are accepted; subclasses and runner lifecycle models are rejected.
+exact same JSON. Validation uses the public `ProducerPayload` union and can reject the event but cannot rewrite its payload. Absent optional model fields are omitted; explicit nulls in open dictionaries are retained. Public producer classes and typed CustomEvent subclasses are accepted; other subclasses and runner lifecycle models are rejected.
 
 Model calls expose their nested models directly:
 
 ```python
-from adb_events import LLMCall, LLMRequest, LLMResponse, emit
+from adb_events import (
+    ChatMessageUser, ChatMessageAssistant, ChatCompletionChoice,
+    LLMCall, ModelCall, ModelOutput, emit,
+)
 
 emit(LLMCall(
     agent="agent-1", model="provider/alias",
-    request=LLMRequest(
-        messages=[{"role": "user", "content": "Hello"}],
-        model="model-sent-to-sdk", params={"temperature": 0.2},
+    input=[ChatMessageUser(content="Hello")],
+    output=ModelOutput(
+        model="provider-returned-model", completion="Hi",
+        choices=[ChatCompletionChoice(
+            message=ChatMessageAssistant(content="Hi"), stop_reason="stop",
+        )],
     ),
-    response=LLMResponse(
-        message={"role": "assistant", "content": "Hi"},
-        model="provider-returned-model", raw={"system_fingerprint": "fp_123"},
-    ),
+    call=ModelCall(request={"model": "model-sent-to-sdk", "temperature": 0.2, "max_tokens": 128},
+                   response={"system_fingerprint": "fp_123"}),
 ))
 ```
 
-`request.params` contains effective SDK arguments after adapter overrides,
-excluding the separately recorded messages and model. `request.raw` can retain
-an available provider request; `response.raw` retains the provider response.
-SDK arguments do not necessarily include defaults added by the SDK or server.
+The chat and output data models are vendored from Inspect AI 0.3.263 in
+`adb_events.inspect_chat`; analysis needs only Pydantic. `input` contains typed
+messages and `output` retains every choice, usage, and output metadata. Raw SDK
+request/response evidence lives in `call`. Read generation settings from
+`call.request`; no separate projection is stored. The direct OpenAI client
+records effective SDK settings after adapter overrides. The Inspect adapter
+retains `GenerateConfig` only in its raw `inspect.event` record.
 
 For data that does not fit a standard model, use the public custom container:
 
@@ -100,19 +109,15 @@ from adb_events import CustomEvent, emit
 emit(CustomEvent(kind="my-experiment.resource", data={"remaining": 42}))
 ```
 
-Experiment-specific model classes cannot extend the wire vocabulary. Use
-`AgentEvent(agent=..., kind=..., data=...)` for actions attributed to an agent,
-and `Log(message=..., level=...)` for diagnostics. `CustomEvent.data` accepts
-JSON values, including nested objects, arrays and nulls.
-
-Use `Instance(agent=..., data=InstanceData(id=..., scores=...))` for instance
-outcomes. All emission uses the runner socket; use the shared
-[emission test fixture](../authoring/experiments.md#how-do-i-test-python-emission-without-launching-a-full-run)
-for adapter unit tests. Experiments do not need to redirect or suppress stdout
-around framework calls.
+Experiments can subclass `CustomEvent[DataModel]` with a literal `kind` and
+strict Pydantic data. Their Payload union replaces the untyped custom arm with
+these kinds. Generic custom data still accepts JSON objects, arrays and nulls.
+Use prefixed custom kinds for per-item outcomes and attributed actions, and
+`Log` for diagnostics. The shared [emission test fixture](../authoring/experiments.md#how-do-i-test-python-emission-without-launching-a-full-run)
+works for either form.
 
 `adb_experiment.scaffold.deposit_artifact` writes a text artifact and emits its
-pointer. Its `experiment_main` helper reads and validates parameters, reports
+pointer using the required experiment-specific `kind` argument. Its `experiment_main` helper reads and validates parameters, reports
 validation or run-function exceptions to stderr, and returns `1` on those
 errors. A run-function exception also emits any supplied fallback metrics.
 Successful execution returns `0`.
@@ -135,13 +140,16 @@ from adb_events import CustomEvent, LLMCall, read_events
 for record in read_events("/path/to/run"):
     event = record.event
     if isinstance(event, LLMCall):
-        print(record.seq, event.request.model, event.response)
+        print(record.seq, event.model, event.output.completion)
     elif isinstance(event, CustomEvent):
         print(event.kind, event.data)
 ```
 
-`read_events` accepts a run directory or one JSONL file and reads chunks in
-numeric order. No experiment imports or model registration are needed.
+`read_events` accepts a run directory or its `events.jsonl` file. The default shared reader needs no Inspect dependency or experiment imports.
+For typed GovSim data, pass `payload=govsim_adapter.models.Payload`; a
+Pydantic TypeAdapter is also accepted.
+For static type inference, construct `TypeAdapter[GovsimPayload](GovsimPayload)`
+and pass that adapter; bare runtime union aliases validate identically.
 Invalid records raise `EventReadError` with the file and line number, including
 unknown types and truncated JSON. Valid partial runs can be read without a
 `run.end` record. Files are never modified.

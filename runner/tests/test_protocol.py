@@ -16,27 +16,28 @@ from adb_runner.store import RunStore
 MANIFEST = {
     "name": "t",
     "params": {"x": {"type": {"kind": "int"}, "default": 1}},
-    "results": {
-        "m": {
+    "results": [
+        {
+            "name": "m",
             "type": {"kind": "int"},
             "label": "Measurement",
             "description": "The measured count.",
             "unit": "items",
             "details": "Count recorded by the fixture.",
         },
-        "missing": {"type": {"kind": "float"}},
-    },
+        {"name": "missing", "type": {"kind": "float"}},
+    ],
 }
 
 FIXTURE = r"""#!/bin/sh
 read -r params
 adb-emit status --detail "got $params"
 echo '{"type":"status","phase":"experiment-stage"}'
-adb-emit metric --name m --value 42
-adb-emit metric --name undeclared --value 1
-adb-emit message --from a --channel town --content hi
+adb-emit result --name m --value 42
+adb-emit result --name undeclared --value 1
+adb-emit custom --kind govsim.discussion --data '{"speaker":"a","text":"hi"}'
 adb-emit llm-call --agent a --model mock/x <<'EOF'
-{ "request":{"messages":[{"role":"user","content":"q"}],"params":{}},"response":{"message":{"role":"assistant","content":"r"}},"usage":{"input_tokens":3,"output_tokens":5}}
+{"input":[{"role":"user","content":"q"}],"output":{"choices":[{"message":{"role":"assistant","content":"r"}}],"usage":{"input_tokens":3,"output_tokens":5}}}
 EOF
 echo '{"type":"run.end","fake":"reserved"}'
 echo '{"type":"t.custom","anything":1}'
@@ -48,31 +49,32 @@ exit 0
 """
 
 
-def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=None):
+def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=None,
+                credential_env=None, fetch_ref=None, tree_hash=None):
     prog = tmp_path / "exp.sh"
     # Exercise the real CLI using this test environment's Python.
     cli = f'adb-emit() {{ {shlex.quote(sys.executable)} -m adb_runner.emit "$@"; }}\n'
     prog.write_text(script.replace("#!/bin/sh\n", "#!/bin/sh\n" + cli, 1))
     prog.chmod(prog.stat().st_mode | stat.S_IEXEC)
-    store = RunStore(tmp_path / "home", "cid", "rid")
+    store = RunStore(tmp_path / "home", "cid", "20260916t120000z-012345abcdef",
+                     experiment=(manifest or MANIFEST)["name"])
     result = execute_run(
         program=str(prog),
         manifest=MANIFEST if manifest is None else manifest,
-        spec_params={"x": 1},
-        realized_params=params or {"x": 1},
+        params=params or {"x": 1},
         condition_id="cid",
         source="dirty:test",
-        base_seed=42,
-        replicates=1,
+        fetch_ref=fetch_ref,
+        tree_hash=tree_hash,
         seed=_derive_seed(42, "cid", 1),
-        replicate=1,
         store=store,
-        run_id="rid",
+        run_id="20260916t120000z-012345abcdef",
         on_event=on_event,
+        credential_env=credential_env,
     )
     envelopes = [
         json.loads(line)
-        for f in sorted(store.dir.glob("events-*.jsonl"))
+        for f in sorted(store.dir.glob("events.jsonl"))
         for line in f.read_text().splitlines()
     ]
     return result, envelopes, store
@@ -84,36 +86,35 @@ def test_protocol_end_to_end(tmp_path):
     assert result.state == "completed"
     # transport envelope: runner owns v/ts/run/seq; the payload rides under `event`
     assert [e["seq"] for e in envelopes] == list(range(len(envelopes)))
-    assert all(e["v"] == 0 and e["run"] == "rid" and "event" in e for e in envelopes)
+    assert all(e["v"] == 0 and e["run"] == "20260916t120000z-012345abcdef" and "event" in e for e in envelopes)
+    assert all(len(e["ts"]) == 27 and e["ts"].endswith("Z") for e in envelopes)
+    assert all(e["experiment"] == "t" and e["schema"] == 0 for e in envelopes)
     payloads = [e["event"] for e in envelopes]
 
     record = json.loads((store.dir / "run.json").read_text())
-    assert record["state"] == "completed" and "phase" not in record
-    assert payloads[1] == {"type": "run.status", "state": "running"}
+    assert record["lifecycle"]["state"] == "completed" and "phase" not in record
+    assert "run.status" not in {p["type"] for p in payloads}
     assert {
         "type": "stdout",
         "line": '{"type":"status","phase":"experiment-stage"}',
-        "meta": None,
     } in payloads
     assert payloads[-1]["state"] == "completed" and "phase" not in payloads[-1]
 
     start = payloads[0]
     assert start["type"] == "run.start"
-    assert start["spec_params"] == {"x": 1} and start["realized_params"] == {"x": 1}
-    assert start["dirty"] is True
+    assert start["params"] == {"x": 1}
+    assert "dirty" not in start and "experiment" not in start
+    assert "fetch_ref" not in start and "tree_hash" not in start
+    assert len(record["lifecycle"]["started_at"]) == 27 and record["lifecycle"]["started_at"].endswith("Z")
     assert start["result_definitions"] == MANIFEST["results"]
-    assert record["result_definitions"] == MANIFEST["results"]
+    assert record["definitions"]["results"] == MANIFEST["results"]
 
     end = payloads[-1]
     assert end["type"] == "run.end" and "fake" not in end  # the runner's own, last
-    assert end["summary"] == {"m": 42, "undeclared": 1}
-    assert record["summary"] == result.summary == end["summary"]
-    assert "missing" not in end["summary"]
-    assert end["usage_totals"] == {
-        "input_tokens": 3,
-        "output_tokens": 5,
-        "llm_calls": 1,
-    }
+    assert set(end) == {"type", "state", "duration_s", "exit_code"}
+    assert end["exit_code"] == record["lifecycle"]["exit_code"] == 0
+    assert not {"summary", "usage_totals", "base_seed", "replicates", "realized_params", "spec_params"} & record.keys()
+    assert not hasattr(result, "summary") and not hasattr(result, "usage")
 
     by_type = {}
     for p in payloads:
@@ -121,6 +122,8 @@ def test_protocol_end_to_end(tmp_path):
     # Even event-shaped JSON printed to stdout remains text.
     assert len(by_type["run.end"]) == 1
     assert "t.custom" not in by_type and None not in by_type
+    # Absent optional fields are omitted throughout the saved model call.
+    assert "null" not in json.dumps(by_type["llm.call"][0])
     stdout_lines = [p["line"] for p in by_type["stdout"]]
     assert '{"type":"run.end","fake":"reserved"}' in stdout_lines
     assert '{"no_type":"opaque blob"}' in stdout_lines
@@ -133,20 +136,61 @@ def test_protocol_end_to_end(tmp_path):
 
     # no views are materialized: projections are rendered on demand —
     # the deposit carries irreducibles only
-    assert not (store.artifacts / "chat.jsonl").exists()
-    assert not (store.artifacts / "llm_calls.jsonl").exists()
+    assert not (store.dir / "artifacts").exists()
     assert "artifact" not in by_type
 
 
-@pytest.mark.parametrize("results", [None, {}])
-def test_no_declarations_still_captures_metrics(tmp_path, results):
+def test_envelope_payload_schema_is_separate_from_manifest_version(tmp_path):
+    manifest = {**MANIFEST, "schema_version": 12,
+                "schema": {"version": 7, "models": "test_models:Payload"}}
+    _, envelopes, store = run_fixture(tmp_path, script="#!/bin/sh\n", manifest=manifest)
+    assert all(e["experiment"] == "t" and e["schema"] == 7 for e in envelopes)
+    assert json.loads((store.dir / "run.json").read_text())["identity"]["schema"] == 7
+
+
+def test_run_start_records_the_parameters_passed_to_the_child(tmp_path):
+    _, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\n", params={"x": 2})
+    start = envelopes[0]["event"]
+    assert start["params"] == {"x": 2}
+    assert start["condition"] == "cid"
+    assert start["source"] == "dirty:test"
+    assert "fetch_ref" not in start
+    assert "replicate" not in start
+    assert start["seed"] == _derive_seed(42, "cid", 1)
+
+
+@pytest.mark.parametrize("results", [None, []])
+def test_no_declarations_preserves_results_and_warns(tmp_path, results):
     manifest = {"name": "t", "params": MANIFEST["params"]}
     if results is not None:
         manifest["results"] = results
     result, envelopes, store = run_fixture(tmp_path, manifest=manifest)
-    assert result.summary == {"m": 42, "undeclared": 1}
-    assert envelopes[0]["event"]["result_definitions"] == {}
-    assert json.loads((store.dir / "run.json").read_text())["result_definitions"] == {}
+    assert not hasattr(result, "summary")
+    assert {e["event"]["name"] for e in envelopes if e["event"]["type"] == "result"} == {"m", "undeclared"}
+    assert sum(e["event"]["type"] == "log" and e["event"]["level"] == "warn" for e in envelopes) == 2
+    assert envelopes[0]["event"]["result_definitions"] == []
+    assert json.loads((store.dir / "run.json").read_text())["definitions"]["results"] == []
+
+
+def test_duplicate_and_undeclared_results_warn_without_folding_events(tmp_path):
+    script = '''#!/bin/sh
+adb-emit result --name m --value 1
+adb-emit result --name m --value 2
+adb-emit result --name llm_calls --value 99
+adb-emit llm-call --model mock/model <<'EOF'
+{"input":[],"output":{}}
+EOF
+'''
+    callbacks = []
+    result, envelopes, _ = run_fixture(tmp_path, script=script, on_event=callbacks.append)
+    assert [e["event"]["value"] for e in envelopes if e["event"]["type"] == "result"] == [1, 2, 99]
+    assert sum(e["event"]["type"] == "llm.call" for e in envelopes) == 1
+    assert callbacks == envelopes
+    assert [e["seq"] for e in envelopes] == list(range(len(envelopes)))
+    warnings = [e["event"]["message"] for e in envelopes if e["event"]["type"] == "log"]
+    assert len(warnings) == 2
+    assert "Repeated result 'm'" in warnings[0]
+    assert "Undeclared result 'llm_calls'" in warnings[1]
 
 
 def test_declarations_are_snapshotted_and_do_not_validate_values(tmp_path):
@@ -157,11 +201,11 @@ def test_declarations_are_snapshotted_and_do_not_validate_values(tmp_path):
 
     def change_catalog(envelope):
         if envelope["event"].get("type") == "run.start":
-            manifest["results"]["m"]["label"] = "Changed during run"
-            manifest["results"]["m"]["details"] = "Changed calculation explanation"
-            manifest["results"]["added"] = {"type": {"kind": "bool"}}
+            manifest["results"][0]["label"] = "Changed during run"
+            manifest["results"][0]["details"] = "Changed calculation explanation"
+            manifest["results"].append({"name": "added", "type": {"kind": "bool"}})
 
-    script = "#!/bin/sh\nadb-emit metric --name m --value unavailable\n"
+    script = "#!/bin/sh\nadb-emit result --name m --value unavailable\n"
     result, envelopes, store = run_fixture(
         tmp_path,
         script=script,
@@ -169,10 +213,10 @@ def test_declarations_are_snapshotted_and_do_not_validate_values(tmp_path):
         on_event=change_catalog,
     )
     assert result.state == "completed"
-    assert result.summary == {"m": "unavailable"}
+    assert next(e["event"]["value"] for e in envelopes if e["event"]["type"] == "result") == "unavailable"
     assert envelopes[0]["event"]["result_definitions"] == expected
     assert (
-        json.loads((store.dir / "run.json").read_text())["result_definitions"]
+        json.loads((store.dir / "run.json").read_text())["definitions"]["results"]
         == expected
     )
 
@@ -189,31 +233,79 @@ def test_provenance_is_saved_before_the_child_starts(tmp_path, monkeypatch):
         event = envelope["event"]
         if event["type"] != "run.start":
             return
-        record = json.loads((tmp_path / "home/runs/cid/rid/run.json").read_text())
-        assert record["state"] == "provisioning"
+        record = json.loads((tmp_path / "home/runs/cid-t/20260916t120000z-012345abcdef/run.json").read_text())
+        assert record["lifecycle"]["state"] == "provisioning"
         for field in (
-            "base_seed",
-            "replicates",
             "seed",
-            "replicate",
-            "env",
-            "realized_params",
+            "runtime",
+            "params",
         ):
-            assert record[field] == event[field]
+            assert record["provenance" if field == "runtime" else "inputs"][field] == event[field]
         starts.append(event)
 
     _, _, store = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n", on_event=observe)
     assert len(starts) == 1
     start = next(read_events(store.dir)).event
     assert isinstance(start, RunStart)
-    assert start.env.experiment_bin == str(tmp_path / "exp.sh")
-    assert start.env.runner_bin == "/nix/store/fixture-runner/bin/adb-runner"
-    assert start.env.nix_system == "x86_64-linux"
-    assert start.env.runner_python == sys.executable
-    assert start.env.runner_python_version
-    assert start.base_seed == 42 and start.replicates == 1
-    assert start.seed == _derive_seed(start.base_seed, "cid", start.replicate)
+    assert start.runtime.experiment_bin is None
+    assert start.runtime.runner_bin == "/nix/store/fixture-runner/bin/adb-runner"
+    assert start.runtime.runner_python_version
+    assert start.seed == _derive_seed(42, "cid", 1)
     assert "must-not-be-recorded" not in (store.dir / "run.json").read_text()
+
+
+def test_dev_launch_does_not_publish_home_paths(tmp_path, monkeypatch):
+    directory = tmp_path / "home" / "developer"
+    directory.mkdir(parents=True)
+    monkeypatch.setattr(sys, "executable", "/home/developer/.venv/bin/python")
+    monkeypatch.setenv("ADB_RUNNER_BIN", "/home/developer/.venv/bin/adb-runner")
+    _, envelopes, store = run_fixture(directory, script="#!/bin/sh\n")
+    start = envelopes[0]["event"]
+    assert "/home" not in json.dumps(start)
+    assert not {"experiment_bin", "runner_bin", "runner_python"} & start["runtime"].keys()
+    assert "/home" not in (store.dir / "run.json").read_text()
+
+
+@pytest.mark.parametrize("fetch_ref", [None, "dirty:legacy", "github:owner/repo/" + "a" * 40])
+def test_tree_hash_is_independent_of_a_clean_fetch_reference(tmp_path, fetch_ref):
+    _, envelopes, store = run_fixture(tmp_path, script="#!/bin/sh\n", fetch_ref=fetch_ref,
+                                       tree_hash="sha256-packaging-tree")
+    start = envelopes[0]["event"]
+    metadata = json.loads((store.dir / "run.json").read_text())
+    expected = fetch_ref if fetch_ref and not fetch_ref.startswith("dirty:") else None
+    for saved in (start, metadata["provenance"]):
+        assert saved.get("fetch_ref") == expected
+        assert saved["tree_hash"] == "sha256-packaging-tree"
+        assert "dirty" not in saved
+
+
+@pytest.mark.parametrize("url,origin", [
+    ("https://user:token@proxy.example:8443/v1/project?api_key=hidden#fragment", "https://proxy.example:8443"),
+    ("http://user:token@[::1]:8000/v1?key=hidden", "http://[::1]:8000"),
+    ("https://proxy.example/v1", "https://proxy.example"),
+])
+@pytest.mark.parametrize("provider,model,variable", [
+    ("openai", "openai/model", "OPENAI_BASE_URL"),
+    ("local-proxy", "openai-api/local-proxy/model", "LOCAL_PROXY_BASE_URL"),
+])
+def test_runtime_records_only_endpoint_origins(tmp_path, monkeypatch, url, origin, provider, model, variable):
+    from adb_runner import protocol
+
+    manifest = {"name": "t", "params": {"model": {"type": {"kind": "llm"}}}}
+    # Observe the real spawn: sanitizing capture must not change the child's URL.
+    spawn = protocol.subprocess.Popen
+
+    def observe(*args, **kwargs):
+        assert kwargs["env"][variable] == url
+        return spawn(*args, **kwargs)
+
+    monkeypatch.setattr(protocol.subprocess, "Popen", observe)
+    _, envelopes, store = run_fixture(tmp_path, script="#!/bin/sh\n", params={"model": model},
+                                       manifest=manifest, credential_env={variable: url})
+    start = envelopes[0]["event"]
+    assert start["runtime"]["endpoints"] == {provider: origin}
+    assert all(secret not in json.dumps(start) for secret in ("user:", "token", "hidden", "/v1", "fragment"))
+    assert json.loads((store.dir / "run.json").read_text())["provenance"]["runtime"] == start["runtime"]
 
 
 def test_nonzero_exit_is_failed(tmp_path):
@@ -239,7 +331,7 @@ echo "params=$p seed=$ADB_SEED run=$ADB_RUN_ID"
     assert (
         '"x": 9' in line
         and f"seed={_derive_seed(42, 'cid', 1)}" in line
-        and "run=rid" in line
+        and "run=20260916t120000z-012345abcdef" in line
     )
 
 
@@ -266,7 +358,7 @@ def test_non_utf8_stdio_does_not_drop_subsequent_output(tmp_path, stream, fd):
     )
     assert result.state == "completed"
     assert payloads[-1]["type"] == "run.end"
-    assert json.loads((store.dir / "run.json").read_text())["state"] == "completed"
+    assert json.loads((store.dir / "run.json").read_text())["lifecycle"]["state"] == "completed"
 
 
 @pytest.mark.parametrize("stream, fd", [("stdout", 1), ("stderr", 2)])
@@ -290,7 +382,7 @@ def test_output_reader_failure_is_reported(tmp_path, monkeypatch, stream, fd):
     ]
     assert result.state == "failed"
     assert envelopes[-1]["event"]["state"] == "failed"
-    assert json.loads((store.dir / "run.json").read_text())["state"] == "failed"
+    assert json.loads((store.dir / "run.json").read_text())["lifecycle"]["state"] == "failed"
 
 
 def test_orphaned_pipe_holders_do_not_hang_the_run(tmp_path):
@@ -329,20 +421,20 @@ def test_child_env_is_constructed_not_inherited(monkeypatch):
 
 
 def test_saved_run_deserializes_with_public_models(tmp_path):
-    from adb_events import CustomEvent, Instance, RunEnd, RunStart, read_events
+    from adb_events import CustomEvent, Result, RunEnd, RunStart, read_events
 
     script = """#!/bin/sh
 adb-emit custom --kind t.observation --data '{"resource":42}'
-adb-emit instance --agent solver --data '{"id":"item-1","scores":{"correct":true}}'
+adb-emit result --name m --value 1
 """
     result, envelopes, store = run_fixture(tmp_path, script=script)
     records = list(read_events(store.dir))
     assert result.state == "completed"
     assert len(records) == len(envelopes)
     assert isinstance(records[0].event, RunStart)
-    assert isinstance(records[2].event, CustomEvent)
-    assert records[2].event.data == {"resource": 42}
-    assert isinstance(records[3].event, Instance)
+    assert isinstance(records[1].event, CustomEvent)
+    assert records[1].event.data == {"resource": 42}
+    assert isinstance(records[2].event, Result)
     assert isinstance(records[-1].event, RunEnd)
 
 
@@ -350,20 +442,14 @@ def test_invalid_metrics_and_usage_do_not_break_run_or_poison_totals(tmp_path):
     from adb_events import read_events
 
     script = """#!/bin/sh
-adb-emit metric --name m --value 42
-echo '{"type":"metric","name":"m","value":{"bad":1}}'
+adb-emit result --name m --value 42
+echo '{"type":"result","name":"m","value":{"bad":1}}'
 echo '{"type":"llm.call","agent":"a","model":"x","usage":{"input_tokens":"bad"}}'
 """
     result, envelopes, store = run_fixture(tmp_path, script=script)
     assert result.state == "completed"
-    assert result.summary == {"m": 42}
-    assert envelopes[-1]["event"]["usage_totals"] == {
-        "llm_calls": 0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-    }
-    assert any('"bad":1' in e["event"].get("line", "") for e in envelopes)
-    assert len(list(read_events(store.dir))) == len(envelopes)
+    assert next(e["event"]["value"] for e in envelopes if e["event"]["type"] == "result") == 42
+    assert "usage_totals" not in envelopes[-1]["event"]
 
 
 def test_concurrent_processes_record_large_events_and_cleanup_socket(tmp_path):

@@ -12,16 +12,17 @@ nix run .#inspect-hello -- --describe
 
 | Field | Meaning |
 | --- | --- |
-| `schema_version` | Currently `0`. |
+| `schema_version` | Currently `1`; results are ordered, named declarations. |
 | `name` | Unique experiment name and app name. |
 | `summary` | Short description shown in the interface. |
 | `params` | Object mapping parameter names to declarations. Every key must be bound for a run. |
-| `results` | Object mapping possible summary metric names to result declarations (see below). Declarations describe outputs; the runner summarizes the last emitted value for every metric name, including undeclared names. |
+| `schema` | Payload union identity and export: `{ "version": 0, "models": "module:attribute", "path": "/nix/store/.../schema.json" }`. Separate from the manifest file's `schema_version`. |
+| `results` | Ordered list of possible result declarations (see below), each with a unique `name`. The runner warns on repeated or undeclared result events; readers derive the last emitted value for each declared name. |
 | `env` | Optional experiment metadata. It does not cause the runner to inject arbitrary variables or provision services. |
 | `origin` | Packaging repository reference, separate from a run's pinned fetch reference. |
 | `links` | External references, each with `label` and `url`, displayed on experiment and run pages when the manifest is available. |
 
-The source identity and executable are wrapper settings, not manifest fields. [`adb.mkExperiment`](../authoring/experiments.md) takes `name`, `summary`, `params`, `program` and `src`, with optional `results`, `env` and `links`.
+The source identity and executable are wrapper settings, not manifest fields. [`adb.mkExperiment`](../authoring/experiments.md) takes `name`, `summary`, `params`, `program` and `src`, with optional `results`, `schema`, `schemaPython`, `sharedSrcs`, `env` and `links`. Schema defaults to version 0 and `adb_events:Payload`; typed experiments supply their own union pointer and `schemaPython = "${env}/bin/python"` from the built program environment. Packaging imports that pointer and calls `export_schema`, failing the build if it cannot import. `schema.json` and the shared export sit beside the manifest, along with a `python` link to the schema interpreter used by `adb-runner verify`; `schema.path` is generated, not author-supplied.
 
 ## Parameter declarations
 
@@ -43,21 +44,22 @@ LLM-typed parameters receive shared model suggestions during manifest generation
 
 ## Result declarations
 
-Each result declaration contains a type descriptor and optional presentation fields:
+`results` is a list whose order controls the summary facts grid and definitions table. Each declaration contains a unique name, a type descriptor and optional presentation fields:
 
 | Field | Meaning |
 | --- | --- |
-| `type` | Required type descriptor, using the types listed below. It does not enforce the emitted metric's type. |
+| `name` | Required string matching the `name` on a result event. Duplicate names fail Nix evaluation. |
+| `type` | Required type descriptor, using the types listed below. It does not enforce the emitted result's type. |
 | `label` | Optional string used as the readable result name. The metric key remains its identifier. |
 | `description` | Optional short string explaining the result in plain language, visible with its value. |
 | `details` | Optional longer string explaining the calculation, aggregation or interpretation caveats, shown on expansion. |
 | `unit` | Optional string displayed alongside the value; it does not convert or rescale the value. |
 
-In Nix, declare a result as `{ type = adb.types.int; label = "Recorded count"; description = "Count supplied to the program."; }`. The existing bare-type shorthand, such as `count = adb.types.int;`, remains supported. Manifest generation normalizes it to `"count": { "type": { "kind": "int" } }`; rich declarations retain their presentation fields.
+In Nix, use `results = [ { name = "count"; type = adb.types.int; label = "Recorded count"; description = "Count supplied to the program."; } ];`. The manifest preserves the list and its presentation fields in that order. Map declarations and bare-type shorthand are not supported.
 
-Results are possible outputs, not required outputs. A declared metric that was never emitted is absent from the summary; absence does not mean zero. Undeclared emitted metrics also enter the run summary and remain visible in the viewer with neutral formatting. Boolean results display as neutral Yes/No values without inferring success or failure.
+Results are possible outputs, not required outputs. A declared metric that was never emitted is absent from the summary; absence does not mean zero. Undeclared results remain in the stream but warn and stay out of the summary. Boolean results display as neutral Yes/No values without inferring success or failure.
 
-The run page uses one Results list with labels, values, units and short descriptions; expand a row for its calculation details. Before launch, expand **Results this experiment records** on the experiment page to read the declared outputs. The runner snapshots the normalized declarations as `result_definitions` in both `run.json` and `run.start`. These saved definitions preserve the run's interpretation when the installed experiment changes. A metric event's existing `unit` field takes precedence when displaying that event's value; it does not change the saved declaration. Events do not override result labels, descriptions or details.
+The run page uses one Results list with labels, values, units and short descriptions; expand a row for its calculation details. Before launch, expand **Results this experiment records** on the experiment page to read the declared outputs. The runner snapshots the ordered declaration list as `result_definitions` in both `run.json` and `run.start`. These saved definitions preserve the run's interpretation when the installed experiment changes. Result events have no unit field; units come from the declaration. Events do not override result labels, descriptions or details.
 
 ## Type descriptors
 
@@ -93,4 +95,4 @@ with adb.types; {
 
 The runner rejects unknown and missing parameter keys, then checks value types before hashing the condition. It checks realized values again before executing, including list-length bounds. Specified and realized parameters are currently identical; no distribution or sweep syntax is implemented.
 
-Validation does not verify model existence, credentials, endpoint access or semantic constraints that only the experiment understands. Result type descriptors do not validate emitted metrics against the result declaration; standard metric payloads have their own [scalar-value rule](events.md#metrics).
+Validation does not verify model existence, credentials, endpoint access or semantic constraints that only the experiment understands. Result type descriptors do not validate emitted metrics against the result declaration; standard result payloads have their own [scalar-value rule](events.md#results).

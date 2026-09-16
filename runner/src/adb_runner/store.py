@@ -1,20 +1,28 @@
 """Run directory persistence (docs/book/src/reference/layout.md).
 
-runs/<condition_id>/<run_id>/{run.json, events-NNNNN.jsonl, artifacts/, workspace/}
-conditions/<condition_id>.json — spec as written, once per condition.
+runs/<condition_id>-<experiment>/<run_id>/{run.json, events.jsonl, workspace/}
+conditions/<condition_id>-<experiment>.json — spec as written, once per condition.
 
-Event files are chunked so periodic HF commits add blobs instead of rewriting one
-growing file.
+The stream is evidence; run.json is a replaceable runner index card.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
-CHUNK_BYTES = 1_000_000
+from pydantic import TypeAdapter
+from adb_events.identity import RunId
+
+
+def condition_name(condition: str, experiment: str) -> str:
+    """A storage name, derived from record fields; never decoded by splitting it."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", condition) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", experiment):
+        raise ValueError("invalid condition or experiment path component")
+    return f"{condition}-{experiment}"
 
 
 def default_home() -> Path:
@@ -31,7 +39,7 @@ def write_json_atomic(path: Path, obj: Any) -> None:
 
 
 def find_run(home: Path, run_id: str) -> Path | None:
-    """Locate a run directory by ULID. Run ids are globally unique but stored under
+    """Locate a run directory by its whole ID. Run ids are globally unique but stored under
     their condition, so the condition segment is globbed."""
     matches = sorted((home / "runs").glob(f"*/{run_id}"))
     return matches[0] if matches else None
@@ -40,46 +48,28 @@ def find_run(home: Path, run_id: str) -> Path | None:
 def ensure_condition(home: Path, condition_id: str, spec: dict[str, Any]) -> None:
     cdir = home / "conditions"
     cdir.mkdir(parents=True, exist_ok=True)
-    cpath = cdir / f"{condition_id}.json"
+    cpath = cdir / f"{condition_name(condition_id, spec['experiment'])}.json"
     if not cpath.exists():
         write_json_atomic(cpath, spec)
 
 
 class RunStore:
-    def __init__(self, home: Path, condition_id: str, run_id: str):
-        self.dir = home / "runs" / condition_id / run_id
-        (self.dir / "artifacts").mkdir(parents=True, exist_ok=True)
-        (self.dir / "workspace").mkdir(exist_ok=True)
-        self._chunk_index = 1
-        self._chunk_bytes = 0
+    def __init__(self, home: Path, condition_id: str, run_id: str, *, experiment: str):
+        self.run_id = TypeAdapter[RunId](RunId).validate_python(run_id, strict=True)
+        self.dir = home / "runs" / condition_name(condition_id, experiment) / run_id
+        (self.dir / "workspace").mkdir(parents=True, exist_ok=True)
         self._fh = None
 
     @property
     def workspace(self) -> Path:
         return self.dir / "workspace"
 
-    @property
-    def artifacts(self) -> Path:
-        return self.dir / "artifacts"
-
-    def _open_chunk(self):
-        path = self.dir / f"events-{self._chunk_index:05d}.jsonl"
-        self._fh = path.open("a")
-        return self._fh
-
     def write_event(self, event: dict[str, Any]) -> str:
         line = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
-        fh = self._fh
-        if fh is None:
-            fh = self._open_chunk()
-        elif self._chunk_bytes + len(line) > CHUNK_BYTES:
-            fh.close()
-            self._chunk_index += 1
-            self._chunk_bytes = 0
-            fh = self._open_chunk()
-        fh.write(line + "\n")
-        fh.flush()
-        self._chunk_bytes += len(line) + 1
+        if self._fh is None:
+            self._fh = (self.dir / "events.jsonl").open("a")
+        self._fh.write(line + "\n")
+        self._fh.flush()
         return line
 
     def write_run_json(self, obj: dict[str, Any]) -> None:

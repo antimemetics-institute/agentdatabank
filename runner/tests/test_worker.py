@@ -330,9 +330,9 @@ def test_experiment_outcome_reaches_cli_and_queue(
     assert len(records) == run_count
     for path in records:
         record = json.loads(path.read_text())
-        assert record["state"] == run_state and "phase" not in record
+        assert record["lifecycle"]["state"] == run_state and "phase" not in record
         events = [json.loads(line)["event"]
-                  for chunk in sorted(path.parent.glob("events-*.jsonl"))
+                  for chunk in sorted(path.parent.glob("events.jsonl"))
                   for line in chunk.read_text().splitlines()]
         assert events[-1]["state"] == run_state
         assert "phase" not in events[-1]

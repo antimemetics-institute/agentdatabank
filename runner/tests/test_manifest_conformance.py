@@ -104,7 +104,15 @@ def test_every_shipped_manifest_conforms():
     for f in files:
         doc = json.loads(f.read_text())
         _check(doc, Manifest, f.name)
-        unknown_kinds = set(_kinds([doc["params"], doc.get("results", {})])) - KINDS
+        assert doc["schema_version"] == 1
+        assert doc["schema"]["version"] >= 0
+        assert ":" in doc["schema"]["models"]
+        schema_path = Path(doc["schema"]["path"])
+        assert schema_path.name == "schema.json"
+        assert schema_path.parent == f.resolve().parent
+        assert json.loads(schema_path.read_text())["$defs"]["LLMCall"]["x-adb-render"]["actor"] == "agent"
+        assert (schema_path.parent / "shared-schema.json").is_file()
+        unknown_kinds = set(_kinds([doc["params"], doc.get("results", [])])) - KINDS
         assert not unknown_kinds, f"{f.name}: unknown kinds {sorted(unknown_kinds)}"
 
 
@@ -113,22 +121,24 @@ def test_walker_rejects_wrong_types():
     good = {"name": "x", "params": {"p": {"type": {"kind": "int"}, "order": 1}}}
     _check(good, Manifest, "good")
     _check({**good, "readme": "# Experiment\n\nDocumentation."}, Manifest, "readme")
-    _check({**good, "results": {"score": {
+    _check({**good, "results": [{"name": "score",
         "type": {"kind": "float"}, "label": "Score",
         "description": "Mean score over rounds.", "unit": "points",
         "details": "Each recorded round has equal weight.",
-    }}}, Manifest, "results")
+    }]}, Manifest, "results")
     for bad, why in [
+        ({**good, "results": {"score": {"type": {"kind": "float"}}}}, "results must be a list"),
+        ({**good, "results": [{"type": {"kind": "float"}}]}, "result name is required"),
         ({**good, "name": 1}, "name must be str"),
         ({**good, "readme": 1}, "readme must be str when present"),
         ({**good, "params": {"p": {"type": {"kind": "int"}, "order": "1"}}}, "order must be int"),
         ({**good, "params": {"p": {"type": {"kind": "enum", "values": "ab"}}}}, "values must be a list"),
         ({**good, "params": {"p": {"kind": "int"}}}, "decl missing required 'type'"),
-        ({**good, "results": {"score": {"kind": "float"}}}, "result must be wrapped"),
-        ({**good, "results": {"score": {"type": {"kind": "float"}, "label": 1}}}, "label must be str"),
-        ({**good, "results": {"score": {"type": {"kind": "float"}, "description": []}}}, "description must be str"),
-        ({**good, "results": {"score": {"type": {"kind": "float"}, "details": []}}}, "details must be str"),
-        ({**good, "results": {"score": {"type": {"kind": "float"}, "unit": False}}}, "unit must be str"),
+        ({**good, "results": [{"name": "score", "kind": "float"}]}, "result must be wrapped"),
+        ({**good, "results": [{"name": "score", "type": {"kind": "float"}, "label": 1}]}, "label must be str"),
+        ({**good, "results": [{"name": "score", "type": {"kind": "float"}, "description": []}]}, "description must be str"),
+        ({**good, "results": [{"name": "score", "type": {"kind": "float"}, "details": []}]}, "details must be str"),
+        ({**good, "results": [{"name": "score", "type": {"kind": "float"}, "unit": False}]}, "unit must be str"),
     ]:
         with pytest.raises(AssertionError):
             _check(bad, Manifest, why)
@@ -141,6 +151,10 @@ def test_shipped_readme_is_embedded_in_catalog():
     root = Path(__file__).resolve().parents[2]
     catalog = Path(manifests_dir)
     govsim = json.loads((catalog / "govsim.json").read_text())
+    assert [result["name"] for result in govsim["results"]] == [
+        "rounds", "collapsed", "survival_months", "total_harvest", "gain_per_agent",
+        "final_resource", "equality", "over_usage",
+    ]
     assert govsim["readme"] == (root / "experiments/govsim/README.md").read_text()
     # An experiment directory without a README stays valid and omits the field.
     if not (root / "experiments/inspect_evals/README.md").exists():

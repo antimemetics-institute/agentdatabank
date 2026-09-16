@@ -9,7 +9,7 @@
 # Provenance: git stamps the commit hash into .git-revision when generating an
 # archive (export-subst — GitHub tarballs included), so tarball builds know their
 # rev and runs record a real fetchable ref. In a checkout the placeholder stays
-# unexpanded and runs record `dirty:` — correct, a working tree has no rev. The
+# unexpanded and runs omit fetch_ref — a working tree has no pinned clean rev. The
 # `adbRev` argument overrides the stamp (the fetchGit flow states its own rev).
 let
   lockedSources = import ./pkgs/locked-sources.nix { };

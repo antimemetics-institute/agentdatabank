@@ -178,6 +178,7 @@ tasks:
       - task: lock:check
       - task: typecheck
       - python scripts/check-python-sources.py
+      - python scripts/check-experiment-identity.py
       - task: test:python
       - pnpm --dir web install --frozen-lockfile
       - task: web:typecheck

@@ -1,0 +1,167 @@
+"""The public command audits real saved runs without rewriting evidence."""
+
+import hashlib
+import json
+import shlex
+import sys
+
+import pytest
+
+from adb_runner import cli, credentials
+from adb_runner.verify import VerificationError, verify_run
+from test_protocol import MANIFEST, run_fixture
+
+
+@pytest.fixture
+def saved(tmp_path, monkeypatch):
+    monkeypatch.setenv("ADB_CREDENTIALS_FILE", str(tmp_path / "credentials.toml"))
+    monkeypatch.delenv("ADB_MANIFEST", raising=False)
+    monkeypatch.delenv("ADB_MANIFESTS", raising=False)
+    models = tmp_path / "verify_models.py"
+    models.write_text('''from typing import Annotated, Literal, Union
+from pydantic import Field
+from adb_events import CustomEvent, EVENT_MODELS
+from adb_events.models.base import Model
+class Data(Model):
+    value: int
+class Note(CustomEvent[Data]):
+    kind: Literal["t.note"] = "t.note"
+Payload = Annotated[Union[tuple({model for tag, model in EVENT_MODELS.items() if tag != "custom"}) + (Note,)], Field(discriminator="type")]
+''')
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({**MANIFEST, "schema": {"version": 0, "models": "verify_models:Payload"}}))
+    _, _, store = run_fixture(tmp_path, script='''#!/bin/sh
+adb-emit custom --kind t.note --data '{"value":3}'
+adb-emit result --name m --value 7
+''')
+    return store.dir, manifest
+
+
+def digest_files(directory):
+    return {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in directory.rglob("*") if p.is_file()}
+
+
+def test_public_command_checks_all_three_and_preserves_every_file(saved, monkeypatch, capsys):
+    directory, manifest = saved
+    before = digest_files(directory)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    assert cli.main() == 0
+    assert "verify: PASS:" in capsys.readouterr().out
+    assert digest_files(directory) == before
+
+
+@pytest.mark.parametrize("section", ["identity", "inputs", "lifecycle", "provenance", "definitions", "derived"])
+def test_every_card_section_is_compared(saved, section):
+    directory, manifest = saved
+    path = directory / "run.json"
+    card = json.loads(path.read_text())
+    card[section]["invented"] = True
+    path.write_text(json.dumps(card))
+    with pytest.raises(VerificationError, match=rf"run.json.{section} differs"):
+        verify_run(directory, manifest=manifest, environment={})
+
+
+def rewrite_stream(directory, change):
+    path = directory / "events.jsonl"
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    change(records)
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+def test_custom_payload_is_checked_against_experiment_union(saved):
+    directory, manifest = saved
+    rewrite_stream(directory, lambda rows: rows[1]["event"]["data"].update(value="not-an-int"))
+    with pytest.raises(VerificationError, match="experiment payload validation failed at events.jsonl:2"):
+        verify_run(directory, manifest=manifest, environment={})
+
+
+@pytest.mark.parametrize("change,reason", [
+    (lambda rows: rows.pop(), "finish with run.end"),
+    (lambda rows: rows[1].update(seq=99), "non-contiguous"),
+    (lambda rows: rows[1].update(experiment="another"), "identity differs"),
+    (lambda rows: rows[1].update(schema=9), "identity differs"),
+    (lambda rows: rows[1].update(v=2), "envelope validation failed"),
+])
+def test_incomplete_or_inconsistent_stream_fails(saved, change, reason):
+    directory, manifest = saved
+    rewrite_stream(directory, change)
+    with pytest.raises(VerificationError, match=reason):
+        verify_run(directory, manifest=manifest, environment={})
+
+
+def test_truncated_line_failure_never_echoes_input(saved, monkeypatch, capsys):
+    directory, manifest = saved
+    with (directory / "events.jsonl").open("a") as file:
+        file.write('{"private": "do-not-echo-this-value"')
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    assert cli.main() == 1
+    output = capsys.readouterr()
+    assert "envelope validation failed" in output.err
+    assert "do-not-echo-this-value" not in output.err
+
+
+@pytest.mark.parametrize("origin", ["environment", "stored-profile"])
+def test_scan_checks_real_credential_sources_and_workspace_without_echoing(saved, monkeypatch, capsys, origin):
+    directory, manifest = saved
+    secret = "opaque-provider-credential-for-audit"
+    if origin == "environment":
+        monkeypatch.setenv("TEST_ACCESS_TOKEN", secret)
+    else:
+        credentials.save({"provider": {"another-profile": {"CUSTOM_SECRET": secret,
+                                                           "PROVIDER_BASE_URL": "https://api.example.invalid/v1"}}})
+        endpoints = {"provider": "https://api.example.invalid"}
+        rewrite_stream(directory, lambda rows: rows[0]["event"]["runtime"].update(endpoints=endpoints))
+        card_path = directory / "run.json"
+        card = json.loads(card_path.read_text())
+        card["provenance"]["runtime"]["endpoints"] = endpoints
+        card_path.write_text(json.dumps(card))
+    workspace = directory / "workspace" / "nested"
+    workspace.mkdir()
+    (workspace / "config.json").write_text(json.dumps({"leaked": secret}))
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    assert cli.main() == 1
+    output = capsys.readouterr()
+    assert "secrets scan" in output.err
+    assert "workspace/nested/config.json" in output.err
+    assert secret not in output.out + output.err
+
+
+def test_shell_key_settings_are_not_credentials(saved, monkeypatch):
+    directory, manifest = saved
+    monkeypatch.setenv("KEYTIMEOUT", "1")
+    assert verify_run(directory, manifest=manifest).records > 0
+
+
+def test_unused_endpoint_placeholder_is_not_a_run_credential(saved):
+    directory, manifest = saved
+    credentials.save({"openai": {"local": {"OPENAI_API_KEY": "mock",
+                                         "OPENAI_BASE_URL": "http://localhost:11434/v1"}}})
+    (directory / "workspace" / "notes.txt").write_text("A mock experiment")
+    assert verify_run(directory, manifest=manifest, environment={}).credential_values == 0
+
+
+def test_manifest_must_match_the_recorded_schema(saved):
+    directory, manifest = saved
+    declaration = json.loads(manifest.read_text())
+    declaration["schema"]["version"] = 1
+    manifest.write_text(json.dumps(declaration))
+    with pytest.raises(VerificationError, match="experiment/schema does not match"):
+        verify_run(directory, manifest=manifest, environment={})
+
+
+def test_catalog_lookup_and_built_interpreter(saved, tmp_path):
+    directory, manifest = saved
+    catalog = tmp_path / "catalog"
+    catalog.mkdir()
+    declaration = json.loads(manifest.read_text())
+    declaration["schema"]["path"] = str(catalog / "schema.json")
+    interpreter = catalog / "python"
+    interpreter.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    interpreter.chmod(0o755)
+    (catalog / "t.json").write_text(json.dumps(declaration))
+    assert verify_run(directory, catalog=catalog, environment={}).records > 0
+    (catalog / "python").unlink()
+    with pytest.raises(VerificationError, match="interpreter is unavailable"):
+        verify_run(directory, catalog=catalog, environment={})

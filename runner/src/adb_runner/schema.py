@@ -10,8 +10,9 @@ run. Types describe shape; everything pydantic-ish happens here at instantiation
 
 
 import json
+import re
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from adb_events import Json
 
@@ -74,7 +75,8 @@ class ParamDecl(TypedDict):
 
 
 class ResultDecl(TypedDict):
-    """Presentation metadata for an output, not a runtime value constraint."""
+    """An ordered, named output declaration, not a runtime value constraint."""
+    name: str
     type: ParamType
     label: NotRequired[str]
     description: NotRequired[str]
@@ -87,14 +89,23 @@ class ExtLink(TypedDict):
     url: str
 
 
+class EventSchema(TypedDict):
+    """The experiment's payload union, independent of the manifest format."""
+
+    version: int
+    models: str
+    path: NotRequired[str]
+
+
 class Manifest(TypedDict):
     name: str
     params: dict[str, ParamDecl]
     schema_version: NotRequired[int]
+    schema: NotRequired[EventSchema]
     summary: NotRequired[str]
     readme: NotRequired[str]  # package-directory README Markdown; presentation only
     origin: NotRequired[str]
-    results: NotRequired[dict[str, ResultDecl]]
+    results: NotRequired[list[ResultDecl]]
     env: NotRequired[dict[str, Json]]
     links: NotRequired[list[ExtLink]]
 
@@ -112,6 +123,15 @@ def load_manifest(path: str | Path) -> Manifest:
     for field in ("name", "params"):
         if field not in manifest:
             raise SchemaError(f"manifest missing {field!r}")
+    if "schema" in manifest:
+        schema: dict[str, Any] = manifest["schema"]
+        if (not isinstance(manifest["schema"], dict) or not {"version", "models"} <= set(schema)
+                or set(schema) - {"version", "models", "path"}
+                or ("path" in schema and (not isinstance(schema["path"], str) or not schema["path"]))
+                or type(schema.get("version")) is not int or schema["version"] < 0
+                or not isinstance(schema.get("models"), str)
+                or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*", schema["models"]) is None):
+            raise SchemaError("schema requires a non-negative integer version and module:attr models pointer")
     return manifest
 
 

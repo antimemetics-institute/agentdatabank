@@ -23,18 +23,15 @@ def contained(root, name):
 
 
 def load_capture(source):
-    metadata = json.loads((source / 'run.json').read_text())
-    if metadata.get('state') != 'completed':
-        raise ValueError('replay requires a completed saved run')
     events = []
     previous_seq = -1
-    files = sorted(source.glob('events-*.jsonl'))
-    if not files:
+    files = [source / 'events.jsonl']
+    if not files[0].is_file():
         raise ValueError('saved run has no event files')
     for file in files:
         for line in file.read_text().splitlines():
             event = json.loads(line)
-            if event['run'] != metadata['run'] or event['seq'] <= previous_seq:
+            if (events and event['run'] != events[0]['run']) or event['seq'] <= previous_seq:
                 raise ValueError('saved event run/sequence mismatch')
             previous_seq = event['seq']
             event['_time'] = datetime.datetime.fromisoformat(event['ts'].replace('Z', '+00:00')).timestamp()
@@ -42,6 +39,13 @@ def load_capture(source):
                 if not contained(source, event['event']['path']).is_file():
                     raise ValueError('missing recorded artifact')
             events.append(event)
+    start = next((e for e in events if e['event'].get('type') == 'run.start'), None)
+    end = next((e for e in reversed(events) if e['event'].get('type') == 'run.end'), None)
+    if start is None or end is None or end['event'].get('state') != 'completed':
+        raise ValueError('replay requires a completed saved run')
+    metadata = {**start['event'], **end['event'], 'run': start['run'],
+                'experiment': start['experiment']}
+    metadata.pop('type', None)
     return metadata, events, files
 
 
@@ -52,15 +56,15 @@ def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep
     if destination == source or destination.is_relative_to(source) or source.is_relative_to(destination):
         raise ValueError('replay output must be separate from original run')
     metadata, events, files = load_capture(source)
-    if params != metadata['realized_params']:
-        raise ValueError('replay parameters must match captured realized_params')
+    if params != metadata['params']:
+        raise ValueError('replay parameters must match captured params')
     # Validate all paths before creating any output or emitting payloads.
     for envelope in events:
         event = envelope['event']
         if event.get('type') == 'artifact':
             relative = Path(event['path'])
             if len(relative.parts) == 1 and (relative.name == 'run.json' or
-                                           relative.match('events-*.jsonl')):
+                                           relative.match('events.jsonl')):
                 raise ValueError('artifact would overwrite runner-owned metadata')
             contained(destination, event['path'])
     provenance_path = 'artifacts/docs-recording-replay.json'
@@ -70,7 +74,7 @@ def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep
         'kind': 'saved-run-replay', 'original_run': metadata, 'speed': speed,
         'note': 'Recorded payloads replayed; no experiment or model was executed. Usage is historical.',
         'sha256': {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
-                   for p in [source / 'run.json', *files,
+                   for p in [*files,
                              *(contained(source, e['event']['path']) for e in events
                                if e['event'].get('type') == 'artifact')]},
     }

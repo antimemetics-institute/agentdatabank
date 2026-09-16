@@ -1,6 +1,6 @@
 """The runner protocol: spawn the experiment, feed params, envelope + persist events.
 
-runner → experiment: realized params JSON on stdin; ADB_RUN_ID/ADB_RUN_DIR/ADB_SEED env;
+runner → experiment: params JSON on stdin; ADB_RUN_ID/ADB_RUN_DIR/ADB_SEED env;
 fresh workspace as cwd; a small env allowlist (never the full host environment).
 experiment → runner: validated JSON events through ADB_EVENT_SOCKET; stdout and
 stderr are always captured as text. The runner records typed envelopes and
@@ -14,35 +14,33 @@ import json
 import os
 import platform
 import queue
+import re
 import signal
 import subprocess
-import sys
 import threading
 import time
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any, Literal, TextIO
+from urllib.parse import urlsplit
 
-from . import __version__
 from . import credentials
 
 from adb_events import (
     Envelope,
     CapturedLine,
     Payload,
-    Metric,
-    LLMCall,
+    Result,
     Log,
     RunStart,
-    RunStatus,
     RunEnd,
     RunEnvironment,
-    UsageTotals,
 )
 from .schema import Manifest, Params
+from adb_providers import PROVIDERS
 from .event_socket import event_socket
 from .store import RunStore
-from .ulid import ulid
+from .card import CardProjection
 
 # DOCKER_HOST: sandboxed experiments must find the machine's docker daemon (a
 # per-user rootless socket on dev boxes — see `task docker:up`); like model
@@ -52,19 +50,51 @@ from .ulid import ulid
 # shell can neither leak into a run nor shadow the stored value.
 ENV_ALLOWLIST = ["PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "DOCKER_HOST"]
 
-# Liveness heartbeat: while the experiment runs, the runner touches run.json's mtime
-# (content unchanged — no deposit churn, nothing in the event stream; liveness is
-# operational state, not experimental data). Consumers: running + stale mtime =
-# crashed ("interrupted?" per docs/book/src/reference/layout.md); experiments never know it exists.
+# Refresh the index card from captured records while live, even during quiet periods.
 HEARTBEAT_S = 10.0
 
 
-def _now() -> str:
-    return (
-        datetime.datetime.now(datetime.timezone.utc)
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z")
-    )
+def validate_fetch_ref(ref: str | None) -> str | None:
+    """Only launcher-supplied pinned references are publishable provenance."""
+    if not ref:
+        return None
+    # Check URI authorities and scp-style references, without echoing credentials.
+    if "@" in urlsplit(ref).netloc or re.match(r"[^/?#]*@", ref):
+        raise ValueError("fetch_ref must not contain userinfo")
+    # Old launchers used a dirty marker; it is not a fetchable revision.
+    return None if ref.startswith("dirty:") else ref
+
+
+def _store_path(path: str | None) -> str | None:
+    return path if path and path.startswith("/nix/store/") else None
+
+
+def _endpoint_origins(
+    manifest: Manifest, params: Params, credential_env: dict[str, str],
+) -> dict[str, str]:
+    """Record configured endpoint origins, never URL paths or credentials."""
+    endpoints: dict[str, str] = {}
+    for name in sorted(credentials.sets_used(manifest, params)):
+        provider = PROVIDERS.get(name)
+        prefix = re.sub(r"[^A-Za-z0-9]+", "_", name).upper()
+        variable = provider.base_url.name if provider else f"{prefix}_BASE_URL"
+        url = credential_env.get(variable) or (
+            provider.base_url.default
+            if provider and credential_env.get(provider.api_key.name) else ""
+        )
+        if not url:
+            continue
+        try:
+            parts = urlsplit(url)
+            host = parts.hostname
+            port = parts.port
+        except ValueError:
+            continue  # An invalid endpoint has no trustworthy origin to record.
+        if parts.scheme not in ("http", "https") or not host:
+            continue
+        host = f"[{host}]" if ":" in host else host  # IPv6 URL authority.
+        endpoints[name] = f"{parts.scheme}://{host}" + (f":{port}" if port is not None else "")
+    return endpoints
 
 
 def child_env(
@@ -92,14 +122,10 @@ class RunResult:
         self,
         run_id: str,
         state: RunState,
-        summary: dict[str, Any],
-        usage: dict[str, int],
         duration_s: float,
     ):
         self.run_id = run_id
         self.state = state
-        self.summary = summary
-        self.usage = usage
         self.duration_s = duration_s
 
 
@@ -107,109 +133,94 @@ def execute_run(
     *,
     program: str,
     manifest: Manifest,
-    spec_params: Params,
-    realized_params: Params,
+    params: Params,
     condition_id: str,
     source: str,
     fetch_ref: str | None = None,
-    base_seed: int,
-    replicates: int,
+    tree_hash: str | None = None,
     seed: int,
-    replicate: int,
     store: RunStore,
     run_id: str | None = None,
     on_event: Callable[[dict[str, Any]], None] | None = None,
     credential_env: dict[str, str] | None = None,
 ) -> RunResult:
-    run_id = run_id or ulid()
-    # `source` is the per-experiment content identity (feeds condition_id); `fetch_ref` is
-    # the source reference, recorded for reproduction and dirty-checkout detection
-    # (docs/book/src/running/model.md). Callers that pass only `source` (older tests) get
-    # fetch_ref = source, preserving the previous dirty behavior.
-    fetch_ref = fetch_ref if fetch_ref is not None else source
-    dirty = fetch_ref.startswith("dirty:")
+    run_id = run_id or store.run_id
+    if run_id != store.run_id:
+        raise ValueError("run ID must match the store")
+    fetch_ref = validate_fetch_ref(fetch_ref)
+    # Resolve once before the launch snapshot; only host origins enter runtime.
+    # The full URLs and keys are still passed unchanged to the child.
+    if credential_env is None:
+        credential_env = credentials.env_for_run(manifest, params)
     start = time.monotonic()
     seq = 0
-    metrics: dict[str, Any] = {}
-    result_definitions = deepcopy(manifest.get("results", {}))
-    usage = {"input_tokens": 0, "output_tokens": 0, "llm_calls": 0}
+    projection = CardProjection()
+    seen_results: set[str] = set()
+    result_definitions = deepcopy(manifest.get("results", []))
+    declared_results = {result["name"] for result in result_definitions}
     events_q: queue.Queue[CapturedLine | Log | None] = queue.Queue()
     record_lock = threading.Lock()
 
-    def record_payload(payload: Payload) -> None:
+    def write_card() -> None:
+        store.write_run_json(projection.snapshot())
+
+    def save_payload(payload: Payload) -> dict[str, Any]:
+        """Write one envelope while record_lock is held."""
         nonlocal seq
+        envelope = Envelope(
+            v=0, ts=datetime.datetime.now(datetime.timezone.utc),
+            run=run_id, seq=seq, event=payload,
+            experiment=manifest["name"], schema=manifest.get("schema", {}).get("version", 0),
+        )
+        saved = envelope.model_dump(mode="json", by_alias=True, exclude_none=True)
+        store.write_event(saved)
+        projection.observe(saved)
+        if isinstance(payload, RunStart):
+            write_card()
+        seq += 1
+        return saved
+
+    def record_payload(payload: Payload) -> None:
         # Socket handlers and stdio capture share one sequence and store writer.
         with record_lock:
-            envelope = Envelope(v=0, ts=_now(), run=run_id, seq=seq, event=payload)
-            # Serialize the public models, including defaults and wire aliases.
-            saved = envelope.model_dump(mode="json", by_alias=True)
-            store.write_event(saved)
-            seq += 1
-            if isinstance(payload, Metric):
-                metrics[payload.name] = payload.value
-            elif isinstance(payload, LLMCall):
-                if payload.usage is not None:
-                    usage["input_tokens"] += payload.usage.input_tokens or 0
-                    usage["output_tokens"] += payload.usage.output_tokens or 0
-                usage["llm_calls"] += 1
+            saved = save_payload(payload)
+            warning = None
+            if isinstance(payload, Result):
+                if payload.name not in declared_results:
+                    warning = f"Undeclared result {payload.name!r}; not declared in the manifest"
+                else:
+                    if payload.name in seen_results:
+                        warning = f"Repeated result {payload.name!r}"
+                    seen_results.add(payload.name)
             if on_event:
                 on_event(saved)
+            if warning is not None:
+                saved_warning = save_payload(Log(level="warn", message=warning))
+                if on_event:
+                    on_event(saved_warning)
 
-    environment = RunEnvironment(
-        adb_runner=__version__,
+    runtime = RunEnvironment(
         platform=os.uname().sysname.lower() + "-" + os.uname().machine,
-        experiment_bin=program,
-        runner_python=sys.executable,
+        experiment_bin=_store_path(program),
         runner_python_version=platform.python_version(),
-        runner_bin=os.environ.get("ADB_RUNNER_BIN"),
-        nix_system=os.environ.get("ADB_NIX_SYSTEM"),
+        runner_bin=_store_path(os.environ.get("ADB_RUNNER_BIN")),
+        endpoints=_endpoint_origins(manifest, params, credential_env),
     )
-    run_meta: dict[str, Any] = {
-        "run": run_id,
-        "condition": condition_id,
-        "experiment": manifest["name"],
-        "result_definitions": result_definitions,
-        "source": source,
-        "fetch_ref": fetch_ref,
-        "dirty": dirty,
-        "base_seed": base_seed,
-        "replicates": replicates,
-        "realized_params": realized_params,
-        "env": environment.model_dump(mode="json"),
-        "seed": seed,
-        "replicate": replicate,
-        "state": "provisioning",
-        "started_at": _now(),
-    }
-    store.write_run_json(run_meta)
-
     record_payload(
         RunStart(
-            result_definitions=result_definitions,
+            result_definitions=[dict(declaration) for declaration in result_definitions],
             condition=condition_id,
-            experiment=manifest["name"],
             source=source,
             fetch_ref=fetch_ref,
-            dirty=dirty,
-            spec_params=spec_params,
-            realized_params=realized_params,
-            base_seed=base_seed,
-            replicates=replicates,
+            tree_hash=tree_hash,
+            params=params,
             seed=seed,
-            replicate=replicate,
-            env=environment,
+            runtime=runtime,
         )
     )
 
-    # stored credentials/endpoints for the credential sets this run's model ids route
-    # to (docs/book/src/running/model.md: endpoint + key are environment, not condition).
-    # The CLI resolves these up front (profile ladder, may prompt) and passes them in;
-    # direct callers without one get the default-profile resolution.
-    if credential_env is None:
-        credential_env = credentials.env_for_run(manifest, realized_params)
-    run_meta["state"] = "running"
-    store.write_run_json(run_meta)
-    record_payload(RunStatus(state="running"))
+    projection.card["lifecycle"]["state"] = "running"
+    write_card()
     with event_socket(record_payload) as socket_path:
         proc = subprocess.Popen(
             [program],
@@ -251,7 +262,7 @@ def execute_run(
             t.start()
 
         try:
-            stdin.write(json.dumps(realized_params))
+            stdin.write(json.dumps(params))
             stdin.close()
         except BrokenPipeError:
             pass
@@ -261,9 +272,10 @@ def execute_run(
         finished_readers = 0
         last_beat = time.monotonic()
         child_exited_at: float | None = None
-        while finished_readers < 2:
+        while finished_readers < 2 or proc.poll() is None:
             if time.monotonic() - last_beat >= HEARTBEAT_S:
-                os.utime(store.dir / "run.json")
+                with record_lock:
+                    write_card()
                 last_beat = time.monotonic()
             if child_exited_at is None and proc.poll() is not None:
                 child_exited_at = time.monotonic()
@@ -307,30 +319,14 @@ def execute_run(
     else:
         state = "failed"
 
-    # NOTE: no views are materialized or deposited — chat/llm-call projections are
-    # rendered from the stream on demand (deposit irreducibles, never derivables;
-    # docs/book/src/reference/events.md#transport)
-
-    # Declarations describe outputs; every observed metric belongs in the summary,
-    # including undeclared metrics. Missing declared outputs stay absent.
-    summary = dict(metrics)
     record_payload(
         RunEnd(
             state=state,
             duration_s=round(duration, 3),
-            summary=summary,
-            usage_totals=UsageTotals.model_validate(usage),
             exit_code=returncode,
         )
     )
-    run_meta.update(
-        state=state,
-        finished_at=_now(),
-        duration_s=round(duration, 3),
-        summary=summary,
-        usage_totals=usage,
-        realized_params=realized_params,
-    )
-    store.write_run_json(run_meta)
+    with record_lock:
+        write_card()
     store.close()
-    return RunResult(run_id, state, summary, usage, duration)
+    return RunResult(run_id, state, duration)

@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from adb_events import CustomEvent, EventTransportError, Metric, emit
+from adb_events import CustomEvent, EventTransportError, Result, emit
 from adb_events.transport import send_event
 from adb_runner.event_socket import event_socket
 
@@ -49,7 +49,7 @@ def test_concurrent_large_events_are_separate_and_acknowledged(monkeypatch):
 @pytest.mark.parametrize(
     "data",
     [
-        b'{"type":"metric","name":"m","value":{}}\n',
+        b'{"type":"result","name":"m","value":{}}\n',
         b'{"type":"unknown"}\n',
         b'{"type":"run.status","state":"completed"}\n',
         b"not json\n",
@@ -61,7 +61,7 @@ def test_invalid_submission_gets_error_and_is_not_recorded(data):
     with event_socket(records.append) as path:
         assert "error" in submit(path, data)
         assert records == []
-        assert submit(path, b'{"type":"metric","name":"m","value":1}\n') == {"ok": True}
+        assert submit(path, b'{"type":"result","name":"m","value":1}\n') == {"ok": True}
     assert len(records) == 1
 
 
@@ -76,7 +76,7 @@ def test_ack_waits_for_recording(monkeypatch):
         monkeypatch.setenv("ADB_EVENT_SOCKET", path)
         with ThreadPoolExecutor() as pool:
             future = pool.submit(
-                send_event, Metric(name="n", value=1).model_dump_json()
+                send_event, Result(name="n", value=1).model_dump_json()
             )
             try:
                 assert started.wait(5)
@@ -93,20 +93,20 @@ def test_storage_failure_is_not_acknowledged_as_success(monkeypatch):
     with event_socket(fail) as path:
         monkeypatch.setenv("ADB_EVENT_SOCKET", path)
         with pytest.raises(EventTransportError, match="disk full"):
-            emit(Metric(name="n", value=1))
+            emit(Result(name="n", value=1))
 
 
 def test_cli_and_python_use_socket_without_stdout(monkeypatch, capsys):
     records = []
     with event_socket(records.append) as path:
         monkeypatch.setenv("ADB_EVENT_SOCKET", path)
-        emit(Metric(name="python", value=1))
+        emit(Result(name="python", value=1))
         completed = subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "adb_runner.emit",
-                "metric",
+                "result",
                 "--name",
                 "cli",
                 "--value",
@@ -124,13 +124,13 @@ def test_cli_and_python_use_socket_without_stdout(monkeypatch, capsys):
 def test_missing_socket_is_loud(monkeypatch):
     monkeypatch.delenv("ADB_EVENT_SOCKET", raising=False)
     with pytest.raises(EventTransportError, match="unset"):
-        emit(Metric(name="n", value=1))
+        emit(Result(name="n", value=1))
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
             "adb_runner.emit",
-            "metric",
+            "result",
             "--name",
             "n",
             "--value",
@@ -174,16 +174,15 @@ def test_non_utf8_submission_is_rejected_without_poisoning_receiver(data):
 
 
 def test_python_non_utf8_bytes_fail_before_delivery(monkeypatch):
-    from adb_events import AgentEvent
     from pydantic_core import PydanticSerializationError
 
     records = []
     with event_socket(records.append) as path:
         monkeypatch.setenv("ADB_EVENT_SOCKET", path)
-        event = AgentEvent(agent="a", kind="binary", data={"blob": b'\xff\x00'})
+        event = CustomEvent.model_construct(kind="test.binary", data={"blob": b'\xff\x00'})
         with pytest.raises(PydanticSerializationError):
             emit(event)
         assert records == []
-        emit(Metric(name="still_working", value=1))
+        emit(Result(name="still_working", value=1))
     assert len(records) == 1
     assert records[0].name == "still_working"

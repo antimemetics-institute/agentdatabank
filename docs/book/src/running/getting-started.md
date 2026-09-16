@@ -51,6 +51,10 @@ Follow the run link in the job panel. The **results** card at the top shows simu
 <video class="only-light" autoplay loop muted playsinline src="../images/run-view-light.webm" aria-label="Inspect the conversation and results of a run"></video>
 <video class="only-dark" autoplay loop muted playsinline src="../images/run-view-dark.webm" aria-label="Inspect the conversation and results of a run"></video>
 
+Before launching more live runs, [verify the first run's directory](model.md#how-do-i-audit-the-first-real-run)
+with `adb-runner verify RUN_DIR`. This checks credentials, the experiment's typed
+stream and the card's agreement with the stream.
+
 You can find the run again under **Runs**. Press Ctrl-C in the launch terminal when finished; the saved run remains available next time you start ADB with the same data directory. Stopping ADB also stops its executor and any active execution.
 
 When you want to edit an experiment, use an ADB checkout and start `adb-local` from it, or pass `--repo /path/to/agentdatabank`. Restart after changing experiment declarations. See the [local tools reference](../reference/local.md) for checkout commands, storage locations, the read-only viewer, and terminal execution.

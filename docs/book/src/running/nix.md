@@ -96,7 +96,7 @@ $(nix-build --no-out-link \
   -A exec.inspect-hello) --describe
 ```
 
-Git-generated archives carry a revision stamp used for the run's fetch reference. An ordinary classic-Nix working-tree build has no expanded archive stamp and records a `dirty:` reference unless an `adbRev` is explicitly supplied to the package import. This is separate from the experiment content hash used for conditions.
+Git-generated archives carry a revision stamp used for the run's fetch reference. An ordinary classic-Nix working-tree build has no expanded archive stamp and omits `fetch_ref` unless an `adbRev` is explicitly supplied to the package import. This is separate from the experiment content hash used for conditions.
 
 ## How do I build or develop locally?
 

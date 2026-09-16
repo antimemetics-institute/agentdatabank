@@ -1,4 +1,4 @@
-"""Chunked event storage — chunk boundaries matter for HF incremental commits."""
+"""One append-only stream per run."""
 
 import json
 
@@ -18,14 +18,25 @@ def test_data_directory_environment_precedence(tmp_path, monkeypatch):
     assert store_mod.default_home() == tmp_path / "data"
 
 
-def test_chunks_rotate_and_replay_in_order(tmp_path, monkeypatch):
-    monkeypatch.setattr(store_mod, "CHUNK_BYTES", 200)
-    s = RunStore(tmp_path, "cid", "rid")
+def test_one_stream_preserves_all_records_in_order(tmp_path):
+    s = RunStore(tmp_path, "cid", "20260916t120000z-012345abcdef", experiment="test")
+    assert list(s.dir.iterdir()) == [s.workspace]
     for i in range(20):
-        s.write_event({"v": 0, "seq": i, "event": {"type": "log", "message": "x" * 30}})
+        s.write_event({"v": 0, "seq": i, "event": {"type": "log", "message": "x" * 100_000}})
     s.close()
 
-    chunks = sorted(s.dir.glob("events-*.jsonl"))
-    assert len(chunks) > 1  # rotation happened
-    replayed = [json.loads(line) for c in chunks for line in c.read_text().splitlines()]
+    assert sorted(p.name for p in s.dir.iterdir()) == ["events.jsonl", "workspace"]
+    replayed = [json.loads(line) for line in (s.dir / "events.jsonl").read_text().splitlines()]
     assert [e["seq"] for e in replayed] == list(range(20))  # nothing lost or reordered
+
+
+def test_condition_path_uses_both_fields_and_accepts_hyphenated_experiments(tmp_path):
+    experiment = "inspect-task-with-hyphens"
+    cid = "a" * 40
+    rid = "20260916t120000z-012345abcdef"
+    spec = {"experiment": experiment, "source": "test", "params": {}}
+    store_mod.ensure_condition(tmp_path, cid, spec)
+    store = RunStore(tmp_path, cid, rid, experiment=experiment)
+    assert store.dir == tmp_path / "runs" / (cid + "-" + experiment) / rid
+    assert json.loads((tmp_path / "conditions" / (cid + "-" + experiment + ".json")).read_text()) == spec
+    assert store_mod.find_run(tmp_path, rid) == store.dir

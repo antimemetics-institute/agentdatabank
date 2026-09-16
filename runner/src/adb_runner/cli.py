@@ -1,7 +1,8 @@
 """adb-runner CLI.
 
 Invoked via the mkExperiment wrapper, which bakes ADB_MANIFEST, ADB_EXPERIMENT_BIN,
-ADB_SOURCE (per-experiment content identity) and ADB_FETCH_REF (fetchable repo rev)
+ADB_SOURCE (per-experiment content identity), ADB_FETCH_REF (pinned clean repo rev),
+and ADB_TREE_HASH (packaging-tree narHash, when known)
 into the environment. One invocation resolves one condition and executes its
 replicates locally; there is no server in the execution path.
 """
@@ -23,7 +24,7 @@ from adb_events import Json
 
 from . import credentials
 from .canonical import abbrev, condition_id
-from .protocol import execute_run
+from .protocol import execute_run, validate_fetch_ref
 from .schema import (
     Manifest,
     MissingParamsError,
@@ -36,7 +37,7 @@ from .schema import (
 )
 from .shorthand import ShorthandError, parse_value
 from .store import RunStore, default_home, ensure_condition
-from .ulid import ulid
+from .run_id import new_run_id
 
 
 # the local viewer (adb-web): it binds VIEWER_PORT, walking up when that's taken, so
@@ -122,7 +123,8 @@ def _derive_seed(base_seed: int, cid: str, replicate: int) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="adb-runner", add_help=True)
+    p = argparse.ArgumentParser(prog="adb-runner", add_help=True,
+                                epilog="Management commands: credentials …; verify RUN_DIR (audit a finished run).")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                    help="set a param (JSON, @file, or bare string); repeatable")
     p.add_argument("--replicates", type=int, default=1, metavar="N",
@@ -197,6 +199,10 @@ def resolve_condition(args: argparse.Namespace, manifest: Manifest,
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["verify"]:
+        from .verify import verify_cli
+        return verify_cli(sys.argv[2:])
+
     # `adb-runner credentials …` manages the local credential store; it is a standalone
     # management command, not a run, so it needs no manifest/experiment env.
     if sys.argv[1:2] == ["credentials"]:
@@ -216,7 +222,12 @@ def main() -> int:
     # alone feeds the condition hash, so editing one experiment subtree never shifts
     # another's. ADB_FETCH_REF is the fetchable repo rev, recorded for reproducibility.
     source = os.environ.get("ADB_SOURCE") or "dirty:unknown"
-    fetch_ref = os.environ.get("ADB_FETCH_REF") or "dirty:unknown"
+    try:
+        fetch_ref = validate_fetch_ref(os.environ.get("ADB_FETCH_REF"))
+    except ValueError:
+        _log("fetch_ref must be a valid reference without userinfo")
+        return 2
+    tree_hash = os.environ.get("ADB_TREE_HASH") or None
 
     if args.describe:
         print(json.dumps(manifest, indent=2, sort_keys=True))
@@ -289,8 +300,8 @@ def main() -> int:
                 _log(f"[{abbrev(cond['cid'])} r{replicate}] provisioning failed: {exc}")
                 counts["failed"] += 1
                 continue
-            run_id = ulid()
-            store = RunStore(home, cond["cid"], run_id)
+            run_id = new_run_id()
+            store = RunStore(home, cond["cid"], run_id, experiment=manifest["name"])
             label = f"[{abbrev(cond['cid'])} r{replicate}]"
             # two aligned fields, the clickable one first: the URL is the thing a reader
             # wants at the moment a run starts, and it's underlined/cyan so it reads as a
@@ -311,26 +322,19 @@ def main() -> int:
             result = execute_run(
                 program=program,
                 manifest=manifest,
-                spec_params=cond["params"],
-                realized_params=realized,
+                params=realized,
                 condition_id=cond["cid"],
                 source=source,
                 fetch_ref=fetch_ref,
-                base_seed=base_seed,
-                replicates=replicates,
+                tree_hash=tree_hash,
                 seed=run_seed,
-                replicate=replicate,
                 store=store,
                 run_id=run_id,
                 on_event=on_event,
                 credential_env=credential_env,
             )
             counts[result.state] = counts.get(result.state, 0) + 1
-            summary = " ".join(f"{k}={v}" for k, v in result.summary.items())
-            _log(f"{label} {result.run_id} {result.state} "
-                 f"{summary} ({result.duration_s:.1f}s, "
-                 f"{result.usage['llm_calls']} calls, "
-                 f"{result.usage['input_tokens']}+{result.usage['output_tokens']} tok) "
+            _log(f"{label} {result.run_id} {result.state} ({result.duration_s:.1f}s) "
                  f"— {viewer}/#/runs/{result.run_id}")
             if result.state == "interrupted":
                 break

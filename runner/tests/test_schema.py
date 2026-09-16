@@ -1,6 +1,7 @@
 """Defaults merge + validation."""
 
 import pytest
+import json
 
 from adb_runner.schema import (
     MissingParamsError,
@@ -9,9 +10,28 @@ from adb_runner.schema import (
     validate_realized,
     validate_spec,
     validate_value,
+    load_manifest,
 )
 
 PLAYERS = [{"model": "m", "role": "w"}, {"model": "m", "role": "v"}]
+
+
+def test_payload_schema_accepts_an_export_path(tmp_path):
+    schema = {"version": 0, "models": "test:Payload", "path": "/nix/store/export/schema.json"}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"name": "test", "params": {}, "schema": schema}))
+    assert load_manifest(path)["schema"] == schema
+
+
+@pytest.mark.parametrize("schema", [
+    {"version": -1, "models": "m:Payload"}, {"version": True, "models": "m:Payload"},
+    {"version": 0, "models": "not-a-pointer"}, {"version": 0}, None,
+])
+def test_invalid_payload_schema_is_rejected(tmp_path, schema):
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"name": "t", "params": {}, "schema": schema}))
+    with pytest.raises(SchemaError, match="schema"):
+        load_manifest(path)
 
 MANIFEST = {
     "name": "t",

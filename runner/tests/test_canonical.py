@@ -13,7 +13,7 @@ GOLDEN_PARAMS = {
     "max_days": 10,
 }
 GOLDEN_SOURCE = "github:antimemetics-institute/adb/0000000000000000000000000000000000000000"
-GOLDEN_HASH = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685ceeea0bf4a1186a0d8da9809"
+GOLDEN_HASH = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685"
 
 
 def test_golden_vector():
@@ -41,7 +41,7 @@ def test_jcs_conflates_int_and_equal_float():
 
 def test_unicode_params_hash_stably():
     a = condition_id("e", "s", {"goal": "räv över ån — 狼"})
-    assert len(a) == 64 and a == condition_id("e", "s", {"goal": "räv över ån — 狼"})
+    assert len(a) == 40 and a == condition_id("e", "s", {"goal": "räv över ån — 狼"})
 
 
 def test_abbrev():

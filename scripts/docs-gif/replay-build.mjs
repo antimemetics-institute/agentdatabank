@@ -12,9 +12,12 @@ if (!experiment) throw new Error('Expected nix-build arguments ending exec.EXPER
 const source = resolve(process.env.ADB_DOCS_REPLAY_RUN || '');
 if (!process.env.ADB_DOCS_REPLAY_RUN || !process.env.ADB_DOCS_REPLAY_DIR)
   throw new Error('Set ADB_DOCS_REPLAY_RUN and ADB_DOCS_REPLAY_DIR');
-const meta = JSON.parse(readFileSync(join(source, 'run.json'), 'utf8'));
-if (meta.experiment !== experiment || meta.state !== 'completed')
+const records = readFileSync(join(source, 'events.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+const start = records.find(r => r.event.type === 'run.start');
+const end = records.findLast(r => r.event.type === 'run.end');
+if (start?.experiment !== experiment || end?.event.state !== 'completed')
   throw new Error('Replay must select the captured experiment and a completed run');
+const meta = { condition: start.event.condition, run: start.run };
 const speed = Number(process.env.ADB_DOCS_REPLAY_SPEED || '1');
 if (!Number.isFinite(speed) || speed <= 0) throw new Error('Replay speed must be positive and finite');
 const build = attr => execFileSync('nix-build', [...args, attr], {

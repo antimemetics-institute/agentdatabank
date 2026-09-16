@@ -2,11 +2,11 @@
 
 `replay-build.mjs` is a recording-only `ADB_WORKER_BUILD` hook. Configure:
 
-- `ADB_DOCS_REPLAY_RUN`: absolute path to a completed saved run containing `run.json`, `events-*.jsonl`, and referenced artifacts.
+- `ADB_DOCS_REPLAY_RUN`: absolute path to a completed saved run containing `run.json`, `events.jsonl`, and referenced artifacts.
 - `ADB_DOCS_REPLAY_DIR`: isolated directory for generated wrappers and private manifests.
 - `ADB_DOCS_REPLAY_SPEED`: positive playback multiplier (default `1`).
 
-The hook accepts the worker's ordinary `nix-build` arguments ending in `exec.EXPERIMENT` and prints an executable path. It builds only the manifests and normal ADB runner, never the experiment runtime. The returned executable accepts normal runner arguments. Parameters must match the capture's `realized_params` exactly.
+The hook accepts the worker's ordinary `nix-build` arguments ending in `exec.EXPERIMENT` and prints an executable path. It builds only the manifests and normal ADB runner, never the experiment runtime. The returned executable accepts normal runner arguments. Parameters must match the capture's `params` exactly.
 
 The private execution manifest changes `llm` parameter kinds to `str` and the wrapper discards `--profile` selections. This bypasses credential provisioning only for recording, retaining captured model values in run metadata. No model SDK, model installation, or credentials are needed. The replay adapter uses Python's standard library and does not execute experiment code or make network calls. Building the runner/manifests can use Nix's normal caches/network.
 

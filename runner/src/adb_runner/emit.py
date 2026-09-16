@@ -1,7 +1,7 @@
 """adb-emit: the event vocabulary made executable (docs/book/src/reference/events.md).
 
-    adb-emit message --from agent-2 --channel town --content "hi" --meta '{"day": 2}'
-    adb-emit metric --name winner --value village
+    adb-emit custom --kind govsim.record --data '{"action":"utterance","agent_id":"agent-2","utterance":"hi"}'
+    adb-emit result --name winner --value village
     adb-emit llm-call --agent a --model mock/x < call.json
     adb-emit schema [TYPE]
 
@@ -32,58 +32,39 @@ from adb_events import (
 
 # CLI surface per type: (flag-name, field-name, kind) where kind ∈
 # str | json (value parsed as JSON) | jsonish (JSON if it parses, else raw string)
-# | strlist (comma-separated). Required-ness is the model's job, not argparse's.
+# Required-ness is the model's job, not argparse's.
 FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "status": [("--detail", "detail", "str")],
     "log": [("--message", "message", "str"), ("--level", "level", "str")],
-    "metric": [
+    "result": [
         ("--name", "name", "str"),
         ("--value", "value", "jsonish"),
-        ("--step", "step", "json"),
-        ("--unit", "unit", "str"),
-    ],
-    "message": [
-        ("--from", "from", "str"),
-        ("--content", "content", "str"),
-        ("--channel", "channel", "str"),
-        ("--to", "to", "str"),
-        ("--visible-to", "visible_to", "strlist"),
-        ("--meta", "meta", "json"),
     ],
     "llm-call": [
         ("--agent", "agent", "str"),
         ("--model", "model", "str"),
-        ("--latency-ms", "latency_ms", "json"),
-        ("--request", "request", "json"),
-        ("--response", "response", "json"),
-        ("--usage", "usage", "json"),
-        ("--error", "error", "json"),
-    ],
-    "agent-event": [
-        ("--agent", "agent", "str"),
-        ("--kind", "kind", "str"),
-        ("--data", "data", "json"),
+        ("--input", "input", "json"),
+        ("--output", "output", "json"),
+        ("--params", "params", "json"),
+        ("--tools", "tools", "json"),
+        ("--tool-choice", "tool_choice", "jsonish"),
+        ("--call", "call", "json"),
+        ("--working-time", "working_time", "json"),
+        ("--error", "error", "str"),
     ],
     "custom": [("--kind", "kind", "str"), ("--data", "data", "json")],
-    "instance": [("--agent", "agent", "str"), ("--data", "data", "json")],
-    "artifact": [
-        ("--name", "name", "str"),
-        ("--path", "path", "str"),
-        ("--media-type", "media_type", "str"),
-        ("--bytes", "bytes", "json"),
-    ],
 }
 
 # subcommand name → wire type name
 WIRE_TYPE = {name: name for name in FIELDS}
-WIRE_TYPE.update({"llm-call": "llm.call", "agent-event": "agent.event"})
+WIRE_TYPE.update({
+    "llm-call": "llm.call",
+})
 
 
 def _parse(kind: str, raw: str, flag: str):
     if kind == "str":
         return raw
-    if kind == "strlist":
-        return [s.strip() for s in raw.split(",") if s.strip()]
     if kind == "jsonish":
         try:
             return json.loads(raw)
@@ -146,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         if raw is not None:
             body[field] = _parse(kind, raw, flag)
 
-    # llm-call: the bulky parts (request/response/usage/error) may arrive as one JSON
+    # llm-call: the bulky parts (input/output/tools/call) may arrive as one JSON
     # object on stdin instead of flags — flags win field-by-field if both are given.
     if args.command == "llm-call" and not sys.stdin.isatty():
         stdin_raw = sys.stdin.read().strip()

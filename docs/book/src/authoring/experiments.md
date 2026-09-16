@@ -28,7 +28,7 @@ let
     runtimeInputs = [ jq adb-runner ]; # adb-runner supplies the adb-emit CLI
     text = ''
       count="$(jq -er '.count')"
-      adb-emit metric --name count --value "$count"
+      adb-emit result --name count --value "$count"
     '';
   };
 in
@@ -44,23 +44,24 @@ in
         initial = 3;
       };
     };
-    results = {
-      count = {
+    results = [
+      {
+        name = "count";
         type = adb.types.int;
         label = "Recorded count";
         description = "The supplied count echoed by the program.";
         details = "This checks the integration, not model performance.";
-      };
-    };
+      }
+    ];
   };
 }
 ```
 
-`params` supplies both validation and the local form. `initial` prefills the form and suggested command; users must still bind the parameter explicitly when running from the CLI. `results` declares possible summary metrics and explains their meaning. See [manifest reference](../reference/manifest.md#result-declarations) for the result fields and bare-type shorthand.
+`params` supplies both validation and the local form. `initial` prefills the form and suggested command; users must still bind the parameter explicitly when running from the CLI. `results` declares possible summary metrics and explains their meaning. See [manifest reference](../reference/manifest.md#result-declarations) for the result fields. Declaration list order sets the summary and definitions order.
 
 Give each result a readable `label` and a short, plain-language `description` explaining what the value means. Use optional `details` for the calculation, aggregation and interpretation caveats. Add `unit` when useful. Explain what a boolean means in the experiment; the viewer shows neutral Yes/No values, not automatic success or failure. Distinguish observed progress from configured limits, and explain special cases such as an equality score of 1 when every agent gained zero.
 
-These definitions appear in the collapsible **Results this experiment records** section before launch. On a run, each Results row shows its value and short description; expand the row to read its details. They describe possible outputs, not required outputs: an absent metric is missing, not zero. Undeclared emitted metrics remain visible with neutral formatting. The runner saves the definitions in `run.json` and `run.start` as `result_definitions`, so readers retain the explanation used when the run began.
+These definitions appear in the collapsible **Results this experiment records** section before launch. On a run, each Results row shows its value and short description; expand the row to read its details. They describe possible outputs, not required outputs: an absent metric is missing, not zero. Undeclared results remain in the stream, warn, and are excluded from the summary; repeated declared results warn and use the last value. The runner saves the definitions in `run.json` and `run.start` as `result_definitions`, so readers retain the explanation used when the run began.
 
 `src` declares the experiment's identity sources. Include code, configuration and dependency locks that determine this experiment's behavior. A path is usual; use a list when the experiment depends on several source trees. Changes anywhere in those declared inputs can change the condition identity, including a README inside a declared directory. Development artifacts such as `.venv` are filtered out. The [identity reference](../reference/layout.md#how-is-a-condition-id-calculated) gives the exact rule.
 
@@ -78,7 +79,50 @@ For a larger program, put the implementation beside `package.nix` and have the a
 
 Both emitter APIs handle validation and transport. Do not write a socket client in an experiment.
 
-Add [standard events](../reference/events.md) for the evidence a reader needs: messages, model calls, instance outcomes and metrics. Preserve useful native output as artifacts, write files under `ADB_RUN_DIR/artifacts/`, and emit artifact pointers. Read `ADB_SEED` and pass it to supported random generators or backend settings. The [process protocol](../reference/protocol.md) defines the boundary in full.
+Add [standard events](../reference/events.md) for the evidence a reader needs: model calls and results. Use custom events for messages and instance outcomes. Preserve useful native output as artifacts, write files under `ADB_RUN_DIR/artifacts/`, and emit pointers under an experiment-specific custom kind. Read `ADB_SEED` and pass it to supported random generators or backend settings. The [process protocol](../reference/protocol.md) defines the boundary in full.
+
+## Instrumenting an experiment
+
+Enumerate everything upstream writes before writing the translator: logs, per-agent
+files, checkpoints and auxiliary data. GovSim's [ingestion module](../../../../experiments/govsim/govsim_adapter/upstream.py)
+captures the environment log and each persona's memory nodes, including checkpoints
+left by a failed simulation.
+
+Keep foreign rows as open JSON dictionaries; never narrow them to the fields the
+viewer currently uses. GovSim's [native row models](../../../../experiments/govsim/govsim_adapter/models.py)
+retain unknown keys, nested values and explicit nulls while identifying known actions
+with typed custom kinds.
+
+Mark each ingested source before its records with its relative path, byte size,
+SHA256 of the original bytes and emitted record count. GovSim's
+[file markers](../../../../experiments/govsim/govsim_adapter/upstream.py)
+let readers check which checkpoint contributed each sequence of rows.
+
+Leave out only what is recomputable, and state the inputs needed to reproduce it.
+GovSim's [adapter](../../../../experiments/govsim/govsim_adapter/main.py)
+omits embeddings because its recorded node descriptions and the embedder named in
+`govsim.config` reproduce them.
+
+Use upstream's own actor IDs and declare a roster for display labels. GovSim's
+[config render hint](../../../../experiments/govsim/govsim_adapter/models.py)
+maps `persona_N` to the configured name, so even a persona that never speaks has
+a label on its model calls and memory rows.
+
+Attribute model calls to the component that made them. GovSim's
+[logger hook](../../../../experiments/govsim/govsim_adapter/logger.py)
+uses persona IDs for persona calls and `framework/<component>` for framework
+queries, preserving phase and query context as producer metadata.
+
+Declare results and their meanings in the manifest, then calculate and emit them
+in the adapter. GovSim's [result declarations](../../../../experiments/govsim/package.nix)
+set their display order and definitions; its adapter computes the scientific
+quantities. The viewer displays declared results without deriving experiment-specific
+metrics from native rows.
+
+Run the reusable secrets scan on the entire run directory with fake credentials
+seeded into the environment. GovSim's [end-to-end test](../../../../experiments/govsim/tests/test_end_to_end.py)
+checks the stream and every saved file, so a resolved config or raw request cannot
+silently copy those credentials into publishable data.
 
 ## How do I check the integration?
 
@@ -136,13 +180,13 @@ this shows the fixture interface; in an adapter test, replace the direct `emit`
 call with the adapter function being tested:
 
 ```python
-from adb_events import Metric, emit
+from adb_events import Result, emit
 
 
 def test_recorded_score(event_capture):
-    emit(Metric(name="score", value=1))
+    emit(Result(name="score", value=1))
     events = event_capture.read()
-    assert any(e["type"] == "metric" and e["name"] == "score" and e["value"] == 1
+    assert any(e["type"] == "result" and e["name"] == "score" and e["value"] == 1
                for e in events)
 ```
 
