@@ -89,6 +89,6 @@ def requested_model_name(model_id: str) -> str:
 
 
 def served_model_matches(requested: str, served: str) -> bool:
-    """Allow a provider's snapshot suffix when resolving a requested alias."""
+    """Allow case differences and a snapshot suffix when resolving an alias."""
     name = requested_model_name(requested)
-    return bool(name) and served.startswith(name)
+    return bool(name) and served.casefold().startswith(name.casefold())

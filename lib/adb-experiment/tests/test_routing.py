@@ -27,6 +27,7 @@ def test_azure_resolution_requires_both_credentials():
 
 @pytest.mark.parametrize("requested,served,matches", [
     ("azure/gpt-5-nano", "gpt-5-nano-2025-08-07", True),
+    ("azure/DeepSeek-V4-Pro", "deepSEEK-v4-PRO-2026-09", True),
     ("openai/gpt-5-nano", "gpt-5-mini", False),
     ("openai-api/local/org/model", "org/model-snapshot", True),
     ("openrouter/org/model", "org/model", True),
