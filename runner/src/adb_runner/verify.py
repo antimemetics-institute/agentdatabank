@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from adb_events import Envelope, Json, read_events
-from adb_providers import PROVIDERS
+from adb_providers import PROVIDERS, served_model_matches
 
 from . import credentials
 from .card import derive_card
@@ -29,6 +29,8 @@ class VerificationError(ValueError):
 class Verification:
     records: int
     credential_values: int
+    model_mismatches: tuple[tuple[str, str], ...]
+    max_tokens_stops: int
 
 
 # Invoke only the current build's interpreter and declared union, never code paths
@@ -165,7 +167,13 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
     for section in expected:
         if json.dumps(card[section], sort_keys=True) != json.dumps(expected[section], sort_keys=True):
             raise VerificationError(f"run.json.{section} differs from the stream projection")
-    return Verification(len(records), len({value for value in values.values() if value}))
+    calls = [record.event for record in records if record.event.type == "llm.call"]
+    mismatches = {(call.model, call.output.model) for call in calls
+                  if (call.output.model or call.output.choices)
+                  and not served_model_matches(call.model, call.output.model)}
+    stops = sum(any(choice.stop_reason == "max_tokens" for choice in call.output.choices) for call in calls)
+    return Verification(len(records), len({value for value in values.values() if value}),
+                        tuple(sorted(mismatches)), stops)
 
 
 def verify_cli(argv: list[str]) -> int:
@@ -184,6 +192,10 @@ def verify_cli(argv: list[str]) -> int:
         # without letting a dependency traceback print inputs or credential values.
         print("verify: FAIL: audit could not complete; check the run, manifest and credential store", file=sys.stderr)
         return 1
-    print(f"verify: PASS: {result.records} records; experiment union, secrets scan "
+    for requested, served in result.model_mismatches:
+        print(f"verify: WARN: served model mismatch: requested {requested!r}, served {served!r}", file=sys.stderr)
+    print(f"verify: max_tokens stops: {result.max_tokens_stops} llm.call records")
+    state = "FAIL" if result.model_mismatches else "PASS"
+    print(f"verify: {state}: {result.records} records; experiment union, secrets scan "
           f"({result.credential_values} known credential values), and card match")
-    return 0
+    return int(bool(result.model_mismatches))

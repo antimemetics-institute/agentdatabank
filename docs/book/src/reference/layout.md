@@ -79,7 +79,7 @@ its copies with `run.start` and recompute its derived block with `read_events`.
 | `lifecycle` | Runner-owned `state`; `started_at` is the start record's capture timestamp. At termination, `finished_at` is the end record's timestamp, and `duration_s` and `exit_code` copy `run.end`. |
 | `provenance` | `source`, optional `fetch_ref` and `tree_hash`, and `runtime`, copied from `run.start`. |
 | `definitions` | `results`: the ordered `run.start.result_definitions` list. |
-| `derived` | Results, usage, counts, latest status and last included event position, computed from written records. |
+| `derived` | Results, served models, usage, counts, latest status and last included event position, computed from written records. |
 
 The seed is the derived run seed. The launcher uses a replicate ordinal to derive
 it, but does not write that ordinal into the run. Persisted batch facts belong
@@ -91,6 +91,10 @@ only under `/nix/store/`; endpoint values contain only `scheme://host[:port]`,
 never userinfo, paths, query or fragment. A dirty or otherwise unpinned tree has
 no `fetch_ref`. `tree_hash` is included only where the launcher can compute it;
 absence carries no meaning. These copies do not include source code or build outputs.
+
+`derived.served_models` is the sorted set of non-empty `llm.call.output.model`
+values returned by the endpoints. The runs list shows these beside the requested
+model when they differ; they do not change the condition identity.
 
 `derived.results` is a map of the last result value per declared name. Undeclared
 results stay in the stream but do not enter the map. `derived.usage` contains

@@ -47,7 +47,7 @@ def manifest():
     return json.loads((Path(catalog) / "govsim.json").read_text())
 
 
-def run_mock(tmp_path, manifest, *, setup="", credential_env=None):
+def run_mock(tmp_path, manifest, *, setup="", credential_env=None, expected_state="completed"):
     upstream = os.environ.get("GOVSIM_UPSTREAM")
     if not upstream:
         pytest.skip("requires pinned upstream checkout (GOVSIM_UPSTREAM)")
@@ -75,8 +75,36 @@ def run_mock(tmp_path, manifest, *, setup="", credential_env=None):
     )
     wire = [json.loads(line) for path in sorted(store.dir.glob("events.jsonl"))
             for line in path.read_text().splitlines()]
-    assert result.state == "completed", [r["event"] for r in wire if r["event"]["type"] == "stderr"]
+    assert result.state == expected_state, [r["event"] for r in wire if r["event"]["type"] == "stderr"]
     return store, wire
+
+
+def test_served_model_mismatch_fails_real_upstream_instead_of_using_default_answers(tmp_path, manifest):
+    # Replace only the network. The real upstream wrapper normally catches model
+    # exceptions and supplies default answers; a routing error must stop this run.
+    setup = '''
+from adb_experiment.llm import ChatClient
+from openai.types.chat import ChatCompletion
+def wrong_model(self, kw):
+    self.is_mock = False
+    self._request = lambda kw: ChatCompletion.model_validate({
+        "id": "mismatch", "object": "chat.completion", "created": 0,
+        "model": "wrong-model", "choices": [{"index": 0, "finish_reason": "stop",
+            "message": {"role": "assistant", "content": "5"}}],
+    })
+    return self._create(**kw)
+ChatClient._mock_create = wrong_model
+'''
+    _, wire = run_mock(tmp_path, manifest, setup=setup, expected_state="failed")
+    calls = [r for r in wire if r["event"]["type"] == "llm.call"]
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["event"]["output"]["model"] == "wrong-model"
+    assert call["event"]["call"]["response"]["model"] == "wrong-model"
+    assert wire[call["seq"] + 1]["event"]["type"] == "log"
+    assert wire[call["seq"] + 1]["event"]["level"] == "error"
+    assert "mock/model" in wire[call["seq"] + 1]["event"]["message"]
+    assert "wrong-model" in wire[call["seq"] + 1]["event"]["message"]
 
 
 @pytest.fixture(scope="module")

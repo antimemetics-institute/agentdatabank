@@ -18,7 +18,7 @@ def client_and_reply():
             "id": "call-123",
             "object": "chat.completion",
             "created": 123,
-            "model": "resolved-model",
+            "model": "alias-2026-09-16",
             "system_fingerprint": "fp_123",
             "choices": [
                 {
@@ -63,7 +63,7 @@ def test_capture_matches_effective_sdk_request_and_original_response(event_captu
     assert event["call"]["request"]["max_completion_tokens"] == 80
     assert event["call"]["request"]["seed"] == 17
     assert event["call"]["response"] == original
-    assert event["output"]["model"] == "resolved-model"
+    assert event["output"]["model"] == "alias-2026-09-16"
     assert event["call"]["response"]["system_fingerprint"] == "fp_123"
     assert event["output"]["choices"][0]["message"]["content"] == original["choices"][0]["message"]["content"]
     assert result.choices[0].message.content == "answer"
@@ -148,6 +148,7 @@ def test_stripping_flag_describes_returned_text_without_changing_evidence(event_
 @pytest.mark.parametrize("thinking", [None, True, False])
 def test_qwen_reasoning_settings_are_caller_owned(event_capture, monkeypatch, thinking):
     _, reply = client_and_reply()
+    reply.model = "Qwen3-test"
     sent = {}
 
     def create(**kw):

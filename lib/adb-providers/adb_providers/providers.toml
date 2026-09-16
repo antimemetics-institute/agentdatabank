@@ -63,3 +63,9 @@ base_url = { name = "OPENROUTER_BASE_URL", default = "https://openrouter.ai/api/
 # so it has no default: setup and runtime both require an explicit value.
 api_key = { name = "AZUREAI_API_KEY" }
 base_url = { name = "AZUREAI_BASE_URL" }
+
+[providers.azure]
+# Azure OpenAI v1: https://RESOURCE.openai.azure.com/openai/v1/.
+# The deployment must have the model's name; deployment overrides are deferred.
+api_key = { name = "AZURE_OPENAI_API_KEY" }
+base_url = { name = "AZURE_OPENAI_BASE_URL" }

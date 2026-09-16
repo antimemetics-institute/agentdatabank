@@ -9,6 +9,8 @@ import pytest
 
 from adb_runner import cli, credentials
 from adb_runner.verify import VerificationError, verify_run
+from adb_events import LLMCall, ModelOutput, ChatCompletionChoice, ChatMessageAssistant, read_events
+from adb_runner.card import derive_card
 from test_protocol import MANIFEST, run_fixture
 
 
@@ -68,6 +70,31 @@ def rewrite_stream(directory, change):
     records = [json.loads(line) for line in path.read_text().splitlines()]
     change(records)
     path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+@pytest.mark.parametrize("mismatch", [False, True])
+def test_all_served_models_checked_once_per_pair_and_truncated_calls_counted(saved, monkeypatch, capsys, mismatch):
+    directory, manifest = saved
+    choice = ChatCompletionChoice(message=ChatMessageAssistant(content="partial"), stop_reason="max_tokens")
+    calls = [LLMCall(model="azure/gpt-5-nano", input=[], output=ModelOutput(model="gpt-5-nano-2025-08-07"))]
+    for served in (["gpt-5-mini", "gpt-5-mini", "gpt-4.1"] if mismatch else ["gpt-5-nano"]):
+        calls.append(LLMCall(model="azure/gpt-5-nano", input=[], output=ModelOutput(model=served, choices=[choice, choice])))
+
+    def insert(rows):
+        rows[-1:-1] = [{**rows[0], "event": call.model_dump(mode="json", exclude_none=True)} for call in calls]
+        for seq, row in enumerate(rows):
+            row["seq"] = seq
+    rewrite_stream(directory, insert)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+    result = verify_run(directory, manifest=manifest, environment={})
+    assert result.max_tokens_stops == len(calls) - 1  # once per call, not per choice
+    expected = (("azure/gpt-5-nano", "gpt-4.1"), ("azure/gpt-5-nano", "gpt-5-mini")) if mismatch else ()
+    assert result.model_mismatches == expected
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    assert cli.main() == int(mismatch)
+    output = capsys.readouterr()
+    assert f"max_tokens stops: {len(calls) - 1} llm.call records" in output.out
+    assert output.err.count("WARN: served model mismatch") == (2 if mismatch else 0)
 
 
 def test_custom_payload_is_checked_against_experiment_union(saved):

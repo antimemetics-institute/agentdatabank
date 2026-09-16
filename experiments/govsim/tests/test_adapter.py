@@ -250,7 +250,7 @@ def _reply(text):
             "id": "test",
             "object": "chat.completion",
             "created": 0,
-            "model": "test-model",
+            "model": "model-test-snapshot",
             "choices": [
                 {
                     "index": 0,

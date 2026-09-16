@@ -34,6 +34,8 @@ export function fixtureCard(events: Ev[]): RunCard {
     lifecycle: { state: end?.event.state ?? "running", started_at: first.ts,
       ...(end ? { finished_at: end.ts, duration_s: end.event.duration_s ?? 0, exit_code: end.event.exit_code ?? 0 } : {}) },
     derived: { results: runSummary(events, start.result_definitions),
+      served_models: [...new Set(events.filter(e => e.event.type === "llm.call")
+        .map(e => e.event.output?.model).filter((model): model is string => typeof model === "string" && !!model))].sort(),
       usage: { input_tokens: usage.input, output_tokens: usage.output },
       counts: { llm_calls: usage.calls, failed_calls: usage.failed,
         by_kind: Object.fromEntries(byKind), llm_calls_by_agent: Object.fromEntries(callsByAgent) },

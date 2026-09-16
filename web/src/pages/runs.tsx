@@ -98,7 +98,10 @@ function UnreadableRow({ run, reason, columns }: { run: RunMeta; reason: string;
 
 function RunRow({ run: r, varied, hideExperiment }: { run: RunMeta; varied: string[]; hideExperiment: boolean }) {
   const p = paramsOf(r);
-  const vk = varied;
+  const requested = typeof p?.model === "string" ? p.model.replace(/^[^/]+\//, "") : undefined;
+  const served = Array.isArray(r.derived?.served_models) ? r.derived.served_models : [];
+  const different = served.filter((model) => model !== requested);
+  const vk = [...new Set([...varied, ...(requested && different.length ? ["model"] : [])])];
   const allParams = p
     ? Object.entries(p).map(([k, v]) => `${k}=${fmtVal(v)}`).join("\n")
     : "";
@@ -121,9 +124,12 @@ function RunRow({ run: r, varied, hideExperiment }: { run: RunMeta; varied: stri
         ) : vk.length ? (
           <span className="flex flex-wrap gap-1">
             {vk.map((k) => <ParamChip key={k} name={k} value={p[k]} />)}
+            {different.length > 0 && <span className="text-xs text-muted-foreground" title="Model names returned by the endpoint">
+              → served: {different.join(", ")}
+            </span>}
           </span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">{different.length ? `served: ${different.join(", ")}` : "—"}</span>
         )}
       </TableCell>
       <TableCell><StateBadge state={displayState(r)} /></TableCell>

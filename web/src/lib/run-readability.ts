@@ -69,6 +69,8 @@ export function cardReason(value: unknown): string | null {
   if (!Array.isArray(card.definitions.results)) return "run.json: definitions.results must be an array";
   const derived = card.derived;
   if (!object(derived.results) || !object(derived.usage) || !object(derived.counts)) return "run.json: invalid derived block";
+  if (!Array.isArray(derived.served_models) || !derived.served_models.every((model) => typeof model === "string"))
+    return "run.json: derived.served_models must be an array of strings";
   const counts = derived.counts;
   if (!object(counts.by_kind) || !object(counts.llm_calls_by_agent)) return "run.json: invalid derived counts";
   for (const value of [counts.llm_calls, counts.failed_calls,

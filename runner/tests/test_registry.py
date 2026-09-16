@@ -15,3 +15,11 @@ def test_registry_shape():
     assert all(p.api_key.required for n, p in PROVIDERS.items() if n != "openai")
     # and its base default is a real runtime fallback, like the OpenAI SDK's own
     assert PROVIDERS["openai"].base_url.default == "https://api.openai.com/v1"
+
+
+def test_azure_requires_resource_endpoint_and_key():
+    azure = PROVIDERS["azure"]
+    assert azure.api_key.name == "AZURE_OPENAI_API_KEY"
+    assert azure.api_key.required
+    assert azure.base_url.name == "AZURE_OPENAI_BASE_URL"
+    assert azure.base_url.default == ""

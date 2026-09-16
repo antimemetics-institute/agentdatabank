@@ -17,7 +17,7 @@ class CardProjection:
         self.card: dict[str, Any] = {}
         self.declared: set[str] = set()
         self.derived: dict[str, Any] = {
-            "results": {}, "usage": {"input_tokens": 0, "output_tokens": 0},
+            "results": {}, "served_models": [], "usage": {"input_tokens": 0, "output_tokens": 0},
             "counts": {"llm_calls": 0, "failed_calls": 0,
                        "by_kind": {}, "llm_calls_by_agent": {}},
         }
@@ -48,6 +48,10 @@ class CardProjection:
             if event["name"] in self.declared:
                 self.derived["results"][event["name"]] = event["value"]
         elif tag == "llm.call":
+            served = event.get("output", {}).get("model")
+            if served and served not in self.derived["served_models"]:
+                self.derived["served_models"].append(served)
+                self.derived["served_models"].sort()
             counts["llm_calls"] += 1
             counts["failed_calls"] += int(event.get("error") is not None)
             if isinstance(agent := event.get("agent"), str):

@@ -6,6 +6,9 @@ and validates the naming conventions; the roles themselves are structural, so th
 is nothing to infer. Zero dependencies, by design: the runner and the chat helper
 both consume this without dragging anything else in, and repo-side scripts that
 shouldn't take a dependency at all read the TOML directly.
+
+Model-name parsing and the served-model alias rule also live here so clients and
+saved-run audits use the same interpretation of routing prefixes.
 """
 
 from __future__ import annotations
@@ -72,3 +75,20 @@ PROVIDERS, MOCK_PREFIXES = _parse(
     (Path(__file__).parent / "providers.toml").read_text()
 )
 _validate(PROVIDERS, MOCK_PREFIXES)
+
+
+def requested_model_name(model_id: str) -> str:
+    """Remove routing prefixes, preserving slashes within the model name.
+
+    Inspect's openai-api/SERVICE/MODEL form has two routing components.
+    Bare names are already model names.
+    """
+    if model_id.startswith("openai-api/"):
+        return model_id.split("/", 2)[-1]
+    return model_id.partition("/")[2] if "/" in model_id else model_id
+
+
+def served_model_matches(requested: str, served: str) -> bool:
+    """Allow a provider's snapshot suffix when resolving a requested alias."""
+    name = requested_model_name(requested)
+    return bool(name) and served.startswith(name)

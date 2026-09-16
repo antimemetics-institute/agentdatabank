@@ -7,7 +7,7 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
 
   * the model id's provider prefix picks the endpoint and credential set
     (:mod:`adb_experiment.providers` — openai, anthropic, google, groq, mistral, grok,
-    openrouter, azureai; each an OpenAI-compatible mount), and ``mock/...``
+    openrouter, azure, azureai; each an OpenAI-compatible mount), and ``mock/...``
     runs keyless and offline with a deterministic responder — the smoke/CI path,
     uniform across experiments (the runner's mock convention);
   * every call emits one ``llm.call`` event — the verbatim reply, token usage, and
@@ -25,6 +25,7 @@ module so the base package adds no requirement.
 from __future__ import annotations
 
 from copy import deepcopy
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -36,7 +37,8 @@ from collections.abc import Callable
 from typing import Any, cast
 from pydantic import JsonValue
 
-from adb_events import LLMCall, emit
+from adb_events import LLMCall, Log, emit
+from adb_providers import served_model_matches
 from adb_events.inspect_chat import (
     ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageTool,
     ChatMessageUser, Content, ContentAudio, ContentData, ContentDocument,
@@ -186,6 +188,14 @@ def _stop_reason(value: str | None) -> StopReason:
         case _: return "unknown"
 
 
+class ServedModelMismatch(SystemExit):
+    """Fatal routing error, deliberately outside harnesses' Exception fallbacks.
+
+    Continuing with a default answer would conceal that this condition ran the
+    wrong model. The original response and an error log are emitted before exit.
+    """
+
+
 class ChatClient:
     """See module docstring. `mock_responder` (messages -> str) customizes the mock
     backend's reply; the default picks deterministically from a neutral line bank."""
@@ -206,6 +216,9 @@ class ChatClient:
         self.metadata: dict[str, JsonValue] = deepcopy(metadata or {})
         self.n_calls = 0
         self._count_lock = threading.Lock()
+        self._model_lock = threading.Lock()
+        self._model_checked = False
+        self._retry_count: ContextVar[int] = ContextVar("http_retries", default=0)
         self._temperature = temperature
         self._seed = seed
         self._max_tokens = max_tokens
@@ -219,12 +232,21 @@ class ChatClient:
             self._request = self._mock_create  # unreached (_create short-circuits)
         else:
             import openai  # the [llm] extra; only this module needs it
+            import httpx
 
             endpoint = resolve(model_id)  # ValueError with the fix in the message
             self.served_model = endpoint.served_model
             self.base_url = endpoint.base_url
-            sdk = openai.OpenAI(api_key=endpoint.api_key,
-                                base_url=endpoint.base_url)
+            def count_retry(response: httpx.Response) -> None:
+                if response.status_code == 429 or 500 <= response.status_code < 600:
+                    self._retry_count.set(self._retry_count.get() + 1)
+
+            sdk = openai.OpenAI(
+                api_key=endpoint.api_key, base_url=endpoint.base_url, max_retries=8,
+                # Preserve SDK timeout/connection defaults. Context-local counts
+                # keep overlapping calls independent, including failed calls.
+                http_client=openai.DefaultHttpxClient(event_hooks={"response": [count_retry]}),
+            )
 
             # closed over, so _create never handles an Optional client; a def (not a
             # lambda) so the Any return is declared rather than inferred-unknown
@@ -259,7 +281,14 @@ class ChatClient:
         event = self._event(kw)
         started = time.monotonic()
         try:
-            response = self._request(kw)
+            token = self._retry_count.set(0)
+            try:
+                response = self._request(kw)
+            finally:
+                retries = self._retry_count.get()
+                self._retry_count.reset(token)
+                if retries:
+                    event.metadata = {**(event.metadata or {}), "adb_experiment.retries": retries}
         except Exception as exc:
             event.error = str(exc)
             event.working_time = time.monotonic() - started
@@ -298,7 +327,18 @@ class ChatClient:
             returned_text = strip_think(original_text)
             if returned_text != original_text:
                 event.metadata = {**(event.metadata or {}), "adb_experiment.returned_text_stripped": True}
-        self._emit(event)
+        # Check the first successful response for each client/model in the run.
+        # The verifier checks every recorded call, including later alias drift.
+        # Serialize capture with the check so overlapping responses cannot race
+        # to mark the model checked between another call's emission and check.
+        with self._model_lock:
+            self._emit(event)
+            if not self._model_checked:
+                if not served_model_matches(self.model_id, event.output.model):
+                    message = f"Served model mismatch: requested {self.model_id!r}, served {event.output.model!r}"
+                    emit(Log(level="error", message=message))
+                    raise ServedModelMismatch(message)
+                self._model_checked = True
         if response.choices:
             response.choices[0].message.content = returned_text
         return response
@@ -340,7 +380,9 @@ class ChatClient:
             input=[_chat_message(m) for m in snapshot.get("messages", [])],
             tools=[_tool_info(t) for t in snapshot.get("tools", [])],
             tool_choice=_tool_choice(snapshot.get("tool_choice", "auto")),
-            output=ModelOutput(model=self.served_model),
+            # A failed request has no served model; do not substitute the request
+            # name into evidence or the card's observed served-model set.
+            output=ModelOutput(),
             call=ModelCall(request=snapshot),
             metadata={**deepcopy(self.metadata),
                       "adb_experiment.backend": "mock" if self.is_mock else "openai-chat"},

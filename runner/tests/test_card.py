@@ -39,10 +39,10 @@ def test_agent_counts_use_only_model_calls_without_loading_schema(tmp_path):
     script = '''#!/bin/sh
 adb-emit custom --kind t.message --data '{"agent":"a","text":"hi"}'
 adb-emit custom --kind t.message --data '{"agent":"observer","text":"hi"}'
-adb-emit llm-call --model mock/x --agent a --input '[]' --output '{}' </dev/null
+adb-emit llm-call --model mock/x --agent a --input '[]' --output '{"model":"x-z"}' </dev/null
 adb-emit llm-call --model mock/x --agent a --input '[]' --output '{}' --error offline </dev/null
-adb-emit llm-call --model mock/x --agent b --input '[]' --output '{}' </dev/null
-adb-emit llm-call --model mock/x --input '[]' --output '{}' </dev/null
+adb-emit llm-call --model mock/x --agent b --input '[]' --output '{"model":"x-a"}' </dev/null
+adb-emit llm-call --model mock/x --input '[]' --output '{"model":"x-z"}' </dev/null
 '''
     result, _, store = run_fixture(tmp_path, script=script, manifest=manifest)
     assert result.state == "completed"
@@ -52,6 +52,7 @@ adb-emit llm-call --model mock/x --input '[]' --output '{}' </dev/null
     assert derived["counts"]["failed_calls"] == 1
     assert derived["counts"]["llm_calls_by_agent"] == {"a": 2, "b": 1}
     assert derived["counts"]["by_kind"]["t.message"] == 2
+    assert derived["served_models"] == ["x-a", "x-z"]
     assert "by_actor" not in derived["counts"]
 
 

@@ -19,6 +19,7 @@ export interface FullEvent { record: Ev; line: string }
 /** The runner's rebuildable index card, exactly as written in run.json. */
 export interface RunDerived {
   results: Record<string, unknown>;
+  served_models: string[];
   usage: { input_tokens: number; output_tokens: number };
   counts: { llm_calls: number; failed_calls: number;
     by_kind: Record<string, number>; llm_calls_by_agent: Record<string, number> };

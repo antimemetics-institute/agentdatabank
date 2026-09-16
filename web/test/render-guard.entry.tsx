@@ -51,6 +51,16 @@ const hintDefinitions = compileSchemas([sharedSchema, {
 const raw = readFileSync(process.env.FIXTURE!, "utf8"); // absolute path from render-check.mjs
 const events: Ev[] = raw.split("\n").filter(Boolean).map((l) => parseEventLine(l));
 
+const modelRun = fixtureMeta(events);
+modelRun.params = { model: "azure/gpt-5-nano" };
+modelRun.derived!.served_models = ["gpt-5-nano-2025-08-07"];
+const servedList = renderToStaticMarkup(<RunsTable runs={[modelRun]} />);
+assert.ok(servedList.includes("gpt-5-nano") && servedList.includes("served: gpt-5-nano-2025-08-07"),
+  "A single condition still shows the requested model beside its served snapshot");
+modelRun.derived!.served_models = ["gpt-5-nano"];
+assert.ok(!renderToStaticMarkup(<RunsTable runs={[modelRun]} />).includes("served:"),
+  "Matching model names do not add duplicate labels");
+
 const html = renderToStaticMarkup(
   <EventStream review events={events} definitions={govsimDefinitions} state="completed" cid="fixturecid" rid="FIXTURERID" />,
 );

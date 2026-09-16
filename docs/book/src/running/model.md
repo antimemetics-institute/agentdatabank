@@ -58,6 +58,78 @@ catalog. The manifest must match the recorded experiment and schema version;
 its built interpreter imports the declared union. A missing interpreter or union
 fails verification rather than falling back to untyped custom records.
 
+Verification also checks every `llm.call`'s served model against its requested
+name, warns once per distinct mismatch and exits non-zero if any mismatch exists.
+Snapshot suffixes are allowed: `gpt-5-nano-2025-08-07` matches
+`azure/gpt-5-nano`. The shared client checks its first successful response and
+stops a misrouted run after recording the response and an error log. The audit
+reports how many calls stopped with `max_tokens`, counting calls rather than
+completion choices; that count is informational, so inspect truncated replies
+before launching more.
+
+## Azure
+
+Create an Azure OpenAI deployment named **exactly like the requested model**,
+for example `gpt-5-nano`, and use `azure/gpt-5-nano` as the ADB model ID.
+Identity names the model you asked for; the deployment is routing. A deployment
+label in identity would make conditions depend on an arbitrary label. A
+per-model deployment override is deferred until a deployment cannot be renamed.
+
+Configure the profile locally, with the key entered at the hidden prompt:
+
+```sh
+nix run .#adb-runner -- credentials set azure.default
+```
+
+Supply `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_BASE_URL`:
+`https://RESOURCE.openai.azure.com/openai/v1/`. Neither has a default. The runner
+injects these from the selected profile; exporting them in a shell does not
+configure the launcher. Azure's [v1 API](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle)
+uses the ordinary OpenAI client, with the deployment name in `model`.
+
+Start with one round and one replicate, then verify the printed run directory:
+
+```sh
+nix run .#govsim -- --non-interactive --profile azure=default \
+  --set model=azure/gpt-5-nano --set max_rounds=1 --replicates 1 --seed 42 \
+  --set max_tokens=3000 --set reasoning_effort=low \
+  --set temperature=null --set top_p=null --set embedder=hash
+nix run .#adb-runner -- verify /path/to/run
+```
+
+The hash embedder makes this an endpoint audit; choose `mxbai` for the paper's
+embeddings. GovSim's default completion cap stays **8000** for upstream fidelity.
+For `gpt-5-nano` at low reasoning effort, start with **3000** and review the
+audit's `max_tokens` stop count. Reasoning shares the completion budget.
+
+Azure rate limiting estimates prompt tokens plus the requested maximum output,
+even when the reply is shorter. Budget approximately
+`calls/minute × (prompt tokens + max_tokens) × concurrent runs` against the
+deployment's TPM. For example, ten calls/minute, 1000 prompt tokens and a 3000
+cap need about 40,000 TPM per run; three runs need 120,000. Leave headroom for
+estimation and retries, and check RPM too. See [Azure quota management](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/quota).
+
+Launch one runner process per condition and stagger their starts. Audit the first
+run before increasing concurrency; a single launcher runs its replicates
+sequentially. Staggering reduces bursts but does not raise capacity.
+
+Read a 429's message: rate-limit or quota wording points to the deployment's
+allocated TPM/RPM; temporary inability or high-demand wording points to shared
+capacity. A lower `x-ratelimit-limit-tokens` than configured TPM indicates a
+temporary shared-pool reduction. Honor the retry delay; reduce traffic or adjust
+quota for the former, back off for the latter. Low billed usage alone does not
+distinguish them. See [Azure's 429 troubleshooting table](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/quota#understanding-429-throttling-errors-and-what-to-do).
+
+The shared client permits eight SDK retries, with unchanged SDK timeouts. SDK
+attempts are otherwise invisible: one `llm.call` contains the final outcome.
+When nonzero, `metadata["adb_experiment.retries"]` counts HTTP 429 and 5xx
+responses during that call, including the last rejected response when retries
+are exhausted. This is the only record of rate limiting; it also includes server
+errors and excludes connection failures, timeouts and other retryable statuses.
+Intermediate response bodies and headers are not retained. The card's
+`derived.served_models` lists the endpoint-returned names across the run; the
+runs list shows them beside the requested model when they differ.
+
 ## How do I keep the source version?
 
 A run records `source`, the experiment's declared content identity, and `fetch_ref`, a repository reference intended for fetching the source. The reference is omitted when no pinned clean revision is known. The launcher also records `tree_hash`, the packaging tree’s NAR hash, when available for either clean or dirty trees; a hash alone cannot recover unsaved working-tree content. Preserve your working tree separately when running local modifications.
