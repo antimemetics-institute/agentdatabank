@@ -15,6 +15,7 @@ class ConfigData(Model):
     llm: dict[str, JsonValue]
     embedder: str | None = None
     embedder_revision: str | None = None
+    threads: int | None = None
     mix_llm: list[JsonValue]
     seed: int
     debug: bool

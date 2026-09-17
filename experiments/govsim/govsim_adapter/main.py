@@ -62,6 +62,7 @@ class Params(BaseModel):
     max_rounds: int = Field(ge=0)  # 0 = upstream per-experiment value
     model: str         # provider/model; mock/model = keyless offline
     embedder: Literal["hash", "mxbai"]      # hash | mxbai
+    threads: int = Field(default=2, ge=1, strict=True)
     temperature: float | None = Field(ge=0, allow_inf_nan=False)
     top_p: float | None = Field(gt=0, le=1, allow_inf_nan=False)
     max_tokens: int = Field(gt=0)
@@ -107,6 +108,7 @@ def _compose(root: str, params: Params, seed: int):
         f"+experiment.env.seed={seed}",
         f"+embedder={params.embedder}",
         f"+embedder_revision={MXBAI_REVISION if params.embedder == 'mxbai' else 'null'}",
+        f"+threads={params.threads}",
         "debug=true",
     ]
     if params.max_rounds > 0:
@@ -117,6 +119,15 @@ def _compose(root: str, params: Params, seed: int):
 
 
 def run(params: Params) -> None:
+    # Set these before transformers, NumPy, PyTorch or upstream imports initialize
+    # native thread pools. This is per-process and part of condition identity.
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[name] = str(params.threads)
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    import torch
+
+    torch.set_num_threads(params.threads)
+
     # Match the launcher's non-negative 31-bit range for provider seeds and
     # local RNGs; use this same value in cfg.seed, RNGs and ChatClient.
     seed = int(os.environ.get("ADB_SEED", "0")) & 0x7FFFFFFF

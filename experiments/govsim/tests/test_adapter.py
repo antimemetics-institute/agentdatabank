@@ -22,7 +22,8 @@ def params(**overrides):
 
 @pytest.mark.parametrize("override", [dict(max_rounds=-1), dict(max_tokens=0),
     dict(reasoning_effort="none"), dict(top_p=0), dict(top_p=1.1), dict(temperature=float("nan")),
-    dict(embedder="other"), dict(experiment="fish_baseline_concurrent,seed=9")])
+    dict(embedder="other"), dict(threads=0), dict(threads=-1), dict(threads=1.5),
+    dict(threads=True), dict(experiment="fish_baseline_concurrent,seed=9")])
 def test_invalid_params(override):
     with pytest.raises(ValidationError):
         Params(**params(**override))
@@ -33,6 +34,64 @@ def test_embedder_deterministic_normalized():
     assert np.array_equal(a.embed("fish"), b.embed("fish"))
     assert np.linalg.norm(a.embed("fish")) == pytest.approx(1)
     assert not np.array_equal(a.embed("fish"), a.embed_retrieve("fish"))
+
+
+@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
+def test_child_threads_and_pinned_embedder(tmp_path, event_capture):
+    from govsim_adapter.embedder import MXBAI_MODEL, MXBAI_REVISION
+
+    config = tmp_path / "params.json"
+    config.write_text(json.dumps(params(threads=3, embedder="mxbai")))
+    script = '''
+import importlib.abc
+import json
+import os
+import sys
+from govsim_adapter.main import main
+from govsim_adapter.embedder import HashEmbedder
+assert not {"numpy", "torch", "transformers"}.intersection(sys.modules)
+
+class NumericImportGuard(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname in {"numpy", "torch", "transformers"}:
+            for key in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                assert os.environ[key] == "3", key
+            assert os.environ["TOKENIZERS_PARALLELISM"] == "false"
+        return None
+sys.meta_path.insert(0, NumericImportGuard())
+
+# Substitute the download/encoder only, after the import guard has checked the
+# real bootstrap. Exercise the pinned constructor and upstream retrieval method.
+class Encoder:
+    def __init__(self, model, **kwargs):
+        print("ENCODER " + json.dumps({"model": model, **kwargs}))
+    def encode(self, text, **kwargs):
+        return HashEmbedder().embed(text)
+
+import govsim_adapter.embedder as adapter
+original = adapter.make_embedder
+def make_embedder(kind):
+    import sentence_transformers
+    sentence_transformers.SentenceTransformer = Encoder
+    return original(kind)
+adapter.make_embedder = make_embedder
+status = main()
+import torch
+print("THREADS " + str(torch.get_num_threads()))
+raise SystemExit(status)
+'''
+    proc = subprocess.run([sys.executable, "-c", script, str(config)], cwd=tmp_path,
+                          env=dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED="37",
+                                   HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1"),
+                          text=True, capture_output=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert "THREADS 3" in proc.stdout.splitlines()
+    encoder = next(json.loads(line.removeprefix("ENCODER "))
+                   for line in proc.stdout.splitlines() if line.startswith("ENCODER "))
+    assert encoder == {"model": MXBAI_MODEL, "device": "cpu", "revision": MXBAI_REVISION}
+    config_event = next(e for e in event_capture.read() if e.get("kind") == "govsim.config")
+    assert config_event["data"]["threads"] == 3
+    assert config_event["data"]["embedder_revision"] == MXBAI_REVISION
 
 
 def test_collapse_and_outsider_denominator():

@@ -108,6 +108,12 @@ in
         order = 1010;
         group = "model";
       };
+      threads = param int {
+        description = "CPU threads per process for PyTorch and numeric libraries.";
+        initial = 2;
+        order = 1100;
+        group = "compute";
+      };
       temperature = param float {
         nullable = true;
         description = "Sampling temperature; null omits it from requests (upstream default 0.0).";
