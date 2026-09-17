@@ -631,6 +631,30 @@
           "default": null,
           "title": "Embedder"
         },
+        "embedder_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embedder Revision"
+        },
+        "threads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threads"
+        },
         "mix_llm": {
           "items": {
             "$ref": "#/$defs/JsonValue"

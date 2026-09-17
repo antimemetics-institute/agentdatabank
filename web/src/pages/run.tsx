@@ -137,7 +137,7 @@ function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, de
         <StateBadge state={state} />
       </h2>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span title={cid}>condition <span className="font-mono">{cid.slice(0, 12)}</span></span>
+        <a href={`#/conditions/${encodeURIComponent(cid)}`} title={cid} className="hover:underline">condition <span className="font-mono">{cid.slice(0, 12)}</span></a>
         <span>run <span className="break-all font-mono">{rid}</span></span>
         <span>seed <b className="font-medium text-foreground">{fmtVal(start?.seed ?? meta?.seed)}</b></span>
       </div>

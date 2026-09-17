@@ -17,6 +17,7 @@ import { PageLoading, StateBadge } from "@/components/bits";
 import { ParamChip } from "@/components/param-value";
 import { RenderBoundary, UnreadableBadge, displayRun } from "@/components/read-errors";
 import { ResultChips } from "@/components/results";
+import { conditionHref } from "@/lib/conditions";
 
 export function RunsPage() {
   const runs = useRunsPoll();
@@ -115,7 +116,7 @@ function RunRow({ run: r, varied, hideExperiment }: { run: RunMeta; varied: stri
         void navigateWithGlow(e.currentTarget, `#/runs/${r.run}`,
           () => prefetchRun(r.condition, r.run))}
     >
-      <TableCell className="font-mono text-xs">{(r.condition ?? "").slice(0, 12)}</TableCell>
+      <TableCell className="font-mono text-xs"><a href={conditionHref(r.condition)} onClick={(e) => e.stopPropagation()} className="hover:underline">{(r.condition ?? "").slice(0, 12)}</a></TableCell>
       <TableCell className="font-mono text-xs">{r.run}</TableCell>
       {!hideExperiment && <TableCell>{r.experiment}</TableCell>}
       <TableCell title={allParams}>

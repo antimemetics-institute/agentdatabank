@@ -12,6 +12,7 @@ import { ExperimentPage } from "@/pages/experiment";
 import { RunResolver, RunsPage } from "@/pages/runs";
 import { RunPage } from "@/pages/run";
 import { JobsPage } from "@/pages/jobs";
+import { ConditionPage } from "@/pages/condition";
 import { hashRoute } from "@/lib/run-view";
 
 function useHash(): string {
@@ -46,6 +47,9 @@ export function App() {
     section = "runs";
     fullHeight = true;
     page = <RunPage key={`${parts[1]}/${parts[2]}`} cid={parts[1]!} rid={parts[2]!} query={query} />;
+  } else if (parts[0] === "conditions" && parts.length === 2) {
+    section = "runs";
+    page = <ConditionPage cid={decodeURIComponent(parts[1]!)} query={query} />;
   } else if (parts[0] === "experiments" && parts.length === 2) {
     page = <ExperimentPage key={parts[1]} name={decodeURIComponent(parts[1]!)} />;
   } else if (parts[0] === "runs" && parts.length === 2) {
