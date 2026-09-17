@@ -33,6 +33,7 @@ from adb_experiment.scaffold import experiment_main
 from pydantic import BaseModel, Field, field_validator
 from pydantic.warnings import UnsupportedFieldAttributeWarning
 from .models import ConfigData, GovsimConfig
+from .embedder import MXBAI_REVISION
 
 
 EXPERIMENTS = (
@@ -105,6 +106,7 @@ def _compose(root: str, params: Params, seed: int):
         f"seed={seed}",
         f"+experiment.env.seed={seed}",
         f"+embedder={params.embedder}",
+        f"+embedder_revision={MXBAI_REVISION if params.embedder == 'mxbai' else 'null'}",
         "debug=true",
     ]
     if params.max_rounds > 0:

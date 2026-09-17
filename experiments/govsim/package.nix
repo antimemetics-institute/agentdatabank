@@ -103,7 +103,7 @@ in
         group = "model";
       };
       embedder = param (enum [ "hash" "mxbai" ]) {
-        description = "Memory embeddings: hash gives artificial similarities for offline testing; mxbai uses the paper’s embedding model and may download about 1.3 GB. Its upstream weights are not revision-pinned.";
+        description = "Memory embeddings: hash gives artificial similarities for offline testing; mxbai uses the paper’s embedding model at the revision pinned in the adapter and may download about 1.3 GB.";
         initial = "hash";
         order = 1010;
         group = "model";

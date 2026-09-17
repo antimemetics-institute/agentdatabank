@@ -6,7 +6,7 @@ Explicit deviation from the paper: memory *relevance* becomes content-hash
 noise, so retrieval ranking is driven by recency (0.99^i, w=0.5) and LLM-rated
 importance (w=3); ``always_include`` nodes (agreed limits) are unaffected.
 
-``mxbai``: the paper's ``mixedbread-ai/mxbai-embed-large-v1`` via
+``mxbai``: the paper's ``mixedbread-ai/mxbai-embed-large-v1``, pinned below, via
 sentence-transformers — needs network (HF download, ~1.3 GB) or a warm
 ``HF_HOME``; never the prefilled path.
 """
@@ -14,8 +14,14 @@ sentence-transformers — needs network (HF download, ~1.3 GB) or a warm
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
+
+# https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/commit/b33106f585b9ce46904ad7443a3b52b7a63e231c
+MXBAI_MODEL = "mixedbread-ai/mxbai-embed-large-v1"
+MXBAI_REVISION = "b33106f585b9ce46904ad7443a3b52b7a63e231c"
 
 # upstream's dimension (mxbai-embed-large-v1); embeddings land in
 # embeddings.json via upstream's NumpyEncoder, so plain ndarrays are required
@@ -27,6 +33,8 @@ class HashEmbedder:
     """Deterministic, offline, nonzero-norm (cosine similarity divides by it)."""
 
     def embed(self, text: str) -> np.ndarray:
+        import numpy as np
+
         digest = hashlib.sha256(text.encode("utf-8")).digest()
         rng = np.random.default_rng(int.from_bytes(digest[:8], "big"))
         vec = rng.standard_normal(_DIM)
@@ -43,9 +51,16 @@ def make_embedder(kind: str):
     if kind == "hash":
         return HashEmbedder()
     if kind == "mxbai":
-        # upstream's exact model; constructed lazily so the keyless path never
-        # touches sentence-transformers' download machinery
+        # Retain upstream's encoding and retrieval prefix; only pin construction.
         from simulation.persona import EmbeddingModel
+        from sentence_transformers import SentenceTransformer
 
-        return EmbeddingModel(device="cpu")
+        class PinnedEmbeddingModel(EmbeddingModel):
+            def __init__(self):
+                self.device = "cpu"
+                self.model = SentenceTransformer(
+                    MXBAI_MODEL, device=self.device, revision=MXBAI_REVISION,
+                )
+
+        return PinnedEmbeddingModel()
     raise ValueError(f"unknown embedder: {kind!r} (expected 'hash' or 'mxbai')")
