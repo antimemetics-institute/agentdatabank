@@ -95,7 +95,7 @@ uses the ordinary OpenAI client, with the deployment name in `model`.
 Start with one run of one round, then verify the printed run directory:
 
 ```sh
-nix run .#govsim -- --non-interactive --profile azure=default \
+nix run .#govsim -- --non-interactive --credential azure=default \
   --set model=azure/gpt-5-nano --set max_rounds=1 --seed 42 \
   --set max_tokens=3000 --set reasoning_effort=low \
   --set temperature=null --set top_p=null --set embedder=hash

@@ -8,7 +8,7 @@
 
 The hook accepts the worker's ordinary `nix-build` arguments ending in `exec.EXPERIMENT` and prints an executable path. It builds only the manifests and normal ADB runner, never the experiment runtime. The returned executable accepts normal runner arguments. Parameters must match the capture's `params` exactly.
 
-The private execution manifest changes `llm` parameter kinds to `str` and the wrapper discards `--profile` selections. This bypasses credential provisioning only for recording, retaining captured model values in run metadata. No model SDK, model installation, or credentials are needed. The replay adapter uses Python's standard library and does not execute experiment code or make network calls. Building the runner/manifests can use Nix's normal caches/network.
+The private execution manifest changes `llm` parameter kinds to `str` and the wrapper discards `--credential` selections. This bypasses credential provisioning only for recording, retaining captured model values in run metadata. No model SDK, model installation, or credentials are needed. The replay adapter uses Python's standard library and does not execute experiment code or make network calls. Building the runner/manifests can use Nix's normal caches/network.
 
 `replay.py` reads ordered envelopes, waits timestamp deltas divided by speed, and emits original payloads. Recorded `run.*` events are suppressed; the real runner assigns new IDs, timestamps, sequences, and lifecycle events. Original usage and model-call counts describe historical calls, not new paid calls. Only completed captures are accepted.
 

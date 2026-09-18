@@ -21,7 +21,7 @@ def test_job_args_mapping():
     assert _job_args(JOB) == [
         "--json", "--non-interactive",
         "--set", "x=1", "--set", "model=mockllm/model",
-        "--profile", "openai=work",
+        "--credential", "openai=work",
     ]
     assert _job_args({"id": "j", "experiment": "e"}) == ["--json", "--non-interactive"]
 
@@ -106,7 +106,7 @@ exit 0
     # through the queue: the --set strings pass through verbatim)
     argv = (tmp_path / "argv").read_text().split()
     assert argv == ["--json", "--non-interactive", "--set", "x=1",
-                    "--set", "model=mockllm/model", "--profile", "openai=work"]
+                    "--set", "model=mockllm/model", "--credential", "openai=work"]
     # run ids were REPORTED from run.start envelopes; narration became log lines
     reported_runs = [r for rep in seen["reports"] for r in rep.get("runs", [])]
     assert reported_runs == ["RUN1"]

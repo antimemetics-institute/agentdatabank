@@ -287,7 +287,7 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
     apiPost<JobInfo>("/api/jobs", {
       experiment: name,
       sets: setArgs,
-      profiles: resolved,
+      profiles: resolved, // worker emits --credential SET=NAME; values stay in the credential store
     })
       .then(setJob)
       .catch((e: Error) => setLaunchErr(e.message));

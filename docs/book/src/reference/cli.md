@@ -18,7 +18,7 @@ Pass these options to the named experiment app:
 | --- | --- |
 | `--set KEY=VALUE` | Bind an experiment parameter. Repeat for every declared parameter. A later binding of the same key wins. |
 | `--seed INTEGER` | Run seed in `0..2147483647`, recorded unchanged. A random non-negative 31-bit seed is chosen when omitted. |
-| `--profile SET=PROFILE` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
+| `--credential SET=NAME` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
 | `--data-dir DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
 | `--json` | Print each recorded event, including its run metadata, to stdout as one JSON line as it happens. Events are also saved normally; diagnostics go to stderr. |
 | `--non-interactive` | Never prompt for input. Fail if required credentials or profile selections cannot be resolved automatically. Non-terminal stdin also disables prompts. |

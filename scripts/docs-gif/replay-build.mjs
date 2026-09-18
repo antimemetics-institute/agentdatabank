@@ -50,9 +50,9 @@ import os, sys
 args = iter(sys.argv[1:])
 filtered = []
 for arg in args:
-    if arg == '--profile':
+    if arg == '--credential':
         next(args, None)
-    elif not arg.startswith('--profile='):
+    elif not arg.startswith('--credential='):
         filtered.append(arg)
 os.environ.update(${JSON.stringify({ADB_MANIFEST:manifestPath, ADB_EXPERIMENT_BIN:adapter,
   ADB_SOURCE:`dirty:docs-recording-replay:${meta.condition}:${meta.run}`,

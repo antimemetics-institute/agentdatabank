@@ -246,7 +246,7 @@ def test_run_uses_selected_data_directory(data_directory, tmp_path, monkeypatch,
     assert list(tmp_path.rglob("run.json")) == [card]
 
 
-@pytest.mark.parametrize("option,value", [("--out", "unused"), ("--replicates", "2")])
+@pytest.mark.parametrize("option,value", [("--out", "unused"), ("--replicates", "2"), ("--profile", "openai=work")])
 def test_removed_options_are_rejected(tmp_path, monkeypatch, capsys, option, value):
     import sys
     from adb_runner import cli
@@ -258,3 +258,19 @@ def test_removed_options_are_rejected(tmp_path, monkeypatch, capsys, option, val
     assert f"unrecognized arguments: {option}" in capsys.readouterr().err
     assert option not in cli.build_parser().format_help()
     assert not (tmp_path / "unused").exists()
+
+
+def test_credential_selections_reach_resolver(run_cli, monkeypatch):
+    from adb_runner import cli
+
+    _, invoke = run_cli
+    seen = []
+
+    def resolve_credentials(*args, selections, **kwargs):
+        seen.append(selections)
+        return {}
+
+    monkeypatch.setattr(cli.credentials, "resolve_run_credentials", resolve_credentials)
+    assert invoke("--credential", "openai=work", "--credential", "anthropic=research") == 0
+    assert seen == [{"openai": "work", "anthropic": "research"}]
+    assert "--credential SET=NAME" in cli.build_parser().format_help()

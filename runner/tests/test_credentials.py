@@ -617,7 +617,7 @@ def test_remember_command_writes_prefs_and_guards_typos(cfg, capsys):
     assert env == {"OPENAI_API_KEY": "w"}
 
 
-# -- explicit selection (--profile SET=PROFILE) ----------------------------------------
+# -- explicit selection (--credential SET=NAME) ----------------------------------------
 
 def test_selection_beats_remembered_and_skips_prompts(cfg, monkeypatch, capsys):
     credentials.save({"openai": {"default": {"OPENAI_API_KEY": "d"},
@@ -630,18 +630,19 @@ def test_selection_beats_remembered_and_skips_prompts(cfg, monkeypatch, capsys):
     assert env == {"OPENAI_API_KEY": "w"}
     # no remember question was asked; the stored pref is untouched
     assert credentials._load_prefs() == {"exp": {"openai": "default"}}
+    assert "using openai.work (--credential)" in capsys.readouterr().err
 
 
 def test_selection_typo_guards_both_halves(cfg, capsys):
     credentials.save({"openai": {"default": {"OPENAI_API_KEY": "d"}}})
     manifest = _manifest({"kind": "llm"})
     # a set the run doesn't route to
-    with pytest.raises(ValueError, match="route to"):
+    with pytest.raises(ValueError, match="--credential.*route to"):
         credentials.resolve_run_credentials(
             manifest, {"model": "openai/q"}, experiment="e", interactive=False,
             selections={"anthropic": "default"})
     # a profile that doesn't exist
-    with pytest.raises(ValueError, match="no such profile"):
+    with pytest.raises(ValueError, match="--credential openai=wrok: no such profile"):
         credentials.resolve_run_credentials(
             manifest, {"model": "openai/q"}, experiment="e", interactive=False,
             selections={"openai": "wrok"})

@@ -123,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="set a param (JSON, @file, or bare string); repeatable")
     # profile NAMES are argv-safe (values never are — they live in the 0600 store);
     # an explicit selection skips the picker and the remember question entirely
-    p.add_argument("--profile", action="append", default=[], metavar="SET=PROFILE",
+    p.add_argument("--credential", action="append", default=[], metavar="SET=NAME",
                    help="use that credential profile for that set (repeatable; "
                         "skips the interactive picker)")
     p.add_argument("--seed", type=_seed, metavar="N",
@@ -258,7 +258,7 @@ def main() -> int:
     # prompts — remembered choice, else default profile, else exit 2 with the fix.
     realized = cond["params"]  # no distributions in the MVP: realized ARE the spec params
     interactive = sys.stdin.isatty() and not args.non_interactive
-    selections = dict(_parse_kv(entry, "--profile") for entry in args.profile)
+    selections = dict(_parse_kv(entry, "--credential") for entry in args.credential)
     try:
         credential_env = credentials.resolve_run_credentials(
             manifest, realized, experiment=manifest["name"], interactive=interactive,

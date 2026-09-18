@@ -109,7 +109,7 @@ def _job_args(job: dict[str, Json]) -> list[str]:
     profiles = job.get("profiles")
     if isinstance(profiles, dict):
         for set_name, profile in sorted(profiles.items()):
-            args += ["--profile", f"{set_name}={profile}"]
+            args += ["--credential", f"{set_name}={profile}"]
     return args
 
 

@@ -33,7 +33,7 @@ The store is normally `~/.config/adb/credentials.toml`, or `$XDG_CONFIG_HOME/adb
 
 ## Which profile will a run use?
 
-Add `--profile openai=research` to an experiment command to select that profile explicitly. Repeat the flag for runs using several credential sets. The selected set must be used by this run, and the profile must exist.
+Add `--credential openai=research` to an experiment command to select that profile explicitly. Repeat the flag for runs using several credential sets. The selected set must be used by this run, and the profile must exist.
 
 Without an explicit selection, the runner uses a remembered choice for this experiment and set, then a lone default profile. In an interactive terminal it offers a picker when there are other profiles, and offers first-use setup for an unconfigured built-in provider. With `--non-interactive` or non-terminal stdin it never prompts: it uses the remembered choice or default profile, and fails if a required selection is unavailable.
 
@@ -43,7 +43,7 @@ You can save a preference explicitly:
 nix run .#adb-runner -- credentials remember inspect-hello openai research
 ```
 
-Preferences are stored separately in `$XDG_CONFIG_HOME/adb/preferences.toml`, defaulting to `~/.config/adb/preferences.toml`. An explicit `--profile` overrides them. Profiles are selected as a whole; missing fields are not filled from another profile.
+Preferences are stored separately in `$XDG_CONFIG_HOME/adb/preferences.toml`, defaulting to `~/.config/adb/preferences.toml`. An explicit `--credential` overrides them. Profiles are selected as a whole; missing fields are not filled from another profile.
 
 ## How do model IDs select credential sets?
 

@@ -248,7 +248,7 @@ def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
                             experiment: str, interactive: bool,
                             selections: dict[str, str] | None = None) -> dict[str, str]:
     """The env to inject for this run, resolving a profile for every credential set
-    the run routes to. An explicit selection (`--profile SET=PROFILE`) is the top of
+    the run routes to. An explicit selection (`--credential SET=NAME`) is the top of
     the ladder: it must name an existing profile of a set this run routes to (a typo
     guard on both halves), beats a remembered choice, and skips the picker AND the
     remember question — an explicit flag is a statement, not a conversation opener.
@@ -263,7 +263,7 @@ def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
     for sel_set in sorted(selections):
         if sel_set not in used:
             raise ValueError(
-                f"--profile names credential set {sel_set!r}, but this run's model "
+                f"--credential names credential set {sel_set!r}, but this run's model "
                 f"ids route to {sorted(used) or 'no credential sets'} — a typo, or "
                 f"a leftover flag from another experiment")
     missing = [s for s in missing_sets(manifest, realized_params)
@@ -284,10 +284,10 @@ def resolve_run_credentials(manifest: Manifest, realized_params: Params, *,
             if not profiles or selected not in profiles:
                 have = sorted(profiles) if profiles else "nothing"
                 raise ValueError(
-                    f"--profile {name}={selected}: no such profile (store has {have} "
+                    f"--credential {name}={selected}: no such profile (store has {have} "
                     f"for {name!r}) — create it with `nix run .#adb-runner -- "
                     f"credentials set {name}.{selected}`")
-            print(f"adb: using {name}.{selected} (--profile)", file=sys.stderr)
+            print(f"adb: using {name}.{selected} (--credential)", file=sys.stderr)
             env.update(profiles[selected])
             continue
         if not profiles:

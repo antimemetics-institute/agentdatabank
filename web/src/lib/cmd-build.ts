@@ -163,7 +163,9 @@ export function buildCmd(
   return { cmd, missing };
 }
 
-/* the run button's POST body: the same materialization, argv framing — each entry
+/* Credential selections travel separately in the job profiles map; the worker
+   emits --credential SET=NAME. This builder materializes experiment parameters.
+   The run button's POST body uses argv framing — each entry
    is one `key=value` string for a `--set` argv pair, secrets nowhere in sight */
 export function buildArgs(
   params: Record<string, ParamDecl>,

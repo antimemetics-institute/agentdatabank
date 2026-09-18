@@ -23,7 +23,7 @@ The form keeps edits in this browser across navigation. Review the values when r
 
 The **oneliner** tab generates a command with every experiment parameter bound. Copy it into a terminal to run the same inputs. It invokes the generated experiment launcher, which supplies the runner’s execution context; do not substitute a direct `adb-runner` command or the underlying program. The command's Nix form and source follow the [command settings](nix.md); check those settings before executing. A command using moving `main` runs that source's current experiment, even if you copied it while examining older data. To repeat a historical configuration, [select its recorded source revision](model.md#how-do-i-keep-the-source-version) and inputs.
 
-For a model that needs credentials, [configure a saved profile](secrets.md) and select it with `--profile SET=PROFILE` when needed. An interactive terminal can prompt for missing built-in credentials; noninteractive runs require setup beforehand.
+For a model that needs credentials, [configure a saved profile](secrets.md) and select it with `--credential SET=NAME` when needed. An interactive terminal can prompt for missing built-in credentials; noninteractive runs require setup beforehand.
 
 Without the interface, ask the experiment for its manifest:
 
