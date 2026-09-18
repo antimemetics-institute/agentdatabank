@@ -9,7 +9,6 @@ import sys
 
 import pytest
 
-from adb_runner.cli import _derive_seed
 from adb_runner.protocol import execute_run
 from adb_runner.store import RunStore
 
@@ -66,7 +65,7 @@ def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=N
         source="dirty:test",
         fetch_ref=fetch_ref,
         tree_hash=tree_hash,
-        seed=_derive_seed(42, "cid", 1),
+        seed=42,
         store=store,
         run_id="20260916t120000z-012345abcdef",
         on_event=on_event,
@@ -156,7 +155,7 @@ def test_run_start_records_the_parameters_passed_to_the_child(tmp_path):
     assert start["source"] == "dirty:test"
     assert "fetch_ref" not in start
     assert "replicate" not in start
-    assert start["seed"] == _derive_seed(42, "cid", 1)
+    assert start["seed"] == 42
 
 
 @pytest.mark.parametrize("results", [None, []])
@@ -250,7 +249,7 @@ def test_provenance_is_saved_before_the_child_starts(tmp_path, monkeypatch):
     assert start.runtime.experiment_bin is None
     assert start.runtime.runner_bin == "/nix/store/fixture-runner/bin/adb-runner"
     assert start.runtime.runner_python_version
-    assert start.seed == _derive_seed(42, "cid", 1)
+    assert start.seed == 42
     assert "must-not-be-recorded" not in (store.dir / "run.json").read_text()
 
 
@@ -330,7 +329,7 @@ echo "params=$p seed=$ADB_SEED run=$ADB_RUN_ID"
     )
     assert (
         '"x": 9' in line
-        and f"seed={_derive_seed(42, 'cid', 1)}" in line
+        and "seed=42" in line
         and "run=20260916t120000z-012345abcdef" in line
     )
 

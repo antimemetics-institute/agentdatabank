@@ -3,14 +3,13 @@
 Invoked via the mkExperiment wrapper, which bakes ADB_MANIFEST, ADB_EXPERIMENT_BIN,
 ADB_SOURCE (per-experiment content identity), ADB_FETCH_REF (pinned clean repo rev),
 and ADB_TREE_HASH (packaging-tree narHash, when known)
-into the environment. One invocation resolves one condition and executes its
-replicates locally; there is no server in the execution path.
+into the environment. One invocation resolves one condition and executes one
+run locally; there is no server in the execution path.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import random
@@ -110,14 +109,11 @@ def _parse_kv(raw: str, flag: str) -> tuple[str, str]:
     return key.strip(), value
 
 
-def _derive_seed(base_seed: int, cid: str, replicate: int) -> int:
-    """A non-negative 31-bit seed, forwarded unchanged to every consumer.
-
-    Signed 32-bit provider fields (including xAI's seed) and local RNGs both
-    accept this range. Seeds are outside condition identity.
-    """
-    digest = hashlib.sha256(f"{base_seed}:{cid}:{replicate}".encode()).digest()
-    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
+def _seed(raw: str) -> int:
+    value = int(raw)
+    if not 0 <= value <= 2**31 - 1:
+        raise argparse.ArgumentTypeError("seed must be an integer in 0..2147483647")
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,14 +121,13 @@ def build_parser() -> argparse.ArgumentParser:
                                 epilog="Management commands: credentials …; verify RUN_ID_OR_DIR (audit a finished run).")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                    help="set a param (JSON, @file, or bare string); repeatable")
-    p.add_argument("--replicates", type=int, default=1, metavar="N",
-                   help="runs to draw from this condition (default 1)")
     # profile NAMES are argv-safe (values never are — they live in the 0600 store);
     # an explicit selection skips the picker and the remember question entirely
     p.add_argument("--profile", action="append", default=[], metavar="SET=PROFILE",
                    help="use that credential profile for that set (repeatable; "
                         "skips the interactive picker)")
-    p.add_argument("--seed", type=int, default=None, help="base seed (random if omitted)")
+    p.add_argument("--seed", type=_seed, metavar="N",
+                   help="run seed in 0..2147483647, recorded unchanged (random if omitted)")
     p.add_argument("--data-dir", metavar="DIR",
                    help="run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)")
     p.add_argument("--json", action="store_true", help="print recorded events as JSON lines to stdout")
@@ -240,30 +235,25 @@ def main() -> int:
         _log(f"error: {exc}")
         return 2
 
-    base_seed = args.seed if args.seed is not None else random.SystemRandom().getrandbits(32)
-    replicates = args.replicates
+    seed = args.seed if args.seed is not None else random.SystemRandom().getrandbits(31)
 
     if args.dry_run:
-        print(f"experiment: {manifest['name']}\nsource:     {source}\nbase seed:  {base_seed}")
-        print(f"1 condition x {replicates} replicate(s) = {replicates} run(s)\n")
+        print(f"experiment: {manifest['name']}\nsource:     {source}\nseed:       {seed}\n")
         print(f"condition {abbrev(cond['cid'])}  ({cond['cid']})")
         print(json.dumps(cond["params"], indent=2, sort_keys=True))
         return 0
 
     home = resolve_data_dir(args.data_dir)
     home.mkdir(parents=True, exist_ok=True)
-    _log(f"{manifest['name']}: {replicates} replicate(s) of condition "
-         f"{abbrev(cond['cid'])}, base seed {base_seed}")
+    _log(f"{manifest['name']}: condition {abbrev(cond['cid'])}, seed {seed}")
 
     def _json_out(envelope: dict[str, Any]) -> None:
         print(json.dumps(envelope, separators=(",", ":")), flush=True)
 
     json_out = _json_out if args.json else None
 
-    # Credentials resolve ONCE per invocation (they are constant across replicates —
-    # a picker that re-asked every replicate would be noise). Interactively this may
-    # prompt: first-use setup for an unconfigured built-in (the run continues with
-    # the freshly entered credential; secrets never touch argv), and the profile
+    # Credential resolution may prompt for first-use setup of an unconfigured
+    # built-in (secrets never touch argv), and the profile
     # picker when named profiles exist. Headless (non-terminal stdin or --non-interactive) it never
     # prompts — remembered choice, else default profile, else exit 2 with the fix.
     realized = cond["params"]  # no distributions in the MVP: realized ARE the spec params
@@ -284,66 +274,56 @@ def main() -> int:
     if viewer_hint:
         _log(viewer_hint)
 
-    counts = {"completed": 0, "failed": 0, "interrupted": 0}
     try:
+        try:
+            validate_realized(realized, manifest)
+        except SchemaError as exc:
+            _log(f"provisioning failed: {exc}")
+            return 2
         ensure_condition(home, cond["cid"], {
             "experiment": manifest["name"], "source": source, "params": cond["params"],
         })
-        for replicate in range(1, replicates + 1):
-            run_seed = _derive_seed(base_seed, cond["cid"], replicate)
-            try:
-                validate_realized(realized, manifest)
-            except SchemaError as exc:
-                _log(f"[{abbrev(cond['cid'])} r{replicate}] provisioning failed: {exc}")
-                counts["failed"] += 1
-                continue
-            run_id = new_run_id()
-            store = RunStore(home, cond["cid"], run_id, experiment=manifest["name"])
-            label = f"[{abbrev(cond['cid'])} r{replicate}]"
-            # two aligned fields, the clickable one first: the URL is the thing a reader
-            # wants at the moment a run starts, and it's underlined/cyan so it reads as a
-            # link (terminals cmd-click it; it survives a plain copy either way).
-            _log(f"{label} run {run_id} started")
-            _log(f"  {_sgr('▸ watch', '2')}  {_sgr(f'{viewer}/#/runs/{run_id}', '1;4;36')}")
-            _log(f"  {_sgr('▸ store', '2')}  {_sgr(str(store.dir), '2')}")
+        run_id = new_run_id()
+        store = RunStore(home, cond["cid"], run_id, experiment=manifest["name"])
+        label = f"[{abbrev(cond['cid'])}]"
+        # two aligned fields, the clickable one first: the URL is the thing a reader
+        # wants at the moment a run starts, and it's underlined/cyan so it reads as a
+        # link (terminals cmd-click it; it survives a plain copy either way).
+        _log(f"{label} run {run_id} started")
+        _log(f"  {_sgr('▸ watch', '2')}  {_sgr(f'{viewer}/#/runs/{run_id}', '1;4;36')}")
+        _log(f"  {_sgr('▸ store', '2')}  {_sgr(str(store.dir), '2')}")
 
-            def on_event(envelope: dict[str, Any], _label: str = label) -> None:
-                # an experiment's error-level log is the "why it failed" — say it on
-                # the terminal as it happens, not only in the stored stream
-                ev: dict[str, Any] = envelope.get("event") or {}
-                if ev.get("type") == "log" and ev.get("level") == "error":
-                    _log(f"{_label} error: {ev.get('message')}")
-                if json_out:
-                    json_out(envelope)
+        def on_event(envelope: dict[str, Any]) -> None:
+            # an experiment's error-level log is the "why it failed" — say it on
+            # the terminal as it happens, not only in the stored stream
+            ev: dict[str, Any] = envelope.get("event") or {}
+            if ev.get("type") == "log" and ev.get("level") == "error":
+                _log(f"{label} error: {ev.get('message')}")
+            if json_out:
+                json_out(envelope)
 
-            result = execute_run(
-                program=program,
-                manifest=manifest,
-                params=realized,
-                condition_id=cond["cid"],
-                source=source,
-                fetch_ref=fetch_ref,
-                tree_hash=tree_hash,
-                seed=run_seed,
-                store=store,
-                run_id=run_id,
-                on_event=on_event,
-                credential_env=credential_env,
-            )
-            counts[result.state] = counts.get(result.state, 0) + 1
-            _log(f"{label} {result.run_id} {result.state} ({result.duration_s:.1f}s) "
-                 f"— {viewer}/#/runs/{result.run_id}")
-            if result.state == "interrupted":
-                break
+        result = execute_run(
+            program=program,
+            manifest=manifest,
+            params=realized,
+            condition_id=cond["cid"],
+            source=source,
+            fetch_ref=fetch_ref,
+            tree_hash=tree_hash,
+            seed=seed,
+            store=store,
+            run_id=run_id,
+            on_event=on_event,
+            credential_env=credential_env,
+        )
+        _log(f"{label} {result.run_id} {result.state} ({result.duration_s:.1f}s) "
+             f"— {viewer}/#/runs/{result.run_id}")
     except KeyboardInterrupt:
         _log("interrupted — partial runs kept (garbage is data)")
-        counts["interrupted"] += 1
-
-    _log(f"done: {counts['completed']} completed, {counts['failed']} failed, "
-         f"{counts['interrupted']} interrupted")
-    if counts["interrupted"]:
         return 130
-    return 1 if counts["failed"] else 0
+    if result.state == "interrupted":
+        return 130
+    return 0 if result.state == "completed" else 1
 
 
 if __name__ == "__main__":

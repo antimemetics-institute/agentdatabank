@@ -1,34 +1,6 @@
-"""Seed derivation — the value the runner hands every experiment as $ADB_SEED.
-
-The bound is the point. This seed is forwarded verbatim into provider request
-bodies and local-inference RNGs. The narrowest provider accepts signed 32-bit
-integers, so a seed that overflows is not a degraded run — it is a 400 or a ValueError at generation time. These tests hold
-the width; the derivation itself may change.
-"""
+"""One invocation creates one run with the seed passed to the experiment."""
 
 import pytest
-
-from adb_runner.cli import _derive_seed
-
-INT32_MAX = 2**31 - 1
-CID = "ae70d6ab71a10b0ff1b21fee0aa14d5bffbfe685"
-
-
-def _sweep(n: int = 2000):
-    """Seeds across the three axes the derivation mixes."""
-    return [_derive_seed(base, cid, rep)
-            for base in range(n // 4)
-            for cid in (CID, "0" * 40)
-            for rep in (1, 2)]
-
-
-def test_seed_fits_nonnegative_int32():
-    # xAI rejects seeds above signed int32 max.
-    assert all(0 <= s <= INT32_MAX for s in _sweep())
-
-
-def test_seed_that_xai_rejected_is_masked_at_derivation():
-    assert _derive_seed(42, "3da6efb04688d1cc9d58c9ce3b64cd5f7101ed42", 1) == (4054925867 & 0x7FFFFFFF)
 
 
 @pytest.mark.parametrize("ref", [
@@ -102,77 +74,107 @@ def test_launch_forwards_optional_revision_and_tree_hash(tmp_path, monkeypatch, 
         assert saved.get("fetch_ref") == (ref or None)
 
 
-def test_seed_is_json_and_jq_safe():
-    # the seed rides to the experiment through a jq --argjson lift into a JSON
-    # config; staying under 2**53 keeps it exact for any consumer that parses
-    # JSON numbers as doubles
-    assert all(s < 2**53 for s in _sweep())
-
-
-def test_seed_varies_across_replicates():
-    # what the derivation is FOR: replicates of one condition must not share a
-    # seed (a fixed seed collapses them into repeats of a single draw)
-    seeds = [_derive_seed(7, CID, r) for r in range(1, 33)]
-    assert len(set(seeds)) == len(seeds)
-
-
-def test_seed_varies_across_conditions_and_base():
-    base = _derive_seed(7, CID, 1)
-    assert _derive_seed(8, CID, 1) != base          # base seed
-    assert _derive_seed(7, "0" * 40, 1) != base     # condition
-
-
-def test_seed_is_deterministic():
-    # The invocation's base seed + cid + ordinal must reproduce the run's seed.
-    assert _derive_seed(7, CID, 3) == _derive_seed(7, CID, 3)
-
-
-def test_seed_spreads_across_the_range():
-    # a narrowed width must still be a real hash, not a small-integer counter:
-    # both halves of the non-negative int32 range get used
-    seeds = _sweep()
-    assert any(s > INT32_MAX // 2 for s in seeds)
-    assert any(s < INT32_MAX // 2 for s in seeds)
-
-
-@pytest.mark.parametrize("base_seed", [42, -1, None])
-def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch, base_seed):
+@pytest.fixture
+def run_cli(tmp_path, monkeypatch):
     import json
     import sys
     from adb_runner import cli
 
-    monkeypatch.setattr(cli.random.SystemRandom, "getrandbits", lambda self, bits: 2026)
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
-    marker = tmp_path / "first-run"
     experiment = tmp_path / "experiment"
-    experiment.write_text(
-        f"#!/bin/sh\nif [ -e '{marker}' ]; then exit 0; fi\n"
-        f"touch '{marker}'\nexit 3\n")
+    experiment.write_text("#!/bin/sh\nprintf 'seed=%s\\n' \"$ADB_SEED\"\n")
     experiment.chmod(0o755)
-    home = tmp_path / "home"
+    home = tmp_path / "data"
     monkeypatch.setenv("ADB_MANIFEST", str(manifest))
     monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.delenv("ADB_FETCH_REF", raising=False)
     monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
-    argv = ["adb-runner", "--json", "--replicates", "2", "--data-dir", str(home)]
-    if base_seed is not None:
-        argv += ["--seed", str(base_seed)]
-    monkeypatch.setattr(sys, "argv", argv)
-    assert cli.main() == 1
-    states = [json.loads(path.read_text())["lifecycle"]["state"]
-              for path in home.glob("runs/*/*/run.json")]
-    assert sorted(states) == ["completed", "failed"]
-    records = [json.loads(path.read_text()) for path in home.glob("runs/*/*/run.json")]
-    assert all("base_seed" not in record and "replicates" not in record for record in records)
-    records.sort(key=lambda record: record["lifecycle"]["started_at"])
-    for ordinal, record in enumerate(records, start=1):
-        assert set(record["inputs"]) == {"params", "seed"}
-        assert record["inputs"]["seed"] == _derive_seed(
-            base_seed if base_seed is not None else 2026, record["identity"]["condition"], ordinal
-        )
-    for path in home.glob("runs/*/*/events.jsonl"):
-        start = json.loads(path.read_text().splitlines()[0])["event"]
-        assert not {"replicate", "replicates", "base_seed"} & start.keys()
+
+    def invoke(*args):
+        monkeypatch.setattr(sys, "argv", ["adb-runner", "--json", "--data-dir", str(home), *args])
+        return cli.main()
+
+    return home, invoke
+
+
+def assert_recorded_seed(path, seed):
+    import json
+
+    card = json.loads(path.read_text())
+    events = [json.loads(line)["event"] for line in (path.parent / "events.jsonl").read_text().splitlines()]
+    assert card["inputs"] == {"params": {}, "seed": seed}
+    assert events[0]["type"] == "run.start" and events[0]["seed"] == seed
+    assert events[-1]["type"] == "run.end" and events[-1]["state"] == "completed"
+    assert sum(event["type"] == "run.start" for event in events) == 1
+    assert [event["line"] for event in events if event["type"] == "stdout"] == [f"seed={seed}"]
+    assert not {"replicate", "replicates", "base_seed"} & events[0].keys()
+
+
+@pytest.mark.parametrize("seed", [0, 42, 2**31 - 1])
+def test_explicit_seed_is_recorded_and_forwarded_unchanged(run_cli, monkeypatch, seed):
+    from adb_runner import cli
+
+    def unexpected_random(*args):
+        raise AssertionError("an explicit seed must not draw a random seed")
+
+    monkeypatch.setattr(cli.random.SystemRandom, "getrandbits", unexpected_random)
+    home, invoke = run_cli
+    assert invoke("--seed", str(seed)) == 0
+    [path] = home.glob("runs/*/*/run.json")
+    assert_recorded_seed(path, seed)
+
+
+@pytest.mark.parametrize("seed", [0, 2**31 - 1])
+def test_omitted_seed_draws_31_bits_and_records_the_draw(run_cli, monkeypatch, seed):
+    from adb_runner import cli
+
+    draws = []
+    def draw(self, bits):
+        draws.append(bits)
+        return seed
+
+    monkeypatch.setattr(cli.random.SystemRandom, "getrandbits", draw)
+    home, invoke = run_cli
+    assert invoke() == 0
+    assert draws == [31]
+    [path] = home.glob("runs/*/*/run.json")
+    assert_recorded_seed(path, seed)
+
+
+def test_seed_does_not_depend_on_condition_or_invocation(run_cli, monkeypatch):
+    home, invoke = run_cli
+    for source in ("content:first", "content:first", "content:changed"):
+        monkeypatch.setenv("ADB_SOURCE", source)
+        assert invoke("--seed", "42") == 0
+    paths = list(home.glob("runs/*/*/run.json"))
+    assert len(paths) == 3
+    assert len({path.parent.name for path in paths}) == 3
+    assert len({path.parent.parent.name for path in paths}) == 2
+    for path in paths:
+        assert_recorded_seed(path, 42)
+
+
+def test_dry_run_prints_the_run_seed_without_creating_a_run(run_cli, capsys):
+    home, invoke = run_cli
+    assert invoke("--dry-run", "--seed", "42") == 0
+    output = capsys.readouterr().out
+    assert "seed:       42" in output
+    assert "replicate" not in output and "base seed" not in output
+    assert not home.exists()
+
+
+@pytest.mark.parametrize("seed", ["-1", str(2**31), "4054925867", str(2**53), "not-an-integer"])
+def test_invalid_seed_is_rejected_before_writing_a_run(run_cli, capsys, seed):
+    home, invoke = run_cli
+    with pytest.raises(SystemExit) as exc:
+        invoke("--seed", seed)
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert "--seed" in error
+    if seed != "not-an-integer":
+        assert "0..2147483647" in error
+    assert not home.exists()
 
 
 @pytest.mark.parametrize("json_output", [False, True])
@@ -244,14 +246,15 @@ def test_run_uses_selected_data_directory(data_directory, tmp_path, monkeypatch,
     assert list(tmp_path.rglob("run.json")) == [card]
 
 
-def test_out_option_is_removed(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("option,value", [("--out", "unused"), ("--replicates", "2")])
+def test_removed_options_are_rejected(tmp_path, monkeypatch, capsys, option, value):
     import sys
     from adb_runner import cli
 
-    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(tmp_path / "unused")])
+    monkeypatch.setattr(sys, "argv", ["adb-runner", option, value])
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 2
-    assert "unrecognized arguments: --out" in capsys.readouterr().err
-    assert "--out" not in cli.build_parser().format_help()
+    assert f"unrecognized arguments: {option}" in capsys.readouterr().err
+    assert option not in cli.build_parser().format_help()
     assert not (tmp_path / "unused").exists()

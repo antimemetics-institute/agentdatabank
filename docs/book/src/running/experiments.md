@@ -13,7 +13,7 @@ Choose inputs in the local interface, or [run directly from a terminal](#how-do-
 2. Choose the experiment or task, the model, and the amount of work (such as a dataset limit or number of rounds). Use the experiment summary and linked material to understand those choices. The form includes type information and descriptions. Suggestions help you enter values; a suggested model is not a guarantee that the experiment or your account supports it.
 3. Enter the model ID, usually `provider/model`. You can type a value that is absent from the suggestions. For a list of structured entries, edit the rows or use **raw** to enter the complete JSON array. Object inputs accept JSON or the field controls provided by that experiment.
 4. Open the **run** tab, configure the required credential sets and select profiles. [Configure model credentials](secrets.md) explains how those selections work.
-5. Set the number of replicates and press **run**. Follow the job's run links to inspect its events.
+5. Press **run** to execute the experiment once. Follow the job's run link to inspect its events.
 
 The form keeps edits in this browser across navigation. Review the values when returning to an experiment; they may be your earlier edits rather than its initial suggestions.
 
@@ -49,7 +49,7 @@ Values can be JSON, a bare string or `@path` to read a file. Quote a whole `KEY=
 
 Add `--dry-run` to a complete command. It checks parameter names and types and prints the condition and inputs without starting the experiment or resolving credentials. List-length bounds are checked only when executing. It does not test account access, model availability or an experiment's external dependencies.
 
-Remove `--dry-run` when ready. The runner prints a run ID, data path and viewer link. It executes replicates sequentially.
+Remove `--dry-run` when ready. The runner prints a run ID, data path and viewer link. Each invocation executes one run.
 
 ## How do I inspect the result?
 
@@ -61,8 +61,8 @@ nix run .#adb-web
 
 Open the run under **Runs** using its printed run ID. If a viewer was already serving the same data directory, the runner's **watch** link opens the run directly. A printed link alone does not start a viewer. If you used `--data-dir DIR`, pass the same option when starting the viewer. See [find and read a run](../browsing/runs.md) for inspecting results and evidence.
 
-For terminal processing, add `--json` to the experiment command to stream event envelopes as JSON lines on the launcher’s stdout; its diagnostics go to stderr. This is distinct from the child experiment program’s stdout, which is captured as text events. Saved run files are still written. For unattended execution, also pass `--non-interactive` to disable prompts; required credentials and profile selections must be resolvable without input. Each envelope identifies its run, so replicates can be processed separately.
+For terminal processing, add `--json` to the experiment command to stream event envelopes as JSON lines on the launcher’s stdout; its diagnostics go to stderr. This is distinct from the child experiment program’s stdout, which is captured as text events. Saved run files are still written. For unattended execution, also pass `--non-interactive` to disable prompts; required credentials and profile selections must be resolvable without input. Each envelope identifies its run.
 
-Check `event.state` in each `run.end` envelope, or `state` in the saved `run.json`. The runner returns `0` when all runs complete, `1` if any run fails or times out, and `130` on interruption; an interruption stops the remaining replicates. A completed process can also report errors in individual evaluation items, so inspect the summary and relevant events. Missing `run.end` may mean execution is still active or stopped before recording its outcome. [Read the saved files directly](../browsing/runs.md#how-do-i-read-the-files-without-a-browser) to inspect the record without starting a viewer.
+Check `event.state` in each `run.end` envelope, or `state` in the saved `run.json`. The runner returns `0` when the run completes, `1` if it fails or times out, and `130` on interruption. A completed process can also report errors in individual evaluation items, so inspect the summary and relevant events. Missing `run.end` may mean execution is still active or stopped before recording its outcome. [Read the saved files directly](../browsing/runs.md#how-do-i-read-the-files-without-a-browser) to inspect the record without starting a viewer.
 
 To interrupt a terminal run, press Ctrl-C. Inspect the retained record to see how far it progressed. To run the same configuration again, use the original command or the local job's rerun action; [repeat and compare runs](model.md) explains seeds and source versions.

@@ -245,7 +245,6 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
   const [choices, setChoices] = useState<Record<string, string | null>>({});
   const [job, setJob] = useState<JobInfo | null>(null);
   const [launchErr, setLaunchErr] = useState<string | null>(null);
-  const [replicates, setReplicates] = useState("1");
   const jobId = useRef<string | null>(null);
 
   /* the 1s job poll, while one is live */
@@ -289,7 +288,6 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
       experiment: name,
       sets: setArgs,
       profiles: resolved,
-      replicates: Math.max(1, parseInt(replicates, 10) || 1),
     })
       .then(setJob)
       .catch((e: Error) => setLaunchErr(e.message));
@@ -319,11 +317,6 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
           onClick={launch}>
           ▶ run
         </button>
-        <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          × <input className={`${INPUT} w-16`} type="number" min="1" max="100"
-            value={replicates} onChange={(e) => setReplicates(e.target.value)} />
-          replicates
-        </label>
         {gate && <span className="text-[10px] text-muted-foreground">{gate}</span>}
       </div>
       {launchErr && <p className="text-[10px] text-red-600 dark:text-red-400">{launchErr}</p>}

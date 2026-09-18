@@ -101,7 +101,7 @@ class Client:
 def _job_args(job: dict[str, Json]) -> list[str]:
     """The claimed spec as runner argv — the same `--set key=value` strings the
     oneliner carries (one encoder upstream guarantees it), plus profile NAMES."""
-    args = ["--json", "--non-interactive", "--replicates", str(job.get("replicates") or 1)]
+    args = ["--json", "--non-interactive"]
     sets = job.get("sets")
     if isinstance(sets, list):
         for entry in sets:
@@ -176,7 +176,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
     crashes — the worker survives every bad job."""
     job_id = str(job["id"])
     report = Reporter(client, job_id)
-    _log(f"job {job_id}: {job['experiment']} ({job.get('replicates', 1)} replicate(s))")
+    _log(f"job {job_id}: {job['experiment']}")
 
     # step 1 — resolve the experiment to its executable, the same derivation the
     # user's oneliner would build, from the configured local source

@@ -14,16 +14,16 @@ from adb_runner.worker import _job_args, worker_cli
 
 JOB = {"id": "j1", "experiment": "hello",
        "sets": ["x=1", "model=mockllm/model"],
-       "profiles": {"openai": "work"}, "replicates": 2}
+       "profiles": {"openai": "work"}}
 
 
 def test_job_args_mapping():
     assert _job_args(JOB) == [
-        "--json", "--non-interactive", "--replicates", "2",
+        "--json", "--non-interactive",
         "--set", "x=1", "--set", "model=mockllm/model",
         "--profile", "openai=work",
     ]
-    assert _job_args({"id": "j", "experiment": "e"}) == ["--json", "--non-interactive", "--replicates", "1"]
+    assert _job_args({"id": "j", "experiment": "e"}) == ["--json", "--non-interactive"]
 
 
 class StubQueue(BaseHTTPRequestHandler):
@@ -66,14 +66,13 @@ class StubQueue(BaseHTTPRequestHandler):
 @pytest.mark.parametrize("data_directory", ["flag", "env", "xdg", "default"], indirect=True)
 def test_worker_loop_end_to_end(tmp_path, monkeypatch, data_directory):
     home, flags = data_directory
-    # the stub "experiment binary": records argv, emits two runs' envelopes
+    # the stub "experiment binary": records argv, emits one run's envelopes
     exp = tmp_path / "exp-bin"
     exp.write_text(f"""#!/bin/sh
 echo "$@" > {tmp_path}/argv
 printf '%s' "$ADB_DATA_DIR" > {tmp_path}/data-dir
 echo '{{"v":0,"ts":"t","run":"RUN1","seq":0,"event":{{"type":"run.start"}}}}'
 echo '{{"v":0,"ts":"t","run":"RUN1","seq":1,"event":{{"type":"run.end","state":"completed"}}}}'
-echo '{{"v":0,"ts":"t","run":"RUN2","seq":0,"event":{{"type":"run.start"}}}}'
 echo not-json-narration
 echo "runner narration" >&2
 exit 0
@@ -106,11 +105,11 @@ exit 0
     # the claimed spec became exactly the runner argv (one-encoder parity holds
     # through the queue: the --set strings pass through verbatim)
     argv = (tmp_path / "argv").read_text().split()
-    assert argv == ["--json", "--non-interactive", "--replicates", "2", "--set", "x=1",
+    assert argv == ["--json", "--non-interactive", "--set", "x=1",
                     "--set", "model=mockllm/model", "--profile", "openai=work"]
     # run ids were REPORTED from run.start envelopes; narration became log lines
     reported_runs = [r for rep in seen["reports"] for r in rep.get("runs", [])]
-    assert reported_runs == ["RUN1", "RUN2"]
+    assert reported_runs == ["RUN1"]
     logs = [line for rep in seen["reports"] for line in rep.get("log", [])]
     assert any("building the thing" in line for line in logs)
     assert any("runner narration" in line for line in logs)
@@ -288,14 +287,14 @@ time.sleep(100)
         server.shutdown()
 
 
-@pytest.mark.parametrize("script,run_state,exit_code,run_count", [
-    ("exit 0", "completed", 0, 2),
-    ("exit 3", "failed", 1, 2),
-    ("exit 124", "failed", 1, 2),  # an experiment's timeout exit
-    ("kill -TERM $$", "interrupted", 130, 1),
+@pytest.mark.parametrize("script,run_state,exit_code", [
+    ("exit 0", "completed", 0),
+    ("exit 3", "failed", 1),
+    ("exit 124", "failed", 1),  # an experiment's timeout exit
+    ("kill -TERM $$", "interrupted", 130),
 ])
 def test_experiment_outcome_reaches_cli_and_queue(
-        tmp_path, monkeypatch, script, run_state, exit_code, run_count):
+        tmp_path, monkeypatch, script, run_state, exit_code):
     """A real experiment -> runner subprocess -> queue must agree on failure."""
     import sys
 
@@ -330,7 +329,7 @@ def test_experiment_outcome_reaches_cli_and_queue(
     assert StubQueue.seen["done"] == {
         "state": "completed" if exit_code == 0 else "failed", "exit_code": exit_code}
     records = list(home.glob("runs/*/*/run.json"))
-    assert len(records) == run_count
+    assert len(records) == 1
     for path in records:
         record = json.loads(path.read_text())
         assert record["lifecycle"]["state"] == run_state and "phase" not in record

@@ -216,7 +216,7 @@ For example, suppose an adapter currently calls its model with a hardcoded `temp
 4. Update the README commands and fixtures to supply `--set temperature=0.5` alongside every existing parameter. `initial` prefills the form and suggested command; it does not make this new CLI argument optional. Existing commands must be updated.
 5. Run the before/after fixture with `0.5` and check that the model request and relevant results match. Then use a different value, such as `0.2`, and assert that it reaches the backend. A mock that ignores temperature can check wiring but cannot establish how a real model responds. Check invalid inputs and inspect a small run's parameters, events and summary.
 
-Preserving behavior does not preserve fingerprints: changes to declared source content or the parameter set can change the condition ID. Also, a changed condition ID changes derived run seeds even with the same CLI base seed. Use a fixture with a controlled adapter seed when testing behavior across these edits; see [seeds](../running/model.md#how-do-seeds-work).
+Preserving behavior does not preserve fingerprints: changes to declared source content or the parameter set can change the condition ID. An explicit `--seed` stays unchanged across these edits. Use a fixed seed when testing behavior; see [seeds](../running/model.md#how-do-seeds-work).
 
 If the change makes the experiment incompatible with its earlier meaning or behavior, give it a separate experiment identity and document the distinction. There is no agreed folder-suffix convention or general experiment-versioning system.
 

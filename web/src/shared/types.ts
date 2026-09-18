@@ -166,7 +166,6 @@ export interface JobInfo {
   state: JobState;
   sets: string[];                     /* the exact --set k=v args (no secrets ever) */
   profiles: Record<string, string>;   /* credential set -> profile NAME */
-  replicates: number;
   created_at: string;
   finished_at?: string;
   worker?: { id: string; name: string }; /* who claimed it */

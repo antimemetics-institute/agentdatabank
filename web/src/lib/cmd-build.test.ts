@@ -97,6 +97,7 @@ test("generated commands preserve the selected data directory across Nix formats
       const argv = execFileSync("sh", ["-c", script], { encoding: "utf8" }).trimEnd().split("\n");
       assert.deepEqual(argv, ["--data-dir", dataDir, ...(params.n ? ["--set", "n=3"] : [])]);
       assert.doesNotMatch(rewritten, /--out\b/);
+      assert.doesNotMatch(rewritten, /--replicates\b/);
     }
   }
 });

@@ -37,11 +37,10 @@ function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
   const [err, setErr] = useState<string | null>(null);
   const stop = (id: string) =>
     void apiPost(`/api/jobs/${id}/stop`, {}).catch((e: Error) => setErr(e.message));
-  /* the stored spec IS the resubmission — same experiment, sets, profile names,
-     replicates; a fresh id, back of the queue */
+  /* One new run with the same experiment, sets and profile names; back of the queue. */
   const rerun = (j: JobInfo) =>
     void apiPost("/api/jobs", {
-      experiment: j.experiment, sets: j.sets, profiles: j.profiles, replicates: j.replicates,
+      experiment: j.experiment, sets: j.sets, profiles: j.profiles,
     }).then(() => setErr(null)).catch((e: Error) => setErr(e.message));
   jobs = Array.isArray(jobs) ? jobs : [];
   const cols = ["job", "experiment", "state", "runs", "created", ""];
@@ -124,7 +123,7 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabl
             </button>
           ) : (
             <button type="button" disabled={!enabled} className={BTN}
-              title="submit the same spec again (same --sets, profiles, replicates) as a new job"
+              title="submit one new run with the same --set arguments and profiles"
               onClick={(e) => { e.stopPropagation(); onRerun(); }}>
               re-run
             </button>
@@ -137,7 +136,6 @@ function JobRows({ job: j, live, open, colSpan, onToggle, onStop, onRerun, enabl
             <div className="max-w-3xl space-y-1.5 py-1">
               <p className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
                 {Array.isArray(j.sets) && j.sets.length ? j.sets.map((s) => `--set ${s}`).join(" ") : "(no --set args)"}
-                {j.replicates > 1 && ` × ${j.replicates} replicates`}
               </p>
               <JobPanel job={j} onStop={onStop} />
             </div>

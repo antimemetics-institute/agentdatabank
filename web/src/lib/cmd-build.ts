@@ -146,8 +146,9 @@ function materialize(
   return { args, missing };
 }
 
-/* every bound param is emitted explicitly — the oneliner is the complete condition
-   spec, defaults materialized into the command text rather than hidden behind it. */
+/* One command launches one run. Every bound param is emitted explicitly — the
+   oneliner is the complete condition spec, defaults materialized into the command
+   text rather than hidden behind it. */
 export function buildCmd(
   name: string,
   params: Record<string, ParamDecl>,

@@ -127,10 +127,14 @@ process.on('SIGTERM', async () => {
       assert.equal((await fetch(instance.url + "/api/executor/claim", { method: "POST" })).status, 403);
       assert.equal((await fetch(instance.url + "/api/jobs", { method: "POST", headers: { origin: "https://other.example" } })).status, 403);
     }
-    const spec = { experiment: "hello", sets: ["x=quote' $literal"], profiles: { openai: "work" }, replicates: 2 };
+    const spec = { experiment: "hello", sets: ["x=quote' $literal"], profiles: { openai: "work" } };
+    const obsolete = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify({ ...spec, replicates: 2 }) });
+    assert.equal(obsolete.status, 400);
+    assert.match((await obsolete.json()).error, /unknown job field: replicates/);
     const submitted = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) });
     assert.equal(submitted.status, 201);
     const job = await submitted.json();
+    assert.ok(!("replicates" in job));
     await until(async () => (await (await fetch(a.url + "/api/jobs/" + job.id)).json()).state === "running" || null);
     assert.deepEqual(await (await fetch(b.url + "/api/jobs")).json(), []);
     assert.equal((await fetch(a.url + `/api/jobs/${job.id}/done`, { method: "POST" })).status, 403);

@@ -10,8 +10,7 @@ import {
 } from "./queue.ts";
 
 const home = mkdtempSync(join(tmpdir(), "adb-queue-"));
-const SPEC = { experiment: "hello", sets: ["x=1"], profiles: { openai: "work" },
-  replicates: 2 };
+const SPEC = { experiment: "hello", sets: ["x=1"], profiles: { openai: "work" } };
 
 test("submit → claim → report → stop-via-report → done, durably", async () => {
   const sub = submit(home, SPEC);
@@ -27,6 +26,7 @@ test("submit → claim → report → stop-via-report → done, durably", async 
   assert.ok(spec);
   assert.equal(spec.id, id);
   assert.deepEqual(spec.sets, ["x=1"]); /* the spec passes through verbatim */
+  assert.deepEqual(spec, { id, ...SPEC });
   assert.equal(getJob(id)!.state, "claimed");
 
   assert.deepEqual(report(home, id, { state: "running", runs: ["R1"], log: ["hi"] }),
@@ -44,7 +44,7 @@ test("submit → claim → report → stop-via-report → done, durably", async 
   await flushJobs();
   const disk = JSON.parse(readFileSync(join(home, "jobs", `${id}.json`), "utf8"));
   assert.equal(disk.state, "stopped");
-  assert.equal(disk.replicates, 2); // Batch facts stay in the local job.
+  assert.ok(!("replicates" in disk));
   assert.ok(!("stopRequested" in disk)); /* server-private state never persists */
 });
 
@@ -58,7 +58,7 @@ test("a queued job stops immediately", () => {
 test("boot: in-flight jobs orphan and cannot revive, queued jobs survive", async () => {
   const home2 = mkdtempSync(join(tmpdir(), "adb-queue-boot-"));
   mkdirSync(join(home2, "jobs"), { recursive: true });
-  const base = { experiment: "hello", sets: [], profiles: {}, replicates: 1, created_at: "t", runs: [], log: [] };
+  const base = { experiment: "hello", sets: [], profiles: {}, created_at: "t", runs: [], log: [] };
   writeFileSync(join(home2, "jobs", "j-flight.json"),
     JSON.stringify({ ...base, id: "j-flight", state: "running" }));
   writeFileSync(join(home2, "jobs", "j-waiting.json"),

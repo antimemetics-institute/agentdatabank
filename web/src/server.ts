@@ -267,12 +267,14 @@ const SET_ARG_RE = /^[A-Za-z_][A-Za-z0-9_]*=[\s\S]*$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 interface JobBody {
-  experiment: string; sets: string[]; profiles: Record<string, string>; replicates: number;
+  experiment: string; sets: string[]; profiles: Record<string, string>;
 }
 
 async function parseJobBody(body: unknown): Promise<JobBody | string> {
   if (!body || typeof body !== "object") return "expected a JSON object";
   const b = body as Record<string, unknown>;
+  const unknown = Object.keys(b).find((key) => !["experiment", "sets", "profiles"].includes(key));
+  if (unknown) return `unknown job field: ${unknown}`;
   const experiment = b.experiment;
   if (typeof experiment !== "string" || !EXPERIMENT_RE.test(experiment))
     return "bad experiment name";
@@ -290,11 +292,7 @@ async function parseJobBody(body: unknown): Promise<JobBody | string> {
       return "bad profile selection";
     profiles[set] = profile;
   }
-  const replicates = b.replicates ?? 1;
-  if (typeof replicates !== "number" || !Number.isInteger(replicates) ||
-      replicates < 1 || replicates > 100)
-    return "replicates must be an integer 1..100";
-  return { experiment, sets: sets as string[], profiles, replicates };
+  return { experiment, sets: sets as string[], profiles };
 }
 
 const server = createServer(async (req, res) => {

@@ -163,12 +163,13 @@ print(json.dumps({"params": json.load(sys.stdin), "seed": int(os.environ["ADB_SE
         assert ("rev" in info["locked"]) == (not dirty)
         output = tmp_path / ("dirty-run" if dirty else "clean-run")
         command("nix", "run", "--impure", "--no-write-lock-file", ".", "--",
-                "--data-dir", str(output), "--seed", "37", "--replicates", "1",
+                "--data-dir", str(output), "--seed", "37",
                 "--set", "model=openai/fixture", env=env)
         run_file, = output.glob("runs/*/*/run.json")
         records = list(read_events(run_file.parent))
         start = records[0].event
         assert isinstance(start, RunStart)
+        assert start.seed == 37
         assert start.source.startswith("content:sha256:")
         assert start.fetch_ref == (None if dirty else f"github:fixture/provenance/{revision}")
         assert start.tree_hash == info["locked"]["narHash"]

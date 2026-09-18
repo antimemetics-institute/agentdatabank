@@ -17,17 +17,16 @@ Pass these options to the named experiment app:
 | Option | Meaning |
 | --- | --- |
 | `--set KEY=VALUE` | Bind an experiment parameter. Repeat for every declared parameter. A later binding of the same key wins. |
-| `--replicates N` | Number of runs in this invocation; default `1`. Use a positive integer. Runs execute sequentially. |
-| `--seed INTEGER` | Base seed used to derive per-run seeds. A random 32-bit base seed is chosen when omitted. |
+| `--seed INTEGER` | Run seed in `0..2147483647`, recorded unchanged. A random non-negative 31-bit seed is chosen when omitted. |
 | `--profile SET=PROFILE` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
 | `--data-dir DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
 | `--json` | Print each recorded event, including its run metadata, to stdout as one JSON line as it happens. Events are also saved normally; diagnostics go to stderr. |
 | `--non-interactive` | Never prompt for input. Fail if required credentials or profile selections cannot be resolved automatically. Non-terminal stdin also disables prompts. |
-| `--dry-run` | Print resolved inputs, condition ID, base seed and replicate count; do not execute or resolve credentials. Checks parameter names and types; list-length bounds are checked when executing. |
+| `--dry-run` | Print resolved inputs, condition ID and run seed; do not execute or resolve credentials. Checks parameter names and types; list-length bounds are checked when executing. |
 | `--describe` | Print the experiment manifest as JSON and exit without requiring parameter bindings. |
 | `-h`, `--help` | Print usage. |
 
-The runner returns exit code `2` for input or credential-resolution errors handled before execution. After execution it reports state counts and returns `0` if all runs completed, `1` if any run failed or timed out, or `130` if interrupted. An interruption stops the remaining replicates. Inspect `run.end` or saved `run.json` states for individual process outcomes, and summaries and events for evaluation results.
+Each invocation executes one run. The runner returns exit code `2` for input or credential-resolution errors handled before execution. After execution it returns `0` if the run completed, `1` if it failed or timed out, or `130` if interrupted. Inspect `run.end` or saved `run.json` for the process outcome, and summaries and events for evaluation results.
 
 ## How are parameter values read?
 

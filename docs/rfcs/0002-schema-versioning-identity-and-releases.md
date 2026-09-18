@@ -87,9 +87,9 @@ builds; its absence carries no meaning.
 
 `run.start` carries launch facts and `run.end` carries terminal process facts;
 neither contains aggregates of other records. The stream is the truth, the card
-is a cache of it, and nothing reads the card as an input. Runs record the derived
-seed, not the launcher's replicate ordinal. The ordinal remains an input to seed
-derivation; persisted batch facts belong only to the local jobs file. The sections of the
+is a cache of it, and nothing reads the card as an input. Each launcher invocation
+executes one run. Runs record the `--seed` argument unchanged, or a random
+non-negative 31-bit seed when omitted. The sections of the
 runner's index card, local storage and published layout are defined in
 [RFC 0003](0003-run-directory-and-published-layout.md). Runtime closure paths can
 differ between the flake and classic doors on a checkout with untracked files
@@ -106,7 +106,7 @@ records and paths use its result unchanged. Condition storage names append
 parse the suffix. Each execution has its own run identifier,
 `yyyymmddthhmmssz-<12 lowercase hex random>`, using the launching machine's UTC
 clock and six random bytes. The whole string is the ID; its date is a launch-time
-label, not evidence. Seeds, replicate numbers, credential
+label, not evidence. Seeds, credential
 profiles, endpoints, runner/platform details, fetch references and packaging
 tree hashes are outside this key. Pooling establishes matching declared inputs;
 it does not assert equivalent provider behavior or scientific comparability.

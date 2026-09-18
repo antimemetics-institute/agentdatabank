@@ -37,7 +37,7 @@ The animations show an illustrative, accelerated replay of a historical GovSim r
 
 ## Launch the experiment
 
-Leave **replicates** at `1` and press **▶ run**. A replicate is one execution of the experiment; this one simulates one fishing round. The job panel shows build and execution progress, then a link to the run. The first experiment build may take longer than the test itself.
+Press **▶ run** to execute the experiment once; this run simulates one fishing round. The job panel shows build and execution progress, then a link to the run. The first experiment build may take longer than the test itself.
 
 <video class="only-light" autoplay loop muted playsinline src="../images/launch-light.webm" aria-label="Launch the configured experiment and follow its progress"></video>
 <video class="only-dark" autoplay loop muted playsinline src="../images/launch-dark.webm" aria-label="Launch the configured experiment and follow its progress"></video>

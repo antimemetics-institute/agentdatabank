@@ -81,9 +81,8 @@ its copies with `run.start` and recompute its derived block with `read_events`.
 | `definitions` | `results`: the ordered `run.start.result_definitions` list. |
 | `derived` | Results, served models, usage, counts, latest status and last included event position, computed from written records. |
 
-The seed is the derived run seed. The launcher uses a replicate ordinal to derive
-it, but does not write that ordinal into the run. Persisted batch facts belong
-only to the local jobs file.
+The seed is the `--seed` argument unchanged, or a random non-negative 31-bit seed
+when omitted. Each launcher invocation executes one run.
 
 Provenance includes runtime `platform`, `runner_python_version`, optional
 `experiment_bin` and `runner_bin`, and `endpoints`. Executable paths are recorded
