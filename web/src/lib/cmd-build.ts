@@ -152,8 +152,10 @@ export function buildCmd(
   name: string,
   params: Record<string, ParamDecl>,
   vals: Record<string, string>,
+  dataDir?: string,
 ): BuiltCmd {
   const { args, missing } = materialize(params, vals, encodeSet, (k) => `--set ${k}=null`);
+  if (dataDir !== undefined) args.unshift(`--data-dir ${shQuote(dataDir)}`);
   const cmd = args.length
     ? `nix run .#${name} -- \\\n  ${args.join(" \\\n  ")}`
     : `nix run .#${name}`;

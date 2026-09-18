@@ -14,7 +14,7 @@ export class LocalExecutor {
   constructor(onExit: () => void) { this.onExit = onExit; }
 
   start(python: string, endpoint: string, repo: string, home: string): void {
-    const child = spawn(python, ["-m", "adb_runner.worker", "--server", endpoint, "--repo", repo], {
+    const child = spawn(python, ["-m", "adb_runner.worker", "--server", endpoint, "--data-dir", home, "--repo", repo], {
       stdio: ["ignore", "inherit", "inherit"],
       detached: true, // terminal signals go through the owning server exactly once
       env: { ...process.env, ADB_DATA_DIR: home, ADB_EXECUTOR_CAPABILITY: this.capability },

@@ -13,12 +13,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from adb_events import Envelope, Json, read_events
+from adb_events.identity import RUN_ID_PATTERN
 from adb_providers import PROVIDERS, served_model_matches
 
 from . import credentials
 from .card import derive_card
 from .schema import Manifest, load_manifest
 from .secrets import assert_run_has_no_secrets
+from .store import find_run, resolve_data_dir
 
 
 class VerificationError(ValueError):
@@ -186,12 +188,22 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
 
 def verify_cli(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="adb-runner verify", description=__doc__)
-    parser.add_argument("run_dir", type=Path, metavar="RUN_DIR")
+    parser.add_argument("run_dir", metavar="RUN_ID_OR_DIR",
+                        help="run ID in the data directory, or a path to a run directory")
+    parser.add_argument("--data-dir", metavar="DIR",
+                        help="run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)")
     parser.add_argument("--manifest", type=Path, help="built experiment manifest (defaults to ADB_MANIFEST)")
     parser.add_argument("--catalog", type=Path, help="built manifest directory (otherwise ADB_MANIFESTS or current checkout)")
     args = parser.parse_args(argv)
     try:
-        result = verify_run(args.run_dir, manifest=args.manifest, catalog=args.catalog)
+        home = resolve_data_dir(args.data_dir)
+        run_dir = Path(args.run_dir)
+        if re.fullmatch(RUN_ID_PATTERN, args.run_dir):
+            found = find_run(home, args.run_dir)
+            if found is None:
+                raise VerificationError(f"run {args.run_dir} not found in {home}")
+            run_dir = found
+        result = verify_run(run_dir, manifest=args.manifest, catalog=args.catalog)
     except VerificationError as exc:
         print(f"verify: FAIL: {exc}", file=sys.stderr)
         return 1

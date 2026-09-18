@@ -59,7 +59,7 @@ For browser inspection, start the viewer:
 nix run .#adb-web
 ```
 
-Open the run under **Runs** using its printed run ID. If a viewer was already serving the same data directory, the runner's **watch** link opens the run directly. A printed link alone does not start a viewer. If you used `--out DIR`, start the viewer with `--data-dir DIR`. See [find and read a run](../browsing/runs.md) for inspecting results and evidence.
+Open the run under **Runs** using its printed run ID. If a viewer was already serving the same data directory, the runner's **watch** link opens the run directly. A printed link alone does not start a viewer. If you used `--data-dir DIR`, pass the same option when starting the viewer. See [find and read a run](../browsing/runs.md) for inspecting results and evidence.
 
 For terminal processing, add `--json` to the experiment command to stream event envelopes as JSON lines on the launcher’s stdout; its diagnostics go to stderr. This is distinct from the child experiment program’s stdout, which is captured as text events. Saved run files are still written. For unattended execution, also pass `--non-interactive` to disable prompts; required credentials and profile selections must be resolvable without input. Each envelope identifies its run, so replicates can be processed separately.
 

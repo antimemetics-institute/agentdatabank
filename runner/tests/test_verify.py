@@ -45,13 +45,44 @@ def digest_files(directory):
             for p in directory.rglob("*") if p.is_file()}
 
 
-def test_public_command_checks_all_three_and_preserves_every_file(saved, monkeypatch, capsys):
+@pytest.mark.parametrize("relative", [False, True])
+def test_public_command_checks_all_three_and_preserves_every_file(saved, monkeypatch, capsys, relative):
     directory, manifest = saved
     before = digest_files(directory)
-    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    monkeypatch.chdir(directory.parent)
+    run_arg = "./" + directory.name if relative else str(directory)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", run_arg, "--manifest", str(manifest)])
     assert cli.main() == 0
     assert "verify: PASS:" in capsys.readouterr().out
     assert digest_files(directory) == before
+
+
+@pytest.mark.parametrize("data_directory", ["flag", "env", "xdg", "default"], indirect=True)
+def test_verify_resolves_run_id_in_selected_store(saved, data_directory, monkeypatch, capsys):
+    directory, manifest = saved
+    home, flags = data_directory
+    original_home = directory.parents[2]
+    relative_run = directory.relative_to(original_home)
+    home.parent.mkdir(parents=True, exist_ok=True)
+    original_home.rename(home)
+    before = digest_files(home)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", directory.name, *flags,
+                                     "--manifest", str(manifest)])
+    assert cli.main() == 0
+    assert "verify: PASS:" in capsys.readouterr().out
+    assert (home / relative_run).is_dir()
+    assert digest_files(home) == before
+
+
+def test_verify_does_not_fall_back_to_another_store(saved, tmp_path, monkeypatch, capsys):
+    directory, manifest = saved
+    missing = tmp_path / "missing"
+    monkeypatch.setenv("ADB_DATA_DIR", str(directory.parents[2]))
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", directory.name,
+                                     "--data-dir", str(missing), "--manifest", str(manifest)])
+    assert cli.main() == 1
+    assert f"not found in {missing}" in capsys.readouterr().err
+    assert not missing.exists()
 
 
 @pytest.mark.parametrize("section", ["identity", "inputs", "lifecycle", "provenance", "definitions", "derived"])

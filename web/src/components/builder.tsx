@@ -16,7 +16,7 @@ import {
   clearDraft, getComposerTab, getLastLlm, loadDraft, saveDraft, setComposerTab, setLastLlm,
 } from "@/lib/run-draft";
 import { rewriteCmd } from "@/lib/cmd-rewrite";
-import { useManifests, useExecutorPoll } from "@/lib/data";
+import { useManifests, useExecutorPoll, useDataDir } from "@/lib/data";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Launcher, useLaunchSurface } from "@/components/launcher";
@@ -455,6 +455,7 @@ function BuilderForm({ name }: { name: string }) {
   /* Local execution offers Run; read-only viewers expose the oneliner alone. */
   const { creds, refresh } = useLaunchSurface();
   const executor = useExecutorPoll();
+  const dataDir = useDataDir();
   const [tabChoice, setTabChoice] = useState<string | null>(getComposerTab);
   const [runLive, setRunLive] = useState(false); /* a job is in flight (Launcher reports) */
   const tab = tabChoice ?? (executor?.ready ? "run" : "oneliner");
@@ -500,12 +501,12 @@ function BuilderForm({ name }: { name: string }) {
      the copied text. */
   const prefs = useCmdPrefs();
   const { oneliner, missing } = useMemo(() => {
-    const { cmd, missing } = buildCmd(name, params, seeded);
+    const { cmd, missing } = buildCmd(name, params, seeded, dataDir);
     return { oneliner: rewriteCmd(cmd, prefs), missing };
-  }, [name, params, seeded, prefs]);
+  }, [name, params, seeded, prefs, dataDir]);
 
   const copy = () => {
-    if (missing.length > 0) return;
+    if (missing.length > 0 || dataDir === undefined) return;
     void navigator.clipboard?.writeText(oneliner).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -615,12 +616,12 @@ function BuilderForm({ name }: { name: string }) {
               </TabsContent>
               <TabsContent value="oneliner">
                 <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-                  copy={copy} />
+                  copy={copy} dataDirReady={dataDir !== undefined} />
               </TabsContent>
             </Tabs>
           ) : (
             <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-              copy={copy} />
+              copy={copy} dataDirReady={dataDir !== undefined} />
           )}
         </div>
       )}
@@ -630,9 +631,10 @@ function BuilderForm({ name }: { name: string }) {
 
 /* the copyable command block — the composer's original artifact, now one of the
    two bottom tabs (and the whole bottom when the launch surface is absent) */
-function Oneliner({ oneliner, missing, copied, copy }: {
-  oneliner: string; missing: string[]; copied: boolean; copy: () => void;
+function Oneliner({ oneliner, missing, copied, copy, dataDirReady }: {
+  oneliner: string; missing: string[]; copied: boolean; copy: () => void; dataDirReady: boolean;
 }) {
+  if (!dataDirReady) return <p className="text-xs text-muted-foreground">Loading data directory…</p>;
   return (
     <div className="space-y-1">
       <span className="text-xs text-muted-foreground">

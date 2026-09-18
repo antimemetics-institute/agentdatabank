@@ -21,6 +21,8 @@ from typing import IO, Literal
 
 from adb_events import Json
 
+from .store import resolve_data_dir
+
 
 JobState = Literal["queued", "building", "running", "completed", "failed", "stopped", "error"]
 
@@ -215,8 +217,7 @@ def execute(client: Client, job: dict[str, Json], *, repo: str,
         [bin_path] + _job_args(job),
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, start_new_session=True,
-        env={**os.environ, "ADB_DATA_DIR": os.environ.get(
-            "ADB_DATA_DIR", os.path.expanduser("~/.local/share/adb"))})
+        env={**os.environ, "ADB_DATA_DIR": str(resolve_data_dir())})
     _active = child
     report.flush(state="running", force=True)
 
@@ -262,12 +263,15 @@ def worker_cli(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="python -m adb_runner.worker")
     p.add_argument("--server", required=True)
     p.add_argument("--repo", required=True)
+    p.add_argument("--data-dir", metavar="DIR",
+                   help="run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)")
     p.add_argument("--once", action="store_true")
     args = p.parse_args(argv)
     token = os.environ.get("ADB_EXECUTOR_CAPABILITY")
-    if not token or not os.environ.get("ADB_DATA_DIR"):
+    if not token:
         _log("this private executor must be started by adb-local")
         return 2
+    os.environ["ADB_DATA_DIR"] = str(resolve_data_dir(args.data_dir))
     client = Client(args.server, token)
     build_cmd = os.environ.get("ADB_WORKER_BUILD", "nix-build")
     parent = os.getppid()

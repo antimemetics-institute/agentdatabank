@@ -136,6 +136,8 @@ export const useJobsPoll = (): JobInfo[] | null | undefined =>
   useGatedPoll<JobInfo[]>("/api/jobs");
 export const useExecutorPoll = (): ExecutorInfo | null | undefined =>
   useGatedPoll<ExecutorInfo>("/api/executor");
+export const useDataDir = (): string | undefined =>
+  useGatedPoll<{ home: string }>("/api/ping")?.home;
 
 export const fmtAgo = (iso: string): string => {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));

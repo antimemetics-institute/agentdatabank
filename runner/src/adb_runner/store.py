@@ -25,11 +25,14 @@ def condition_name(condition: str, experiment: str) -> str:
     return f"{condition}-{experiment}"
 
 
-def default_home() -> Path:
+def resolve_data_dir(data_dir: str | Path | None = None) -> Path:
+    """Select the shared run store: explicit flag, environment, then XDG default."""
+    if data_dir is not None:
+        return Path(data_dir).resolve()
     if "ADB_DATA_DIR" in os.environ:
-        return Path(os.environ["ADB_DATA_DIR"])
+        return Path(os.environ["ADB_DATA_DIR"]).resolve()
     xdg = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-    return Path(xdg) / "adb"
+    return (Path(xdg) / "adb").resolve()
 
 
 def write_json_atomic(path: Path, obj: Any) -> None:

@@ -4,7 +4,7 @@ The local store keeps conditions, run metadata, the event stream and working fil
 
 ## Where are runs saved?
 
-The runner uses `--out DIR`, then `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`, with `XDG_DATA_HOME` defaulting to `~/.local/share`. The viewer uses the same default and accepts `--data-dir DIR`.
+Terminal experiments, browser tools, and verifier run-ID lookup use `--data-dir DIR`, then `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`, with `XDG_DATA_HOME` defaulting to `~/.local/share`.
 
 ```text
 DATA_DIR/

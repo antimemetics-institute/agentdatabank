@@ -35,6 +35,10 @@ adb-runner verify /path/to/run
 nix run .#adb-runner -- verify /path/to/run
 ```
 
+You can also pass the printed run ID: `nix run .#adb-runner -- verify RUN_ID --data-dir DIR`.
+Run-ID lookup selects `--data-dir`, then `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`
+(default `~/.local/share/adb`). An explicit run-directory path is used directly.
+
 The command scans every file, including the workspace, for known credential
 values and common secret patterns, validates every envelope through the
 experiment's declared payload union, and compares every card section with its

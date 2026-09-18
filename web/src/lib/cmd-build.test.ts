@@ -15,6 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCmd, defaultStr, effectiveStr } from "./cmd-build.ts";
 import { clearDraft, loadDraft, saveDraft } from "./run-draft.ts";
+import { CMD_PREFS_DEFAULTS, rewriteCmd } from "./cmd-rewrite.ts";
 import type { ParamDecl } from "../shared/types.ts";
 
 /* no test input contains a literal `<`, so any `<…>` in the output is invented */
@@ -82,6 +83,22 @@ test("user value overrides initial; strings quote when not shell-bare", () => {
 
 test("no params at all -> bare nix run, nothing missing", () => {
   assert.deepEqual(buildCmd("x", {}, {}), { cmd: "nix run .#x", missing: [] });
+});
+
+test("generated commands preserve the selected data directory across Nix formats", () => {
+  const dataDir = "/tmp/ADB data's $HOME `literal` $(printf injected)";
+  for (const mode of ["flakes", "nix-build", "nix-run"] as const) {
+    for (const params of [{}, { n: { type: { kind: "int" }, initial: 3 } }] as Record<string, ParamDecl>[]) {
+      const { cmd, missing } = buildCmd("x", params, {}, dataDir);
+      assert.deepEqual(missing, []);
+      const rewritten = rewriteCmd(cmd, { ...CMD_PREFS_DEFAULTS, mode, source: "local", nixRun: true });
+      // Capture the actual launcher argv, bypassing only Nix's executable lookup.
+      const script = rewritten.replace(/^[\s\S]*?(?=--data-dir)/, "printf '%s\\n' ");
+      const argv = execFileSync("sh", ["-c", script], { encoding: "utf8" }).trimEnd().split("\n");
+      assert.deepEqual(argv, ["--data-dir", dataDir, ...(params.n ? ["--set", "n=3"] : [])]);
+      assert.doesNotMatch(rewritten, /--out\b/);
+    }
+  }
 });
 
 /* ── shell round trip ────────────────────────────────────────────────────────

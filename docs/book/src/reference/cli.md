@@ -20,7 +20,7 @@ Pass these options to the named experiment app:
 | `--replicates N` | Number of runs in this invocation; default `1`. Use a positive integer. Runs execute sequentially. |
 | `--seed INTEGER` | Base seed used to derive per-run seeds. A random 32-bit base seed is chosen when omitted. |
 | `--profile SET=PROFILE` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
-| `--out DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
+| `--data-dir DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
 | `--json` | Print each recorded event, including its run metadata, to stdout as one JSON line as it happens. Events are also saved normally; diagnostics go to stderr. |
 | `--non-interactive` | Never prompt for input. Fail if required credentials or profile selections cannot be resolved automatically. Non-terminal stdin also disables prompts. |
 | `--dry-run` | Print resolved inputs, condition ID, base seed and replicate count; do not execute or resolve credentials. Checks parameter names and types; list-length bounds are checked when executing. |
@@ -69,9 +69,17 @@ Profile names start with a lowercase letter or digit and continue with lowercase
 
 ## Data and configuration settings
 
+Experiment launchers, `adb-local`, `adb-web`, and `adb-runner verify` select run
+storage in this order: `--data-dir DIR`, `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`
+(or `~/.local/share/adb` when `XDG_DATA_HOME` is unset). Commands copied from the
+web include its selected directory explicitly.
+
+To audit a saved run by ID, use `nix run .#adb-runner -- verify RUN_ID --data-dir DIR`.
+`verify` also accepts a run-directory path directly; see [run auditing](../running/model.md#how-do-i-audit-the-first-real-run).
+
 | Setting | Effect |
 | --- | --- |
-| `ADB_DATA_DIR` | Default root for run data; overridden by runner `--out` or server `--data-dir`. |
+| `ADB_DATA_DIR` | Default root for run data; overridden by `--data-dir`. |
 | `XDG_DATA_HOME` | When `ADB_DATA_DIR` is absent, data lives under this directory's `adb/`; default `~/.local/share`. |
 | `ADB_CREDENTIALS_FILE` | Override the credential TOML path. |
 | `XDG_CONFIG_HOME` | Base for `adb/credentials.toml` and `adb/preferences.toml`; default `~/.config`. The credential-file override does not relocate preferences. |

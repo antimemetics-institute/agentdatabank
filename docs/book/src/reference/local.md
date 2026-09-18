@@ -48,8 +48,7 @@ The browser server and its executor share one data directory. A terminal experim
 
 | Setting | Effect |
 | --- | --- |
-| `--data-dir DIR` | Selects storage for `adb-local` or `adb-web`; overrides the environment. |
-| `--out DIR` | Selects storage for a terminal experiment; overrides the environment. |
+| `--data-dir DIR` | Selects storage for terminal experiments, `adb-local`, `adb-web`, and verifier run-ID lookup; overrides the environment. |
 | `ADB_DATA_DIR` | Shared default for the browser tools and terminal experiments. |
 | No explicit directory | Uses `$XDG_DATA_HOME/adb` when `XDG_DATA_HOME` is set; otherwise `~/.local/share/adb`. |
 
@@ -68,7 +67,7 @@ Changing the directory selects a different collection of runs; it does not move 
 
 ## Run the hello test in a terminal
 
-If you used the default data directory in the browser guide, run this command as written. If you chose another directory, set `ADB_DATA_DIR` to that directory first or append `--out DIR`.
+If you used the default data directory in the browser guide, run this command as written. If you chose another directory, set `ADB_DATA_DIR` to that directory first or append `--data-dir DIR`. Commands copied from the browser include its selected data directory.
 
 ```bash
 nix run .#inspect-hello -- \

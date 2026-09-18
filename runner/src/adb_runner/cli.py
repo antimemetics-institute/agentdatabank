@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import random
+import shlex
 import sys
 import urllib.request
 from pathlib import Path
@@ -36,7 +37,7 @@ from .schema import (
     validate_spec,
 )
 from .shorthand import ShorthandError, parse_value
-from .store import RunStore, default_home, ensure_condition
+from .store import RunStore, resolve_data_dir, ensure_condition
 from .run_id import new_run_id
 
 
@@ -97,8 +98,9 @@ def resolve_viewer(home: Path) -> tuple[str, str | None]:
     if mismatched is not None:
         base, served = mismatched
         return base, (f"the viewer at {base} is serving {served}, not {home} — restart it "
-                      f"with: nix run .#adb-web -- --data-dir {home}")
-    return VIEWER_URL, "no viewer running — start one with: nix run .#adb-web"
+                      f"with: nix run .#adb-web -- --data-dir {shlex.quote(str(home))}")
+    return VIEWER_URL, ("no viewer running — start one with: "
+                        f"nix run .#adb-web -- --data-dir {shlex.quote(str(home))}")
 
 
 def _parse_kv(raw: str, flag: str) -> tuple[str, str]:
@@ -120,7 +122,7 @@ def _derive_seed(base_seed: int, cid: str, replicate: int) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="adb-runner", add_help=True,
-                                epilog="Management commands: credentials …; verify RUN_DIR (audit a finished run).")
+                                epilog="Management commands: credentials …; verify RUN_ID_OR_DIR (audit a finished run).")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                    help="set a param (JSON, @file, or bare string); repeatable")
     p.add_argument("--replicates", type=int, default=1, metavar="N",
@@ -131,7 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="use that credential profile for that set (repeatable; "
                         "skips the interactive picker)")
     p.add_argument("--seed", type=int, default=None, help="base seed (random if omitted)")
-    p.add_argument("--out", default=None, metavar="DIR", help="override $ADB_DATA_DIR")
+    p.add_argument("--data-dir", metavar="DIR",
+                   help="run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)")
     p.add_argument("--json", action="store_true", help="print recorded events as JSON lines to stdout")
     p.add_argument("--non-interactive", action="store_true",
                    help="never prompt for input; fail if required credentials cannot be resolved")
@@ -149,8 +152,6 @@ def suggested_oneliner(manifest: Manifest) -> str:
     it keeps the CLI usable without the GUI while every param stays on the command
     line — the oneliner IS the condition spec, nothing hidden in defaults. Only a
     param the manifest names no value for anywhere gets a `<name>` placeholder."""
-    import shlex
-
     sets: list[str] = []
     # presentation order: params may carry an `order` hint (task-level params first —
     # they're what a researcher cares about); ties break by name
@@ -249,7 +250,7 @@ def main() -> int:
         print(json.dumps(cond["params"], indent=2, sort_keys=True))
         return 0
 
-    home = default_home() if args.out is None else Path(args.out)
+    home = resolve_data_dir(args.data_dir)
     home.mkdir(parents=True, exist_ok=True)
     _log(f"{manifest['name']}: {replicates} replicate(s) of condition "
          f"{abbrev(cond['cid'])}, base seed {base_seed}")

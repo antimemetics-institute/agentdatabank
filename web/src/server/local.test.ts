@@ -36,6 +36,7 @@ test("managed instances share explicit source/home, bind independently, protect 
     }
     for (const mode of [["--viewer-only"], ["--execution-source", dir, "--runner", "/unused"]]) {
       assert.throws(() => execFileSync(process.execPath, [bundle, ...mode, "--home", dir, "--help"], { stdio: "pipe" }), /Unknown option '--home'/);
+      assert.throws(() => execFileSync(process.execPath, [bundle, ...mode, "--out", dir, "--help"], { stdio: "pipe" }), /Unknown option '--out'/);
       const help = execFileSync(process.execPath, [bundle, ...mode, "--help"], { encoding: "utf8" });
       assert.match(help, /--data-dir DIR/);
       assert.doesNotMatch(help, /--home/);
@@ -55,6 +56,7 @@ console.log(JSON.stringify({providers: []}));
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 const endpoint = args[args.indexOf('--server') + 1];
+fs.mkdirSync(require('node:path').dirname(process.env.ADB_DATA_DIR), {recursive: true});
 fs.writeFileSync(process.env.ADB_DATA_DIR + '.executor', JSON.stringify({pid: process.pid, args, home: process.env.ADB_DATA_DIR, creds: process.env.ADB_CREDENTIALS_FILE}));
 const headers = {'content-type':'application/json', 'x-adb-executor':process.env.ADB_EXECUTOR_CAPABILITY};
 let job;
@@ -71,28 +73,46 @@ process.on('SIGTERM', async () => {
   setInterval(()=>{},1000);
 })();
 `, { mode: 0o755 });
-    async function launch(home: string, port: number, execute = true, explicitDir = true) {
+    async function launch(home: string, port: number, execute = true, dataSource = "flag") {
       let output = "";
-      const child = spawn(process.execPath, [bundle, "--port", String(port), ...(explicitDir ? ["--data-dir", home] : []), "--no-open",
+      const child = spawn(process.execPath, [bundle, "--port", String(port), ...(dataSource === "flag" ? ["--data-dir", home] : []), "--no-open",
         "--catalog", manifests, "--static-dir", staticDir, "--host", "127.0.0.1",
         ...(execute ? ["--execution-source", dir, "--runner", runner, "--executor-python", python, "--repo", dir] : ["--viewer-only"])], {
         env: { ...process.env, ADB_LOCAL_SOURCE: "/wrong-source", PATH: `${bin}:${process.env.PATH}`, ADB_RUNNER: "/wrong-runner",
           TEST_MANIFESTS: manifests, BUILD_TRACE: join(dir, "build-trace"),
           ADB_WEB_STATIC: "/wrong-static", ADB_HOST: "invalid-host", ADB_PORT: "invalid-port", ADB_NO_OPEN: "1",
-          ADB_WEB_MANIFESTS: join(dir, "wrong-manifests"), ADB_DATA_DIR: explicitDir ? "/wrong-home" : home,
+          ADB_WEB_MANIFESTS: join(dir, "wrong-manifests"),
+          ADB_DATA_DIR: dataSource === "flag" ? "/wrong-home" : dataSource === "env" ? home : undefined,
+          XDG_DATA_HOME: dataSource === "default" ? undefined : join(dir, "xdg"),
+          HOME: join(dir, "user"),
           ADB_HOME: "/obsolete-home",
           ADB_CREDENTIALS_FILE: join(dir, "credentials") },
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["ignore", "pipe", "pipe"], cwd: dir,
       });
       children.push(child);
       child.stdout!.on("data", (b) => { output += b; });
       child.stderr!.on("data", (b) => { output += b; });
       const url = await until(async () => output.match(/on (http:\/\/[^\s]+)/)?.[1] ?? null);
       if (execute) await until(async () => (await (await fetch(url + "/api/executor")).json()).ready || null);
+      assert.equal((await (await fetch(url + "/api/ping")).json()).home, resolve(dir, home));
+      if (execute) {
+        const record = JSON.parse(readFileSync(resolve(dir, home + ".executor"), "utf8"));
+        assert.equal(record.home, resolve(dir, home));
+        assert.equal(record.args[record.args.indexOf("--data-dir") + 1], resolve(dir, home));
+      }
       return { child, url };
     }
-    const a = await launch(join(dir, "a"), 0);
-    const b = await launch(join(dir, "b"), Number(new URL(a.url).port), true, false); // env data dir, occupied port
+    const a = await launch("a", 0);
+    const b = await launch(join(dir, "b"), Number(new URL(a.url).port), true, "env"); // env data dir, occupied port
+    for (const execute of [false, true]) {
+      for (const [source, home] of [
+        ["flag", "data dir's"], ["env", join(dir, "environment")],
+        ["xdg", join(dir, "xdg/adb")], ["default", join(dir, "user/.local/share/adb")],
+      ] as const) {
+        const instance = await launch(home, 0, execute, source);
+        const closed = once(instance.child, "close"); instance.child.kill("SIGTERM"); await closed;
+      }
+    }
     assert.notEqual(a.url, b.url);
     for (const [instance, home] of [[a, "a"], [b, "b"]] as const) {
       const record = JSON.parse(readFileSync(join(dir, home + ".executor"), "utf8"));
@@ -134,7 +154,7 @@ process.on('SIGTERM', async () => {
     const card = fixtureCard([startRecord]);
     writeFileSync(join(runDir, "run.json"), JSON.stringify(card));
     writeFileSync(join(runDir, "events.jsonl"), JSON.stringify(startRecord) + "\n");
-    const readonly = await launch(join(dir, "read-only"), 0, false, false);
+    const readonly = await launch(join(dir, "read-only"), 0, false, "env");
     const initial = await fetch(readonly.url + "/api/runs");
     const rows = await initial.json();
     assert.deepEqual(rows[0].result_definitions, definitions);

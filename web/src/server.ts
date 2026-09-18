@@ -67,7 +67,7 @@ if (args.help) {
     `${EXECUTE ? "adb-local [--repo DIR]" : "adb-web"} [--host ADDR] [--port N] [--data-dir DIR] [--no-open]\n\n` +
     "  --host ADDR   bind address (default 127.0.0.1; 0.0.0.0 exposes to the network)\n" +
     "  --port N      listen port (default 8340; walks up if taken)\n" +
-    "  --data-dir DIR  run data directory (default $ADB_DATA_DIR, else ~/.local/share/adb)\n" +
+    "  --data-dir DIR  run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)\n" +
     "  --no-open     don't open the browser\n\n" +
     (EXECUTE ? "  --repo DIR   execution source; restart after editing declarations." : "  Read-only viewer. Use adb-local for browser execution."),
   );

@@ -51,7 +51,7 @@ def test_launch_rejects_fetch_ref_userinfo_before_writing_a_run(tmp_path, monkey
     monkeypatch.setenv("ADB_MANIFEST", str(manifest))
     monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
     monkeypatch.setenv("ADB_FETCH_REF", ref)
-    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(tmp_path / "runs")])
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--data-dir", str(tmp_path / "runs")])
     assert cli.main() == 2
     assert not marker.exists()
     assert not (tmp_path / "runs").exists()
@@ -77,7 +77,7 @@ def test_launch_forwards_optional_revision_and_tree_hash(tmp_path, monkeypatch, 
     monkeypatch.setenv("ADB_TREE_HASH", "sha256-launcher-tree")
     monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
     home = tmp_path / "data"
-    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(home)])
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--data-dir", str(home)])
     assert cli.main() == 0
     [path] = home.glob("runs/*/*/run.json")
     metadata = json.loads(path.read_text())
@@ -154,7 +154,7 @@ def test_successful_later_replicate_does_not_hide_failure(tmp_path, monkeypatch,
     monkeypatch.setenv("ADB_MANIFEST", str(manifest))
     monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
     monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
-    argv = ["adb-runner", "--json", "--replicates", "2", "--out", str(home)]
+    argv = ["adb-runner", "--json", "--replicates", "2", "--data-dir", str(home)]
     if base_seed is not None:
         argv += ["--seed", str(base_seed)]
     monkeypatch.setattr(sys, "argv", argv)
@@ -201,7 +201,7 @@ def test_output_and_interaction_are_independent(
         return {}
 
     monkeypatch.setattr(cli.credentials, "resolve_run_credentials", resolve_credentials)
-    argv = ["adb-runner", "--out", str(tmp_path / "runs")]
+    argv = ["adb-runner", "--data-dir", str(tmp_path / "runs")]
     if json_output:
         argv.append("--json")
     if non_interactive:
@@ -216,3 +216,42 @@ def test_output_and_interaction_are_independent(
         assert events[-1]["type"] == "run.end"
     else:
         assert output == ""
+
+
+@pytest.mark.parametrize("data_directory", ["flag", "env", "xdg", "default"], indirect=True)
+def test_run_uses_selected_data_directory(data_directory, tmp_path, monkeypatch, capsys):
+    import json
+    import shlex
+    import sys
+    from adb_runner import cli
+
+    home, flags = data_directory
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"name": "fixture", "params": {}}))
+    experiment = tmp_path / "experiment"
+    experiment.write_text("#!/bin/sh\nexit 0\n")
+    experiment.chmod(0o755)
+    monkeypatch.setenv("ADB_MANIFEST", str(manifest))
+    monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(experiment))
+    monkeypatch.delenv("ADB_FETCH_REF", raising=False)
+    monkeypatch.setattr(cli, "_viewer_ping", lambda _: None)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", *flags])
+
+    assert cli.main() == 0
+    [card] = home.glob("runs/*/*/run.json")
+    assert json.loads(card.read_text())["lifecycle"]["state"] == "completed"
+    assert f"--data-dir {shlex.quote(str(home))}" in capsys.readouterr().err
+    assert list(tmp_path.rglob("run.json")) == [card]
+
+
+def test_out_option_is_removed(tmp_path, monkeypatch, capsys):
+    import sys
+    from adb_runner import cli
+
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "--out", str(tmp_path / "unused")])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "unrecognized arguments: --out" in capsys.readouterr().err
+    assert "--out" not in cli.build_parser().format_help()
+    assert not (tmp_path / "unused").exists()

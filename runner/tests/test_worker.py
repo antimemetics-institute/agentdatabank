@@ -63,11 +63,14 @@ class StubQueue(BaseHTTPRequestHandler):
         pass
 
 
-def test_worker_loop_end_to_end(tmp_path, monkeypatch):
+@pytest.mark.parametrize("data_directory", ["flag", "env", "xdg", "default"], indirect=True)
+def test_worker_loop_end_to_end(tmp_path, monkeypatch, data_directory):
+    home, flags = data_directory
     # the stub "experiment binary": records argv, emits two runs' envelopes
     exp = tmp_path / "exp-bin"
     exp.write_text(f"""#!/bin/sh
 echo "$@" > {tmp_path}/argv
+printf '%s' "$ADB_DATA_DIR" > {tmp_path}/data-dir
 echo '{{"v":0,"ts":"t","run":"RUN1","seq":0,"event":{{"type":"run.start"}}}}'
 echo '{{"v":0,"ts":"t","run":"RUN1","seq":1,"event":{{"type":"run.end","state":"completed"}}}}'
 echo '{{"v":0,"ts":"t","run":"RUN2","seq":0,"event":{{"type":"run.start"}}}}'
@@ -82,7 +85,6 @@ exit 0
     build.chmod(build.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("ADB_WORKER_BUILD", str(build))
     monkeypatch.setenv("ADB_EXECUTOR_CAPABILITY", "s3cret")
-    monkeypatch.setenv("ADB_DATA_DIR", str(tmp_path / "home"))
     monkeypatch.setenv("ADB_CREDENTIALS_FILE", str(tmp_path / "credentials.toml"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
 
@@ -93,10 +95,11 @@ exit 0
     try:
         code = worker_cli([
             "--server", f"http://127.0.0.1:{server.server_port}",
-            "--repo", str(tmp_path), "--once"])
+            "--repo", str(tmp_path), "--once", *flags])
     finally:
         server.shutdown()
     assert code == 0
+    assert (tmp_path / "data-dir").read_text() == str(home)
 
     seen = StubQueue.seen
     assert seen["auth"] == "s3cret"

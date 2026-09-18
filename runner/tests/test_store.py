@@ -11,11 +11,13 @@ def test_data_directory_environment_precedence(tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_HOME", str(tmp_path / "obsolete"))
     monkeypatch.delenv("ADB_DATA_DIR", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-    assert store_mod.default_home() == tmp_path / "user/.local/share/adb"
+    assert store_mod.resolve_data_dir() == tmp_path / "user/.local/share/adb"
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert store_mod.default_home() == tmp_path / "xdg/adb"
+    assert store_mod.resolve_data_dir() == tmp_path / "xdg/adb"
     monkeypatch.setenv("ADB_DATA_DIR", str(tmp_path / "data"))
-    assert store_mod.default_home() == tmp_path / "data"
+    assert store_mod.resolve_data_dir() == tmp_path / "data"
+    monkeypatch.chdir(tmp_path)
+    assert store_mod.resolve_data_dir("explicit") == tmp_path / "explicit"
 
 
 def test_one_stream_preserves_all_records_in_order(tmp_path):
