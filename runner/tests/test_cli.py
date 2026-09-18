@@ -172,6 +172,8 @@ def test_invalid_seed_is_rejected_before_writing_a_run(run_cli, capsys, seed):
     assert "--seed" in error
     if seed != "not-an-integer":
         assert "0..2147483647" in error
+    else:
+        assert "invalid seed value" in error
     assert not home.exists()
 
 
@@ -244,7 +246,7 @@ def test_run_uses_selected_data_directory(data_directory, tmp_path, monkeypatch,
     assert list(tmp_path.rglob("run.json")) == [card]
 
 
-@pytest.mark.parametrize("option,value", [("--out", "unused"), ("--replicates", "2"), ("--profile", "openai=work")])
+@pytest.mark.parametrize("option,value", [("--out", "unused"), ("--replicates", "2")])
 def test_removed_options_are_rejected(tmp_path, monkeypatch, capsys, option, value):
     import sys
     from adb_runner import cli
@@ -256,6 +258,29 @@ def test_removed_options_are_rejected(tmp_path, monkeypatch, capsys, option, val
     assert f"unrecognized arguments: {option}" in capsys.readouterr().err
     assert option not in cli.build_parser().format_help()
     assert not (tmp_path / "unused").exists()
+
+
+def test_run_alias_is_rejected(monkeypatch, capsys):
+    import sys
+    from adb_runner import cli
+
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "run"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "unrecognized arguments: run" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", [[], ["publish", "--to", "s3://throwaway/prefix"]])
+def test_aws_profile_rejects_credential_syntax(monkeypatch, capsys, command):
+    import sys
+    from adb_runner import cli
+
+    monkeypatch.setattr(sys, "argv", ["adb-runner", *command, "--profile", "openai=work"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "AWS --profile NAME cannot contain =" in capsys.readouterr().err
 
 
 def test_credential_selections_reach_resolver(run_cli, monkeypatch):

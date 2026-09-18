@@ -41,6 +41,7 @@ function JobsTable({ jobs, enabled }: { jobs: JobInfo[]; enabled: boolean }) {
   const rerun = (j: JobInfo) =>
     void apiPost("/api/jobs", {
       experiment: j.experiment, sets: j.sets, profiles: j.profiles,
+      ...(j.publish ? { publish: j.publish } : {}),
     }).then(() => setErr(null)).catch((e: Error) => setErr(e.message));
   jobs = Array.isArray(jobs) ? jobs : [];
   const cols = ["job", "experiment", "state", "runs", "created", ""];

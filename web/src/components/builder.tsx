@@ -9,7 +9,7 @@
    and llm params on a fresh form seed from the last model entered anywhere.
    Degrades to a note when the server has no manifests dir (bare dev.sh). */
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { buildCmd, defaultStr, effectiveStr, initialStr, orderedParams } from "@/lib/cmd-build";
 import { useCmdPrefs } from "@/lib/cmd-prefs";
 import {
@@ -456,6 +456,15 @@ function BuilderForm({ name }: { name: string }) {
   const { creds, refresh } = useLaunchSurface();
   const executor = useExecutorPoll();
   const dataDir = useDataDir();
+  const [publishEnabled, setPublishEnabled] = useState(false);
+  const [publishTarget, setPublishTarget] = useState("");
+  const [publishProfile, setPublishProfile] = useState("");
+  const [awsProfiles, setAwsProfiles] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/publish-profiles").then((res) => res.ok ? res.json() : []).then(setAwsProfiles).catch(() => {});
+  }, []);
+  const publication = useMemo(() => publishEnabled ? { to: publishTarget, profile: publishProfile || undefined } : undefined,
+    [publishEnabled, publishTarget, publishProfile]);
   const [tabChoice, setTabChoice] = useState<string | null>(getComposerTab);
   const [runLive, setRunLive] = useState(false); /* a job is in flight (Launcher reports) */
   const tab = tabChoice ?? (executor?.ready ? "run" : "oneliner");
@@ -501,9 +510,9 @@ function BuilderForm({ name }: { name: string }) {
      the copied text. */
   const prefs = useCmdPrefs();
   const { oneliner, missing } = useMemo(() => {
-    const { cmd, missing } = buildCmd(name, params, seeded, dataDir);
+    const { cmd, missing } = buildCmd(name, params, seeded, dataDir, publication);
     return { oneliner: rewriteCmd(cmd, prefs), missing };
-  }, [name, params, seeded, prefs, dataDir]);
+  }, [name, params, seeded, prefs, dataDir, publication]);
 
   const copy = () => {
     if (missing.length > 0 || dataDir === undefined) return;
@@ -597,6 +606,24 @@ function BuilderForm({ name }: { name: string }) {
             })}
           </div>
 
+          <fieldset className="space-y-2 rounded border p-3 text-xs">
+            <legend className="px-1 font-medium">Publish</legend>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={publishEnabled} onChange={(event) => setPublishEnabled(event.target.checked)} />
+              Publish on completion
+            </label>
+            <label className="flex items-center gap-2">Target
+              <input className="min-w-0 flex-1 rounded border bg-background px-2 py-1" placeholder="s3://bucket/prefix"
+                value={publishTarget} onChange={(event) => setPublishTarget(event.target.value)} />
+            </label>
+            <label className="flex items-center gap-2">AWS profile
+              <select className="rounded border bg-background px-2 py-1" value={publishProfile} onChange={(event) => setPublishProfile(event.target.value)}>
+                <option value="">Default AWS resolution</option>
+                {awsProfiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
+              </select>
+            </label>
+          </fieldset>
+
           {/* the two outputs of the same condition: submit it (run tab) or copy it
               (oneliner tab). No launch surface → no tabs, the oneliner alone. The
               run tab stays mounted while hidden (forceMount) so an in-flight job
@@ -612,7 +639,7 @@ function BuilderForm({ name }: { name: string }) {
               </TabsList>
               <TabsContent value="run" forceMount className="data-[state=inactive]:hidden">
                 <Launcher name={name} params={params} vals={seeded} missing={missing}
-                  creds={creds} refresh={refresh} onLive={setRunLive} />
+                  creds={creds} refresh={refresh} onLive={setRunLive} publish={publication} />
               </TabsContent>
               <TabsContent value="oneliner">
                 <Oneliner oneliner={oneliner} missing={missing} copied={copied}

@@ -372,3 +372,19 @@ test("every shipped manifest uses only declared keys", (t) => {
     }
   }
 });
+
+test("publish toggle adds shell-safe target/profile flags, and default resolution omits profile", () => {
+  const to = "s3://bucket/research team's run";
+  const profile = "research team";
+  const built = buildCmd("hello", {}, {}, "/tmp/data dir's", { to, profile });
+  assert.deepEqual(built.missing, []);
+  const args = JSON.parse(execFileSync("python3", ["-c", "import json,shlex,sys; print(json.dumps(shlex.split(sys.argv[1].replace('\\\\\\n', ''))))", built.cmd], { encoding: "utf8" }));
+  assert.deepEqual(args.slice(-4), ["--publish", to, "--profile", profile]);
+  assert.ok(buildCmd("hello", {}, {}, undefined, { to }).cmd.includes("--publish"));
+  assert.ok(!buildCmd("hello", {}, {}, undefined, { to }).cmd.includes("--profile"));
+  assert.ok(!buildCmd("hello", {}, {}).cmd.includes("--publish"));
+  assert.ok(buildCmd("hello", {}, {}, undefined, { to: "https://invalid" }).missing.length);
+  const invalidProfile = buildCmd("hello", {}, {}, undefined, { to, profile: "openai=work" });
+  assert.deepEqual(invalidProfile.missing, ["publish target/profile"]);
+  assert.ok(!invalidProfile.cmd.includes("--profile"));
+});

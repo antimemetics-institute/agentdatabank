@@ -111,6 +111,20 @@ export function setArg(key: string, raw: string, kind: string): string {
   return `${key}=${setParts(raw, kind).value}`;
 }
 
+export interface PublishOptions { to: string; profile?: string }
+
+export function publishProblem(publish?: PublishOptions): string | null {
+  if (!publish) return null;
+  try {
+    const target = new URL(publish.to);
+    if (target.protocol !== "s3:" || !target.hostname || target.username || target.password || target.port || target.search || target.hash ||
+        publish.to.replace(/^s3:\/\/[^/]+\/?/, "").split("/").some((part) => part === "." || part === ".."))
+      return "Enter a target as s3://bucket/prefix";
+    if (publish.profile?.includes("=")) return "AWS profile names cannot contain =";
+    return null;
+  } catch { return "Enter a target as s3://bucket/prefix"; }
+}
+
 export interface BuiltCmd {
   /* canonical `nix run .#…` oneliner (one `--set` per backslash-continued line,
      same style as the docs — the portable spelling: bash, zsh, and fish all take
@@ -154,8 +168,16 @@ export function buildCmd(
   params: Record<string, ParamDecl>,
   vals: Record<string, string>,
   dataDir?: string,
+  publish?: PublishOptions,
 ): BuiltCmd {
   const { args, missing } = materialize(params, vals, encodeSet, (k) => `--set ${k}=null`);
+  if (publish) {
+    if (publishProblem(publish)) missing.push("publish target/profile");
+    else {
+      args.push(`--publish ${shQuote(publish.to)}`);
+      if (publish.profile) args.push(`--profile ${shQuote(publish.profile)}`);
+    }
+  }
   if (dataDir !== undefined) args.unshift(`--data-dir ${shQuote(dataDir)}`);
   const cmd = args.length
     ? `nix run .#${name} -- \\\n  ${args.join(" \\\n  ")}`

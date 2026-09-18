@@ -30,7 +30,45 @@ The final layout for local and published stores is `runs/<condition>-<experiment
 
 ## 5. Published layout
 
-Publication preserves the same run structure under a version prefix, plus `index.jsonl` with one row per `run.json`. The stream is published as `events.jsonl.zst`, one object per run, uploaded with `Content-Encoding: zstd` and `Content-Type: application/x-ndjson`; the card accompanies it and the workspace does not. Objects for terminal runs are never rewritten. A new layout is a new version prefix produced from the records, so repairing or replacing a convenience projection cannot mutate published evidence.
+An experiment bucket contains only `runs/` under a caller-selected S3 prefix.
+Publication preserves the final `runs/<condition>-<experiment>/<run>/` structure.
+Conditions remain groupings of cards; no separate condition object is published.
+
+```text
+<prefix>/
+  runs/
+    <condition>-<experiment>/
+      <run>/
+        run.json
+        events.jsonl.zst
+```
+
+Each `events.jsonl.zst` is one level-19 zstd frame, preserving the original JSONL
+bytes when decompressed, with `Content-Type: application/zstd`. `run.json` is the
+full local card, copied byte-for-byte with `Content-Type: application/json`.
+Workspaces are never published. Indexes are derived, live outside experiment
+buckets, and are specified separately.
+
+The gate requires a terminal state and a passing `verify` audit, including model
+identity checks. Verification resolves the manifest in the same way as
+`adb-runner verify`. Failures are reported per run without aborting the batch.
+A run is refused if either destination run key exists, checked with HEAD on both
+keys. The stream is uploaded first, then the card. Partial uploads are not
+overwritten. The publisher uses only HeadObject and PutObject.
+
+`adb-runner publish --to s3://<bucket>/<prefix> [STEM ...]` selects all local runs
+unless stems or `--experiment` narrow the selection. Stems are
+`<condition>-<experiment>` or `<condition>-<experiment>/<run>`. `--data-dir` follows
+the shared flag, environment, XDG resolution. `--dry-run` verifies and
+prints keys and sizes without writing. `--profile NAME` selects a boto3 profile;
+without it, boto3 resolves configuration normally. No endpoint, region or client
+configuration overrides, host presets, remote registry, or target environment
+variable belong in ADB.
+
+`nix run .#<experiment> -- … --publish s3://<bucket>/<prefix>` uses the same gate and
+upload path after execution. Publication errors are logged without changing run
+state or exit code. Ambient AWS variables do not enter the experiment environment;
+explicitly supplied experiment credential sets are preserved.
 
 ## 6. Deferred
 

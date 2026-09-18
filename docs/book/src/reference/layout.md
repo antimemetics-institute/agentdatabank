@@ -113,13 +113,27 @@ may leave a stale card; it never makes that card more authoritative than the str
 
 ## Published runs
 
-Published runs use `events.jsonl.zst`, one object per run, uploaded with
-`Content-Encoding: zstd` and `Content-Type: application/x-ndjson`. The same
-condition/run directory structure lives under a version prefix, alongside
-`index.jsonl` with one row per card. The workspace is local and never published.
-Published objects for terminal runs are never rewritten; a new layout is a new
-prefix produced from the records. Compression and future transport partitions
-do not change `(run, seq)` record addresses.
+The final run path is `runs/<condition>-<experiment>/<run>/` for both local and
+published runs. The bucket contains only `runs/` under the selected prefix:
+
+```text
+PREFIX/
+  runs/CONDITION_ID-EXPERIMENT/RUN_ID/
+    run.json
+    events.jsonl.zst
+```
+
+Publication copies `run.json` byte-for-byte and compresses `events.jsonl` to one
+level-19 zstd frame named `events.jsonl.zst`, with `Content-Type: application/zstd`.
+The workspace is local and never published. Indexes are derived, live outside
+experiment buckets, and are specified separately.
+
+Condition identity lives on the cards and `run.start`; conditions are groupings
+of cards on `condition`. Terminal runs must pass verification before upload.
+Both destination run keys are checked with HEAD; if either exists, the run is
+refused without overwriting it. A changed immutable object uses a new prefix.
+Compression does not change `(run, seq)` record addresses.
+See [Publishing](../running/publishing.md) for commands and profile setup.
 
 In an `llm.call`, model API evidence is stored in `call.request` and
 `call.response`; generation settings are read from the request. Inspect also saves every native

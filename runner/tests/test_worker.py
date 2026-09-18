@@ -338,3 +338,11 @@ def test_experiment_outcome_reaches_cli_and_queue(
                   for line in chunk.read_text().splitlines()]
         assert events[-1]["state"] == run_state
         assert "phase" not in events[-1]
+
+
+def test_publish_options_reach_runner_as_separate_arguments():
+    from adb_runner.worker import _job_args
+    assert _job_args({"sets": [], "profiles": {"openai": "work"},
+                      "publish": {"to": "s3://bucket/research team's", "profile": "research team"}}) == [
+        "--json", "--non-interactive", "--credential", "openai=work", "--publish", "s3://bucket/research team's",
+        "--profile", "research team"]

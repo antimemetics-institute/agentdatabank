@@ -41,6 +41,9 @@ test("managed instances share explicit source/home, bind independently, protect 
       assert.match(help, /--data-dir DIR/);
       assert.doesNotMatch(help, /--home/);
     }
+    const awsDir = join(dir, "user", ".aws"); mkdirSync(awsDir, { recursive: true });
+    const awsConfig = "[profile research team]\nregion = us-east-1\n";
+    writeFileSync(join(awsDir, "config"), awsConfig);
     const manifests = join(dir, "manifests"); mkdirSync(manifests);
     writeFileSync(join(manifests, "hello.json"), JSON.stringify({ name: "hello", params: {} }));
     const staticDir = join(dir, "static"); mkdirSync(staticDir);
@@ -127,7 +130,15 @@ process.on('SIGTERM', async () => {
       assert.equal((await fetch(instance.url + "/api/executor/claim", { method: "POST" })).status, 403);
       assert.equal((await fetch(instance.url + "/api/jobs", { method: "POST", headers: { origin: "https://other.example" } })).status, 403);
     }
-    const spec = { experiment: "hello", sets: ["x=quote' $literal"], profiles: { openai: "work" } };
+    const spec = { experiment: "hello", sets: ["x=quote' $literal"], profiles: { openai: "work" },
+      publish: { to: "s3://bucket/research team's", profile: "research team" } };
+    const invalidPublish = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify({ ...spec, publish: { to: "https://invalid" } }) });
+    assert.equal(invalidPublish.status, 400);
+    const invalidProfile = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify({
+      ...spec, publish: { ...spec.publish, profile: "openai=work" },
+    }) });
+    assert.equal(invalidProfile.status, 400);
+    assert.match((await invalidProfile.json()).error, /AWS profile names cannot contain =/);
     const obsolete = await fetch(a.url + "/api/jobs", { method: "POST", body: JSON.stringify({ ...spec, replicates: 2 }) });
     assert.equal(obsolete.status, 400);
     assert.match((await obsolete.json()).error, /unknown job field: replicates/);
@@ -142,6 +153,7 @@ process.on('SIGTERM', async () => {
     const saved = JSON.parse(readFileSync(join(dir, "a", "jobs", job.id + ".json"), "utf8"));
     assert.equal(saved.state, "stopped");
     assert.deepEqual(saved.sets, spec.sets);
+    assert.deepEqual(saved.publish, spec.publish);
     const bJob = await (await fetch(b.url + "/api/jobs", { method: "POST", body: JSON.stringify(spec) })).json();
     await until(async () => (await (await fetch(b.url + "/api/jobs/" + bJob.id)).json()).state === "running" || null);
     process.kill(JSON.parse(readFileSync(join(dir, "b.executor"), "utf8")).pid, "SIGKILL");
@@ -172,6 +184,9 @@ process.on('SIGTERM', async () => {
     assert.match(parameter.headers.get("cache-control")!, /immutable/);
     assert.equal((await fetch(parameterUrl, { headers: { "if-none-match": parameter.headers.get("etag")! } })).status, 304);
     assert.equal((await fetch(readonly.url + "/api/conditions/condition")).status, 404);
+    assert.deepEqual(await (await fetch(readonly.url + "/api/publish-profiles")).json(), ["research team"]);
+    assert.equal((await fetch(readonly.url + "/api/publish-profiles", { headers: { origin: "https://other.example" } })).status, 403);
+    assert.equal(readFileSync(join(awsDir, "config"), "utf8"), awsConfig);
     assert.equal((await fetch(readonly.url + "/api/params/condition/long")).status, 404);
     const stream = await (await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/events")).json();
     assert.equal(typeof stream[0].event.result_definitions[0].description.__elided.bytes, "number");

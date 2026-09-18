@@ -417,6 +417,9 @@ def test_child_env_is_constructed_not_inherited(monkeypatch):
     assert "AWS_SECRET_ACCESS_KEY" not in env
     assert env["DOCKER_HOST"] == "unix:///run/user/1000/docker.sock"  # allowlisted
     assert env["ADB_RUN_ID"] == "rid" and env["ADB_SEED"] == "7"
+    stored = {"AWS_ACCESS_KEY_ID": "stored-access", "AWS_SECRET_ACCESS_KEY": "stored-secret"}
+    env = child_env("rid", "/run/dir", 7, stored)
+    assert {key: env[key] for key in stored} == stored
 
 
 def test_saved_run_deserializes_with_public_models(tmp_path):

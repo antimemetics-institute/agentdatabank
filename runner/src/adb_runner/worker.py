@@ -110,6 +110,11 @@ def _job_args(job: dict[str, Json]) -> list[str]:
     if isinstance(profiles, dict):
         for set_name, profile in sorted(profiles.items()):
             args += ["--credential", f"{set_name}={profile}"]
+    publish = job.get("publish")
+    if isinstance(publish, dict) and isinstance(publish.get("to"), str):
+        args += ["--publish", str(publish["to"])]
+        if isinstance(publish.get("profile"), str) and publish["profile"]:
+            args += ["--profile", str(publish["profile"])]
     return args
 
 

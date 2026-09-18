@@ -15,6 +15,7 @@
 - [Choose inputs and run](running/experiments.md)
 - [Configure model credentials](running/secrets.md)
 - [Repeat and compare runs](running/model.md)
+- [Publishing](running/publishing.md)
 - [Working with Nix](running/nix.md)
 
 # Add or change experiments

@@ -18,6 +18,8 @@ Pass these options to the named experiment app:
 | --- | --- |
 | `--set KEY=VALUE` | Bind an experiment parameter. Repeat for every declared parameter. A later binding of the same key wins. |
 | `--seed INTEGER` | Run seed in `0..2147483647`, recorded unchanged. A random non-negative 31-bit seed is chosen when omitted. |
+| `--publish s3://BUCKET/PREFIX` | Publish the terminal run after a passing verification audit; publishing failures do not change the run exit code. |
+| `--profile NAME` | Select an AWS profile with `--publish`; omitted means boto3 default resolution. The name cannot contain `=`. |
 | `--credential SET=NAME` | Select a saved profile for a credential set used by this run. Repeat for multiple sets. |
 | `--data-dir DIR` | Write runs to this data directory, overriding `ADB_DATA_DIR`. |
 | `--json` | Print each recorded event, including its run metadata, to stdout as one JSON line as it happens. Events are also saved normally; diagnostics go to stderr. |
@@ -45,6 +47,19 @@ The value after `=` is parsed as JSON if possible, otherwise as a string. `@path
 
 These are syntax examples; the keys must exist in the selected experiment. Unknown keys, omitted parameters and type mismatches are errors. Shell quoting is separate from JSON syntax: quote arguments containing spaces, braces or other shell punctuation.
 
+## Publish saved runs
+
+```text
+adb-runner publish --to s3://<bucket>/<prefix> [STEM ...] [--experiment X]
+  [--profile NAME] [--data-dir DIR] [--dry-run]
+```
+
+Stems select `<condition>-<experiment>` or `<condition>-<experiment>/<run>`.
+Without stems, all runs are considered, optionally filtered by experiment.
+`--dry-run` verifies, prints exact keys and sizes, and writes nothing.
+Verification resolves manifests as `adb-runner verify` does. Each run uploads
+only its compressed stream and card under `runs/`. See [Publishing](../running/publishing.md).
+
 ## Credential commands
 
 Credential management is a standalone use of `adb-runner`; these commands
@@ -68,7 +83,7 @@ Profile names start with a lowercase letter or digit and continue with lowercase
 
 ## Data and configuration settings
 
-Experiment launchers, `adb-local`, `adb-web`, and `adb-runner verify` select run
+Experiment launchers, `adb-local`, `adb-web`, `adb-runner publish`, and `adb-runner verify` select run
 storage in this order: `--data-dir DIR`, `ADB_DATA_DIR`, then `$XDG_DATA_HOME/adb`
 (or `~/.local/share/adb` when `XDG_DATA_HOME` is unset). Commands copied from the
 web include its selected directory explicitly.

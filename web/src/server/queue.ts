@@ -101,6 +101,7 @@ function assign(home: string, job: Job): void {
 const claimSpec = (job: Job) => ({
   id: job.id, experiment: job.experiment, sets: job.sets,
   profiles: job.profiles,
+  ...(job.publish ? { publish: job.publish } : {}),
 });
 
 export function claim(home: string): { job: Promise<ReturnType<typeof claimSpec> | null> } {
@@ -128,6 +129,7 @@ export interface JobSpec {
   experiment: string;
   sets: string[];
   profiles: Record<string, string>;
+  publish?: JobInfo["publish"];
 }
 
 export function submit(home: string, spec: JobSpec): { job: JobInfo } | { error: string } {
@@ -140,6 +142,7 @@ export function submit(home: string, spec: JobSpec): { job: JobInfo } | { error:
     state: "queued",
     sets: spec.sets,
     profiles: spec.profiles,
+    ...(spec.publish ? { publish: spec.publish } : {}),
     created_at: now(),
     runs: [],
     log: [],

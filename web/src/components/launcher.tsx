@@ -16,7 +16,7 @@
 
 import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { buildArgs } from "@/lib/cmd-build";
+import { buildArgs, type PublishOptions } from "@/lib/cmd-build";
 import { initialProfile, needsSetup, setsUsed, templateRows } from "@/lib/creds";
 import { api, apiPost, JOB_TERMINAL, useExecutorPoll } from "@/lib/data";
 import type { CredsInfo, JobInfo, ParamDecl } from "@/shared/types";
@@ -231,13 +231,14 @@ export function JobPanel({ job, onStop, queueLink }: {
   );
 }
 
-export function Launcher({ name, params, vals, missing, creds, refresh, onLive }: {
+export function Launcher({ name, params, vals, missing, creds, refresh, onLive, publish }: {
   name: string;
   params: Record<string, ParamDecl>;
   vals: Record<string, string>; /* the builder's seeded values — buildCmd's input */
   missing: string[];
   creds: CredsInfo;        /* non-null by contract — the builder gates on useLaunchSurface */
   refresh: () => void;
+  publish?: PublishOptions;
   onLive?: (live: boolean) => void; /* a job is in flight — the run tab's pulse dot */
 }) {
   /* Readiness belongs to the server-owned local executor. */
@@ -288,6 +289,7 @@ export function Launcher({ name, params, vals, missing, creds, refresh, onLive }
       experiment: name,
       sets: setArgs,
       profiles: resolved, // worker emits --credential SET=NAME; values stay in the credential store
+      ...(publish ? { publish } : {}),
     })
       .then(setJob)
       .catch((e: Error) => setLaunchErr(e.message));

@@ -30,8 +30,10 @@ import { promisify } from "node:util";
 import { LocalExecutor } from "./server/executor";
 import { readReadmeAsset } from "./server/readme-assets";
 import { elideEvent, UnreadableRecord } from "./server/events";
+import { awsProfiles } from "./server/aws-profiles";
 import { RunReader } from "./server/runs";
 import { oneLineReason } from "./lib/run-readability";
+import { publishProblem, type PublishOptions } from "./lib/cmd-build";
 import { parameterIdentity } from "./lib/conditions";
 import { readRunSchemas } from "./server/event-schemas";
 import { parseArgs } from "node:util";
@@ -264,13 +266,13 @@ const SET_ARG_RE = /^[A-Za-z_][A-Za-z0-9_]*=[\s\S]*$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 interface JobBody {
-  experiment: string; sets: string[]; profiles: Record<string, string>;
+  experiment: string; sets: string[]; profiles: Record<string, string>; publish?: PublishOptions;
 }
 
 async function parseJobBody(body: unknown): Promise<JobBody | string> {
   if (!body || typeof body !== "object") return "expected a JSON object";
   const b = body as Record<string, unknown>;
-  const unknown = Object.keys(b).find((key) => !["experiment", "sets", "profiles"].includes(key));
+  const unknown = Object.keys(b).find((key) => !["experiment", "sets", "profiles", "publish"].includes(key));
   if (unknown) return `unknown job field: ${unknown}`;
   const experiment = b.experiment;
   if (typeof experiment !== "string" || !EXPERIMENT_RE.test(experiment))
@@ -289,7 +291,17 @@ async function parseJobBody(body: unknown): Promise<JobBody | string> {
       return "bad profile selection";
     profiles[set] = profile;
   }
-  return { experiment, sets: sets as string[], profiles };
+  let publish: PublishOptions | undefined;
+  if (b.publish !== undefined) {
+    if (!b.publish || typeof b.publish !== "object") return "bad publish options";
+    const value = b.publish as Record<string, unknown>;
+    if (Object.keys(value).some((key) => !["to", "profile"].includes(key)) || typeof value.to !== "string" ||
+        (value.profile !== undefined && typeof value.profile !== "string")) return "bad publish options";
+    publish = { to: value.to, ...(typeof value.profile === "string" ? { profile: value.profile } : {}) };
+    const problem = publishProblem(publish);
+    if (problem) return problem;
+  }
+  return { experiment, sets: sets as string[], profiles, ...(publish ? { publish } : {}) };
 }
 
 const server = createServer(async (req, res) => {
@@ -314,6 +326,11 @@ const server = createServer(async (req, res) => {
         let home = resolve(HOME);
         try { home = realpathSync(home); } catch { /* not created yet — absolute is enough */ }
         return json(req, res, 200, { adb: "web", home }, { "cache-control": "no-store" });
+      }
+      if (parts[1] === "publish-profiles" && parts.length === 2 && req.method === "GET") {
+        const blocked = writeBlocked(req);
+        if (blocked) return json(req, res, 403, { error: blocked });
+        return json(req, res, 200, await awsProfiles(), { "cache-control": "no-store" });
       }
       if (parts[1] === "experiments" && parts.length === 2) {
         /* manifests are per-build-immutable; no-cache is fine (tiny, rarely fetched) */

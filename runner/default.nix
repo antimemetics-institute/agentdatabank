@@ -1,3 +1,4 @@
+# boto3 and zstandard are runtime dependencies resolved through pyproject.toml and uv.lock.
 # adb-runner, packaged from its own uv.lock with the shared locked Python toolchain.
 # The interpreter is selected here, per project.
 { pkgs, pyproject-nix, uv2nix, pyproject-build-systems }:

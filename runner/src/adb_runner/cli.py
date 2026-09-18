@@ -109,7 +109,8 @@ def _parse_kv(raw: str, flag: str) -> tuple[str, str]:
     return key.strip(), value
 
 
-def _seed(raw: str) -> int:
+def seed(raw: str) -> int:
+    """Signed 32-bit provider fields reject larger seeds."""
     value = int(raw)
     if not 0 <= value <= 2**31 - 1:
         raise argparse.ArgumentTypeError("seed must be an integer in 0..2147483647")
@@ -118,15 +119,18 @@ def _seed(raw: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="adb-runner", add_help=True,
-                                epilog="Management commands: credentials …; verify RUN_ID_OR_DIR (audit a finished run).")
+                                epilog="Management commands: credentials …; verify RUN_ID_OR_DIR; publish --to s3://BUCKET/PREFIX …")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                    help="set a param (JSON, @file, or bare string); repeatable")
     # profile NAMES are argv-safe (values never are — they live in the 0600 store);
     # an explicit selection skips the picker and the remember question entirely
     p.add_argument("--credential", action="append", default=[], metavar="SET=NAME",
-                   help="use that credential profile for that set (repeatable; "
-                        "skips the interactive picker)")
-    p.add_argument("--seed", type=_seed, metavar="N",
+                   help="select a saved credential profile (repeatable)")
+    p.add_argument("--profile", metavar="NAME",
+                   help="AWS profile for --publish (default: boto3's normal resolution)")
+    p.add_argument("--publish", metavar="s3://BUCKET/PREFIX",
+                   help="publish the terminal run after verification")
+    p.add_argument("--seed", type=seed, metavar="N",
                    help="run seed in 0..2147483647, recorded unchanged (random if omitted)")
     p.add_argument("--data-dir", metavar="DIR",
                    help="run data directory (default $ADB_DATA_DIR, then $XDG_DATA_HOME/adb or ~/.local/share/adb)")
@@ -191,6 +195,10 @@ def resolve_condition(args: argparse.Namespace, manifest: Manifest,
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["publish"]:
+        from .publish import publish_cli
+        return publish_cli(sys.argv[2:])
+
     if sys.argv[1:2] == ["verify"]:
         from .verify import verify_cli
         return verify_cli(sys.argv[2:])
@@ -201,7 +209,16 @@ def main() -> int:
         from .credentials import credentials_cli
         return credentials_cli(sys.argv[2:])
 
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.profile is not None and "=" in args.profile:
+        parser.error("AWS --profile NAME cannot contain =; use --credential SET=NAME for credentials")
+    if args.publish:
+        from .publish import parse_target, PublishError
+        try:
+            parse_target(args.publish)
+        except PublishError as exc:
+            parser.error(str(exc))
 
     manifest_path = os.environ.get("ADB_MANIFEST")
     program = os.environ.get("ADB_EXPERIMENT_BIN")
@@ -318,6 +335,13 @@ def main() -> int:
     except KeyboardInterrupt:
         _log("interrupted — partial runs kept (garbage is data)")
         return 130
+    if args.publish:
+        from .publish import publish_run, failure
+        try:
+            publish_run(store.dir, args.publish, profile=args.profile,
+                        manifest=Path(manifest_path), log=_log)
+        except Exception as exc:
+            _log(f"publish failed: {failure(exc)}")
     if result.state == "interrupted":
         return 130
     return 0 if result.state == "completed" else 1
