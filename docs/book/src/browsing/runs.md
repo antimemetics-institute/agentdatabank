@@ -50,7 +50,7 @@ The [event reference](../reference/events.md) defines fields and conventions. [R
 
 ## How do I read the files without a browser?
 
-Start with the **store** path printed by the runner. To locate an older run, look under `runs/CONDITION_ID-EXPERIMENT/RUN_ID/` in your [data directory](../reference/layout.md#where-are-runs-saved). Its `run.json` identifies the experiment, condition, source reference and state. The corresponding `conditions/CONDITION_ID-EXPERIMENT.json` contains the input configuration.
+Start with the **store** path printed by the runner. To locate an older run, look under `runs/CONDITION_ID-EXPERIMENT/RUN_ID/` in your [data directory](../reference/layout.md#where-are-runs-saved). Its `run.json` identifies the experiment, condition, source reference and state. The card also contains `inputs.params` and `provenance.source`, copied from `run.start`. Readers derive conditions by grouping cards on `condition`; shared fields come from any member.
 
 With Python 3, this example prints the metadata and reads result and completion events. Replace `/path/to/run` with that run's directory:
 

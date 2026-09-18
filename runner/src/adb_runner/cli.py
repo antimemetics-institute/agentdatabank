@@ -36,7 +36,7 @@ from .schema import (
     validate_spec,
 )
 from .shorthand import ShorthandError, parse_value
-from .store import RunStore, resolve_data_dir, ensure_condition
+from .store import RunStore, resolve_data_dir
 from .run_id import new_run_id
 
 
@@ -280,9 +280,6 @@ def main() -> int:
         except SchemaError as exc:
             _log(f"provisioning failed: {exc}")
             return 2
-        ensure_condition(home, cond["cid"], {
-            "experiment": manifest["name"], "source": source, "params": cond["params"],
-        })
         run_id = new_run_id()
         store = RunStore(home, cond["cid"], run_id, experiment=manifest["name"])
         label = f"[{abbrev(cond['cid'])}]"

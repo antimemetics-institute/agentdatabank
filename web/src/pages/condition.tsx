@@ -1,6 +1,6 @@
 import type { RunMeta } from "@/shared/types";
-import { conds, useRunsPoll } from "@/lib/data";
-import { conditionHref, siblingConditions, type NamedCondition } from "@/lib/conditions";
+import { useRunsPoll } from "@/lib/data";
+import { conditionHref, siblingConditions, groupConditions } from "@/lib/conditions";
 import { PageLoading } from "@/components/bits";
 import { RunsTable } from "@/pages/runs";
 import { ParamChip } from "@/components/param-value";
@@ -8,15 +8,13 @@ import { ParamChip } from "@/components/param-value";
 export function ConditionPage({ cid, query = "" }: { cid: string; query?: string }) {
   const runs = useRunsPoll();
   if (runs === null) return <PageLoading />;
-  const conditions = Object.entries(conds).filter(([, c]) => c && typeof c.source === "string"
-    && typeof c.experiment === "string" && c.params && typeof c.params === "object" && !Array.isArray(c.params))
-    .map(([id, c]) => ({ ...c, id }));
-  return <ConditionView cid={cid} query={query} conditions={conditions} runs={runs} />;
+  return <ConditionView cid={cid} query={query} runs={runs} />;
 }
 
-export function ConditionView({ cid, query = "", conditions, runs }: {
-  cid: string; query?: string; conditions: NamedCondition[]; runs: RunMeta[];
+export function ConditionView({ cid, query = "", runs }: {
+  cid: string; query?: string; runs: RunMeta[];
 }) {
+  const conditions = groupConditions(runs);
   const anchor = conditions.find((c) => c.id === cid);
   if (!anchor) return <p className="text-muted-foreground">Condition unavailable: <code>{cid}</code></p>;
   const siblings = siblingConditions(anchor, conditions);

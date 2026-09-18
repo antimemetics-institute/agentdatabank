@@ -1,7 +1,6 @@
 """Run directory persistence (docs/book/src/reference/layout.md).
 
 runs/<condition_id>-<experiment>/<run_id>/{run.json, events.jsonl, workspace/}
-conditions/<condition_id>-<experiment>.json — spec as written, once per condition.
 
 The stream is evidence; run.json is a replaceable runner index card.
 """
@@ -46,14 +45,6 @@ def find_run(home: Path, run_id: str) -> Path | None:
     their condition, so the condition segment is globbed."""
     matches = sorted((home / "runs").glob(f"*/{run_id}"))
     return matches[0] if matches else None
-
-
-def ensure_condition(home: Path, condition_id: str, spec: dict[str, Any]) -> None:
-    cdir = home / "conditions"
-    cdir.mkdir(parents=True, exist_ok=True)
-    cpath = cdir / f"{condition_name(condition_id, spec['experiment'])}.json"
-    if not cpath.exists():
-        write_json_atomic(cpath, spec)
 
 
 class RunStore:

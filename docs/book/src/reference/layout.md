@@ -1,6 +1,6 @@
 # Run files and identity
 
-The local store keeps conditions, run metadata, the event stream and working files as ordinary files.
+The local store keeps run metadata, the event stream and working files as ordinary files.
 
 ## Where are runs saved?
 
@@ -8,8 +8,6 @@ Terminal experiments, browser tools, and verifier run-ID lookup use `--data-dir 
 
 ```text
 DATA_DIR/
-  conditions/
-    CONDITION_ID-EXPERIMENT.json
   runs/
     CONDITION_ID-EXPERIMENT/
       RUN_ID/
@@ -20,14 +18,14 @@ DATA_DIR/
 
 | Path | Contents |
 | --- | --- |
-| `conditions/CONDITION_ID-EXPERIMENT.json` | `{experiment, source, params}` for the condition, written once. |
 | `run.json` | Runner index card: copied facts, lifecycle state and a derived cache. Replaced atomically at each heartbeat and at run end. |
 | `events.jsonl` | One stream per run: event envelopes, one JSON object per line, in ascending sequence order. |
 | `workspace/` | Fresh working directory used to execute the experiment. |
 
-Readers derive `runs/<condition>-<experiment>/` and
-`conditions/<condition>-<experiment>.json` from the recorded `(condition,
-experiment)` pair. The experiment suffix is never parsed to recover either
+Readers derive `runs/<condition>-<experiment>/` from the recorded `(condition,
+experiment)` pair. Conditions are groupings of cards, not stored objects. Each
+card and `run.start` carries condition identity, experiment, source and params;
+readers group cards on `condition` and take shared fields from any member. The experiment suffix is never parsed to recover either
 field; discovery reads `run.json`. Experiment names may themselves contain
 hyphens.
 
@@ -53,8 +51,7 @@ The identity excludes the runner, web, docs, and other undeclared paths. It also
 
 Condition IDs are the first 40 lowercase hexadecimal characters of the SHA-256
 hash (160 bits, matching the Nix store's hash width). The same ID is recorded in
-`run.start.condition` and `run.json.identity.condition` and used in condition filenames
-and run directory names. Hash truncation belongs only to `canonical.condition_id`;
+`run.start.condition` and `run.json.identity.condition` and used in run directory names. Hash truncation belongs only to `canonical.condition_id`;
 readers use the recorded value.
 
 A run ID has the form `yyyymmddthhmmssz-<12 lowercase hex random>`, for example

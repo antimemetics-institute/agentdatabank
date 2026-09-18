@@ -53,18 +53,17 @@ const raw = readFileSync(process.env.FIXTURE!, "utf8"); // absolute path from re
 const events: Ev[] = raw.split("\n").filter(Boolean).map((l) => parseEventLine(l));
 
 const modelRun = fixtureMeta(events);
-const comparisonConditions = [
-  { id: "base", experiment: "govsim", source: "same", params: { threads: 2, model: "a" } },
-  { id: "sibling", experiment: "govsim", source: "same", params: { threads: 3, model: "a" } },
-  { id: "two-differences", experiment: "govsim", source: "same", params: { threads: 3, model: "b" } },
-  { id: "old", experiment: "govsim", source: "old", params: { threads: 3, model: "a" } },
-];
-const comparisonRuns = comparisonConditions.map((c) => ({ ...modelRun, condition: c.id, run: `${c.id}-run`, params: c.params }));
-const conditionHtml = renderToStaticMarkup(<ConditionView cid="base" conditions={comparisonConditions} runs={comparisonRuns} />);
+const comparisonRuns = [
+  { condition: "base", experiment: "govsim", source: "same", params: { threads: 2, model: "a" } },
+  { condition: "sibling", experiment: "govsim", source: "same", params: { threads: 3, model: "a" } },
+  { condition: "two-differences", experiment: "govsim", source: "same", params: { threads: 3, model: "b" } },
+  { condition: "old", experiment: "govsim", source: "old", params: { threads: 3, model: "a" } },
+].map((c) => ({ ...modelRun, ...c, run: `${c.condition}-run` }));
+const conditionHtml = renderToStaticMarkup(<ConditionView cid="base" runs={comparisonRuns} />);
 assert.match(conditionHtml, /threads.*2.*→.*3/);
 assert.match(conditionHtml, /#\/conditions\/base\?pool=threads/);
 assert.ok(!conditionHtml.includes("two-differences-run"));
-const pooledHtml = renderToStaticMarkup(<ConditionView cid="base" query="pool=threads" conditions={comparisonConditions} runs={comparisonRuns} />);
+const pooledHtml = renderToStaticMarkup(<ConditionView cid="base" query="pool=threads" runs={comparisonRuns} />);
 assert.match(pooledHtml, /Pooled runs · varying threads/);
 assert.match(pooledHtml, /base-run/);
 assert.match(pooledHtml, /sibling-run/);

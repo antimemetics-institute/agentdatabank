@@ -1,6 +1,6 @@
 import { open, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { Condition, FullEvent, RunCard, RunMeta } from "../shared/types.ts";
+import type { FullEvent, RunCard, RunMeta } from "../shared/types.ts";
 import { cardMeta, cardReason, metadataReason, object, oneLineReason } from "../lib/run-readability.ts";
 import { conditionName } from "../lib/identity.ts";
 import { readEventRecords } from "./events.ts";
@@ -25,15 +25,6 @@ export class RunReader {
     const dir = await this.directory(cid, rid);
     if (!dir) throw new Error("no such run");
     return readFile(join(dir, "run.json"), "utf8");
-  }
-
-  async condition(cid: string): Promise<Condition | null> {
-    const run = (await this.list()).find((r) => r.condition === cid && r.experiment !== "unknown");
-    if (!run) return null;
-    try {
-      const value = JSON.parse(await readFile(join(this.root, "conditions", `${conditionName(cid, run.experiment)}.json`), "utf8"));
-      return object(value) && value.experiment === run.experiment ? value as Condition : null;
-    } catch { return null; }
   }
 
   async read(cid: string, rid: string, withRecords = false): Promise<RunSnapshot | null> {

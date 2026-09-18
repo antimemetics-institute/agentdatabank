@@ -27,7 +27,7 @@ export type ParamWidget =
   | "ref";                                     /* server-side {__param_ref} descriptor */
 
 /* the server replaces large param values with descriptors; the full value is one
-   fetch away (/api/params/<ref>), pulled when the modal opens */
+   fetch away (/api/runs/<cid>/<run>/params/<key>), pulled when the modal opens */
 export const isParamRef = (v: unknown): v is ParamRef =>
   !!v && typeof v === "object" && "__param_ref" in (v as object);
 

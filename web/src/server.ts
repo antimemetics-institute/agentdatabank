@@ -2,16 +2,16 @@
    stack is frontend/build-time; nothing of it runs here). A dumb pipe with a WIRE
    DIET: the disk record is served faithfully but thinly —
 
-   - /api/runs returns THIN summaries (no params) with a store-fingerprint ETag so
+   - /api/runs returns summaries with thin params with a store-fingerprint ETag so
      the 2s poll is a 304 in the common case;
-   - /api/conditions/<cid> replaces large param values (> ~2 KB) with
-     {__param_ref: {size, preview, ref}} descriptors; /api/params/<cid>/<key>
+   - Large card params (> ~2 KB) become {__param_ref} descriptors;
+     /api/runs/<cid>/<run>/params/<key>
      serves one full value on demand;
    - the events endpoint may elide payload fields into typed transport markers;
      /api/runs/<cid>/<rid>/event/<seq> serves the verbatim JSONL line as text. The disk
      record stays untouched — "truncation is strictly a viewer concern"
      (docs/book/src/reference/events.md);
-   - immutable data (conditions, params, terminal runs' events) is served with
+   - immutable data (params, terminal runs' events) is served with
      strong ETags + long-lived Cache-Control;
    - responses over ~1 KB are gzipped (node:zlib — still stdlib) when the client
      accepts it: event streams are key-repetitive JSON and compress ~10x.
@@ -32,9 +32,10 @@ import { readReadmeAsset } from "./server/readme-assets";
 import { elideEvent, UnreadableRecord } from "./server/events";
 import { RunReader } from "./server/runs";
 import { oneLineReason } from "./lib/run-readability";
+import { parameterIdentity } from "./lib/conditions";
 import { readRunSchemas } from "./server/event-schemas";
 import { parseArgs } from "node:util";
-import type { Condition, Manifest } from "./shared/types";
+import type { Manifest } from "./shared/types";
 import {
   claim, done, getJob, initJobs, listJobs, report, flushJobs, interruptJobs,
   stopJob, submit,
@@ -168,20 +169,16 @@ const preview = (s: string): string => {
   return line.trim().slice(0, 160);
 };
 
-/* large values become {__param_ref} descriptors; /api/params serves the full value */
-function thinParams(cid: string, params: Record<string, unknown>): Record<string, unknown> {
+/* Large card params expand through the immutable per-run parameter endpoint. */
+function thinParams(cid: string, rid: string, params: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(params)) {
     const s = typeof v === "string" ? v : JSON.stringify(v);
     if (s !== undefined && s.length > PARAM_REF_LIMIT) {
-      out[k] = { __param_ref: { size: s.length, preview: preview(s), ref: `${cid}/${k}` } };
+      out[k] = { __param_ref: { size: s.length, preview: preview(s), ref: `${encodeURIComponent(cid)}/${encodeURIComponent(rid)}/params/${encodeURIComponent(k)}`, hash: createHash("sha256").update(parameterIdentity(v)).digest("hex") } };
     } else out[k] = v;
   }
   return out;
-}
-
-async function readCondition(cid: string): Promise<Condition | null> {
-  return runReader.condition(cid);
 }
 
 /* Catalog evaluated from the configured execution source at startup. */
@@ -302,7 +299,9 @@ const server = createServer(async (req, res) => {
     if (parts[0] === "api") {
       if (parts[1] === "runs" && parts.length === 2) {
         /* thin list + store-fingerprint ETag: 2s polls are 304s when nothing moved */
-        const scan = await runReader.list();
+        const scan = (await runReader.list()).map((run) => ({ ...run,
+          ...(run.params && typeof run.params === "object" ? { params: thinParams(run.condition, run.run, run.params as Record<string, unknown>) } : {}),
+        }));
         return withEtag(req, res, `"runs-${createHash("sha256").update(JSON.stringify(scan)).digest("hex")}"`,
           "no-cache", () => scan);
       }
@@ -459,6 +458,13 @@ const server = createServer(async (req, res) => {
         if (!snapshot) return json(req, res, 404, { error: "no parseable run.json" });
         if (snapshot.meta.readable === false)
           return json(req, res, 422, { readable: false, reason: snapshot.meta.reason, error: snapshot.meta.reason });
+        if (parts.length === 6 && parts[4] === "params") {
+          const key = decodeURIComponent(parts[5]!);
+          const params = snapshot.meta.params as Record<string, unknown> | undefined;
+          if (!params || !Object.hasOwn(params, key)) return json(req, res, 404, { error: "no such param" });
+          return withEtag(req, res, `"param-${createHash("sha256").update(JSON.stringify(params[key])).digest("hex")}"`,
+            IMMUTABLE, () => ({ value: params[key] }));
+        }
         const records = snapshot.records!;
         const state = snapshot.meta.state;
         if (parts.length === 5 && parts[4] === "schemas") {
@@ -482,23 +488,6 @@ const server = createServer(async (req, res) => {
           res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": cc });
           return res.end(ev.line);
         }
-      }
-      if (parts[1] === "conditions" && parts.length === 3) {
-        const cid = parts[2]!;
-        const cond = await readCondition(cid);
-        if (cond === null) return json(req, res, 404, { error: "no such condition" });
-        if (cond.params && typeof cond.params === "object")
-          cond.params = thinParams(cid, cond.params as Record<string, unknown>);
-        /* conditions are immutable once written */
-        return withEtag(req, res, `"cond-${cid}"`, IMMUTABLE, () => cond);
-      }
-      if (parts[1] === "params" && parts.length === 4) {
-        const [, , cid, key] = parts as [string, string, string, string];
-        const cond = await readCondition(cid);
-        const params = cond?.params as Record<string, unknown> | undefined;
-        if (!params || !(key in params)) return json(req, res, 404, { error: "no such param" });
-        return withEtag(req, res, `"param-${cid}-${key}"`, IMMUTABLE,
-          () => ({ value: params[key] }));
       }
       return json(req, res, 404, { error: "unknown endpoint" });
     }

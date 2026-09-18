@@ -60,10 +60,12 @@ export ADB_DATA_DIR="$HOME/adb-first-run"
 
 Changing the directory selects a different collection of runs; it does not move existing data. To inspect a run directly, use the `store` path printed by the terminal experiment. Under the chosen data directory:
 
-- `conditions/<condition_id>-<experiment>.json` records the experiment source and parameter configuration.
 - `runs/<condition_id>-<experiment>/<run_id>/run.json` records run metadata and outcome.
 - `runs/<condition_id>-<experiment>/<run_id>/events.jsonl` contains the recorded events, one stream per run.
 - `runs/<condition_id>-<experiment>/<run_id>/workspace/` is the experiment's working directory.
+
+Condition identity, experiment, source and params live on each card and `run.start`.
+Readers derive conditions by grouping cards on `condition`.
 
 ## Run the hello test in a terminal
 

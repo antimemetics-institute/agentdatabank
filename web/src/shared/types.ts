@@ -67,22 +67,18 @@ export interface RunMeta {
 
 /* server wire-diet markers (round 7): large param values and quadratic event
    fields are replaced on the wire by these descriptors; full values come from
-   /api/params/<ref> and /api/runs/<cid>/<rid>/event/<seq>. Disk records are
+   /api/runs/<cid>/<rid>/params/<key> and /api/runs/<cid>/<rid>/event/<seq>. Disk records are
    untouched — truncation is strictly a viewer concern (docs/book/src/reference/events.md). */
 export interface ParamRef {
-  __param_ref: { size: number; preview: string; ref: string };
+  __param_ref: { size: number; preview: string; ref: string; hash: string };
 }
 export interface ElidedMarker {
   __elided: { bytes: number; preview?: string };
 }
 
-/* conditions/<cid>-<experiment>.json as written by the runner; immutable once written */
-export interface Condition {
-  experiment: string;
-  params: Record<string, unknown>;
-  source: string;
-  [k: string]: unknown;
-}
+/* A condition is a grouping of cards, with shared fields taken from any member. */
+export type Condition = Pick<RunCard["identity"], "experiment">
+  & Pick<RunCard["inputs"], "params"> & Pick<RunCard["provenance"], "source">;
 
 /* experiment manifest (adb.mkExperiment result → JSON), served by /api/experiments
    from the catalog directory — the schema that drives the run-config builder. */

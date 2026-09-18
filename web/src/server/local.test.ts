@@ -156,12 +156,23 @@ process.on('SIGTERM', async () => {
       seq: 0, event: { type: "run.start", condition: "condition", result_definitions: definitions },
     };
     const card = fixtureCard([startRecord]);
+    const longParam = "large parameter ".repeat(300);
+    card.inputs.params = { long: longParam, small: 3 };
     writeFileSync(join(runDir, "run.json"), JSON.stringify(card));
     writeFileSync(join(runDir, "events.jsonl"), JSON.stringify(startRecord) + "\n");
     const readonly = await launch(join(dir, "read-only"), 0, false, "env");
     const initial = await fetch(readonly.url + "/api/runs");
     const rows = await initial.json();
     assert.deepEqual(rows[0].result_definitions, definitions);
+    assert.equal(rows[0].params.small, 3);
+    assert.equal(rows[0].params.long.__param_ref.size, longParam.length);
+    const parameterUrl = readonly.url + "/api/runs/" + rows[0].params.long.__param_ref.ref;
+    const parameter = await fetch(parameterUrl);
+    assert.deepEqual(await parameter.json(), { value: longParam });
+    assert.match(parameter.headers.get("cache-control")!, /immutable/);
+    assert.equal((await fetch(parameterUrl, { headers: { "if-none-match": parameter.headers.get("etag")! } })).status, 304);
+    assert.equal((await fetch(readonly.url + "/api/conditions/condition")).status, 404);
+    assert.equal((await fetch(readonly.url + "/api/params/condition/long")).status, 404);
     const stream = await (await fetch(readonly.url + "/api/runs/condition/20260916t120000z-012345abcdef/events")).json();
     assert.equal(typeof stream[0].event.result_definitions[0].description.__elided.bytes, "number");
     const disk = readFileSync(join(runDir, "events.jsonl"));

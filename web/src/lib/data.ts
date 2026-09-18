@@ -1,10 +1,9 @@
 /* Data plumbing shared by the pages: fetch helper, the 2s /api/runs poll hook, the
-   session-lifetime condition cache (conditions are immutable — fetch each once),
    param helpers, and the module-level UI state that survives hash navigation
    (filters, agent pick). */
 
 import { useEffect, useState } from "react";
-import type { Condition, Ev, FullEvent, JobInfo, Manifest, RunMeta, ExecutorInfo } from "@/shared/types";
+import type { Ev, FullEvent, JobInfo, Manifest, RunMeta, ExecutorInfo } from "@/shared/types";
 import { parseEnvelope, parseEventLine } from "./envelope";
 import { needsDisplayRecord } from "./event-transport";
 import type { JsonSchema } from "./render-hints";
@@ -93,7 +92,6 @@ export function useRunsPoll(): RunMeta[] | null {
       try { fresh = await api<RunMeta[]>("/api/runs"); } catch { return; }
       if (!Array.isArray(fresh)) return;
       notePollOk();
-      await fetchConds(fresh);
       runsCache = fresh;
       if (!stopped) setRuns(fresh);
     };
@@ -241,27 +239,13 @@ export function fetchFullEvent(cid: string, rid: string, seq: number): Promise<F
 const paramValueCache = new Map<string, unknown>();
 export async function fetchParamValue(ref: string): Promise<unknown> {
   if (paramValueCache.has(ref)) return paramValueCache.get(ref);
-  const { value } = await api<{ value: unknown }>(`/api/params/${ref}`);
+  const { value } = await api<{ value: unknown }>(`/api/runs/${ref}`);
   paramValueCache.set(ref, value);
   return value;
 }
 
-/* ------------- conditions cache ------------- */
-
-export const conds: Record<string, Condition> = {};
-
-export async function fetchConds(runs: RunMeta[]): Promise<void> {
-  const missing = [...new Set(runs.filter((r) => object(r) && typeof r.condition === "string").map((r) => r.condition))].filter((c) => c && !(c in conds));
-  await Promise.all(missing.map(async (c) => {
-    try { conds[c] = await api<Condition>(`/api/conditions/${c}`); }
-    catch { /* not written yet or unreadable — retried next poll */ }
-  }));
-}
-
-/* condition params, with run.json's params as a fallback so a run is
-   renderable even before its condition file lands */
 export const paramsOf = (r: RunMeta): Record<string, unknown> | undefined => {
-  const value = conds[r.condition]?.params ?? r.params;
+  const value = r.params;
   return object(value) ? value : undefined;
 };
 

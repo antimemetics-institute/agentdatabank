@@ -36,9 +36,7 @@ def test_condition_path_uses_both_fields_and_accepts_hyphenated_experiments(tmp_
     experiment = "inspect-task-with-hyphens"
     cid = "a" * 40
     rid = "20260916t120000z-012345abcdef"
-    spec = {"experiment": experiment, "source": "test", "params": {}}
-    store_mod.ensure_condition(tmp_path, cid, spec)
     store = RunStore(tmp_path, cid, rid, experiment=experiment)
     assert store.dir == tmp_path / "runs" / (cid + "-" + experiment) / rid
-    assert json.loads((tmp_path / "conditions" / (cid + "-" + experiment + ".json")).read_text()) == spec
+    assert not (tmp_path / "conditions").exists()
     assert store_mod.find_run(tmp_path, rid) == store.dir

@@ -1,8 +1,8 @@
 /* Run summary and stream share one event snapshot and URL navigation state. */
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { Condition, Ev, FullEvent, Manifest, RunMeta } from "@/shared/types";
-import { api, conds, displayState, fmtVal, loadRunEvents, runCache, useManifests, useRunSchemas, useRunsPoll } from "@/lib/data";
+import type { Ev, FullEvent, Manifest, RunMeta } from "@/shared/types";
+import { displayState, fmtVal, loadRunEvents, runCache, useManifests, useRunSchemas, useRunsPoll } from "@/lib/data";
 import { LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
 import { RunResults } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
@@ -62,13 +62,6 @@ function RunPageData({ cid, rid, query = "" }: { cid: string; rid: string; query
     return () => { stopped = true; if (timer !== null) clearInterval(timer); };
   }, [cid, rid, key]);
 
-  useEffect(() => {
-    if (cid in conds) return;
-    api<Condition>(`/api/conditions/${cid}`)
-      .then((c) => { conds[cid] = c; bump(); })
-      .catch(() => { /* not written yet */ });
-  }, [cid]);
-
   const events = eventsRef.current;
   const ended = events.some((e) => e.event.type === "run.end");
   useEffect(() => {
@@ -79,12 +72,12 @@ function RunPageData({ cid, rid, query = "" }: { cid: string; rid: string; query
   const schemas = useRunSchemas(cid, rid, events.length > 0);
   const definitions = useMemo(() => compileSchemas(schemas), [schemas]);
   const experiment = events.find((e) => typeof e.experiment === "string")?.experiment
-    ?? meta?.experiment ?? conds[cid]?.experiment;
+    ?? meta?.experiment;
   if (!events.length && !meta && !readError)
     return <div className="space-y-3 pt-1"><LoadingBar /><Skeleton className="h-16" />
       <Skeleton className="h-8 w-72" /><Skeleton className="h-64" /></div>;
   return <RunView cid={cid} rid={rid} query={query} preferredTab={preferredTab} events={events}
-    definitions={definitions} meta={meta} condition={conds[cid]} now={now}
+    definitions={definitions} meta={meta} now={now}
     manifest={manifests?.find((m) => m.name === experiment)} readError={readError} />;
 }
 
@@ -98,10 +91,10 @@ export function RunView(props: Parameters<typeof ReadableRunView>[0]) {
 }
 
 function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, definitions = [],
-  meta, manifest, condition, now = Date.now(), review = false, readError, diskRecords }: {
+  meta, manifest, now = Date.now(), review = false, readError, diskRecords }: {
   cid: string; rid: string; query?: string; preferredTab?: RunTab | null;
   events: Ev[]; definitions?: EventDefinition[]; meta?: RunMeta | null;
-  manifest?: Manifest; condition?: Condition; now?: number; review?: boolean; readError?: string | null;
+  manifest?: Manifest; now?: number; review?: boolean; readError?: string | null;
   diskRecords?: ReadonlyMap<number, FullEvent>; rawRunJson?: string | null;
 }) {
   const startRecord = events.find((e) => e.event.type === "run.start");
@@ -110,7 +103,7 @@ function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, de
   const state = end?.state ?? (meta ? displayState(meta, now) : "running");
   const terminal = !!end || ["completed", "failed", "interrupted"].includes(state);
   const experiment = events.find((e) => typeof e.experiment === "string")?.experiment
-    ?? meta?.experiment ?? condition?.experiment ?? manifest?.name ?? "run";
+    ?? meta?.experiment ?? manifest?.name ?? "run";
   const options = readRunView(query);
   const tab = selectRunTab(options, preferredTab, terminal);
   const activity = {
@@ -124,7 +117,7 @@ function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, de
   const usage = { calls: meta?.derived?.counts.llm_calls ?? 0, failed: meta?.derived?.counts.failed_calls ?? 0,
     input: meta?.derived?.usage.input_tokens ?? 0, output: meta?.derived?.usage.output_tokens ?? 0 };
   const runtime = start?.runtime ?? meta?.runtime ?? {};
-  const params = start?.params ?? meta?.params;
+  const params = meta?.params ?? start?.params;
   const lastStatus = meta?.derived?.last_status;
   const elapsed = end?.duration_s ?? meta?.duration_s ?? elapsedSeconds(startRecord?.ts ?? meta?.started_at ?? events[0]?.ts, now);
   const age = elapsedSeconds(meta?.derived?.last_event_at, now);
@@ -184,7 +177,7 @@ function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, de
       </section>
       <section aria-label="Provenance">
         <SectionTitle>Provenance</SectionTitle>
-        <Facts values={{ source: start?.source ?? meta?.source ?? condition?.source ?? "not recorded",
+        <Facts values={{ source: start?.source ?? meta?.source ?? "not recorded",
           fetch_ref: start?.fetch_ref ?? meta?.fetch_ref ?? "no pinned revision",
           tree_hash: start?.tree_hash ?? meta?.tree_hash ?? "not recorded" }} />
         <h4 className="mb-2 mt-4 text-xs font-medium">Runtime</h4>

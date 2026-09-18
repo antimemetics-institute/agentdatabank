@@ -20,11 +20,11 @@ test("record identity resolves suffixed paths, condition params and raw lines be
   const line = JSON.stringify({ ...envelope({ type: "log", message: "hello" }), run: rid, experiment }) + "\n";
   try {
     await mkdir(dir, { recursive: true });
-    await mkdir(join(root, "conditions"));
-    await writeFile(join(root, "conditions", conditionName(cid, experiment) + ".json"), JSON.stringify(condition));
     const card = fixtureCard([JSON.parse(line)]);
     Object.assign(card.identity, { condition: cid });
     card.lifecycle.state = "completed";
+    card.inputs.params = condition.params;
+    card.provenance.source = condition.source;
     await writeFile(join(dir, "run.json"), JSON.stringify(card));
     await writeFile(join(dir, "events.jsonl"), line);
     const reader = new RunReader(root, () => {});
@@ -33,7 +33,8 @@ test("record identity resolves suffixed paths, condition params and raw lines be
     assert.equal(run?.meta.condition, cid);
     assert.equal(run?.meta.experiment, experiment);
     assert.equal(run?.records?.[0]?.line, line);
-    assert.deepEqual(await reader.condition(cid), condition);
+    assert.deepEqual(run?.meta.params, condition.params);
+    assert.equal(run?.meta.source, condition.source);
     assert.deepEqual(JSON.parse(await reader.raw(cid, rid)), card);
     // A misleading suffix is an error, never an alternative source of identity.
     const wrong = join(root, "runs", conditionName(cid, "another-experiment"));

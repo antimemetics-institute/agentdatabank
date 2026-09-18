@@ -64,11 +64,9 @@ def test_launch_forwards_optional_revision_and_tree_hash(tmp_path, monkeypatch, 
     assert path.parent.parent.name == name
     assert find_run(home, metadata["identity"]["run"]) == path.parent
     assert all(record.run == path.parent.name == metadata["identity"]["run"] for record in read_events(path.parent))
-    [condition_file] = (home / "conditions").glob("*.json")
-    assert condition_file.name == name + ".json"
-    assert json.loads(condition_file.read_text()) == {
-        "experiment": metadata["identity"]["experiment"], "source": metadata["provenance"]["source"], "params": metadata["inputs"]["params"],
-    }
+    assert not (home / "conditions").exists()
+    assert start["params"] == metadata["inputs"]["params"]
+    assert start["source"] == metadata["provenance"]["source"]
     for saved in (start, metadata["provenance"]):
         assert saved["tree_hash"] == "sha256-launcher-tree"
         assert saved.get("fetch_ref") == (ref or None)
