@@ -80,3 +80,83 @@ The stream is compressed at zstd level 19 in a single frame with
 `Content-Type: application/zstd`, preserving its original bytes when decompressed.
 The card is copied byte-for-byte with `Content-Type: application/json`.
 Workspaces are never uploaded. See the [published layout](../reference/layout.md#published-runs).
+
+## Build and serve an index
+
+Experiment buckets contain only `runs/`. A separate, replaceable index lets a
+static browser discover those runs. Keep `stores.json` and `site.json` in the
+site repository. Write the store list yourself; ADB does not infer a public URL
+from an S3 address. `data.example.org` below is an example store hostname.
+
+```json
+{
+  "v": 0,
+  "stores": [
+    {
+      "s3": "s3://my-experiment-bucket/adb-v1",
+      "profile": "research",
+      "url": "https://data.example.org/experiments/adb-v1",
+      "experiments": ["govsim"]
+    }
+  ]
+}
+```
+
+`url` must expose the same prefix over public HTTPS. Optional `experiments`,
+`conditions` and `runs` lists filter exact recorded values and intersect.
+Leave a filter out to include everything; an empty list includes nothing.
+Store profiles select source credentials. The index command writes to a local
+directory that the site deploys.
+
+The complete `site.json` is:
+
+```json
+{"v": 0}
+```
+
+Unknown keys are rejected. CI builds the dist, copies it and `site.json` into
+`site/`, generates `site/index`, and deploys `site/`. With the ADB Nix packages
+and `adb-runner` available in CI:
+
+```bash
+web_dist="$(nix build .#adb-web-dist --no-link --print-out-paths)"
+mkdir -p site
+cp -R "$web_dist"/. site/
+chmod -R u+w site
+cp site.json site/site.json
+adb-runner index --stores stores.json --to site/index
+```
+
+Deploy the resulting `site/` directory. Only CI uses AWS profiles; the browser
+reads the generated index and public run objects.
+
+`--dry-run` prints each store's filtered run count and the files and sizes it
+would write, without creating or deleting anything. Every invocation rebuilds
+the whole index from complete run-object pairs. It deletes the output directory
+and rewrites it in full, writing `index.json` last. Shards for experiments no
+longer present are removed.
+Unreadable, malformed or disappeared cards produce warnings and are skipped,
+so healthy runs can still be indexed. Failure to list a store aborts the rebuild
+before replacing the destination.
+
+The root `index.json` lists experiment names, their run counts, the total count,
+and `built_at`. Each `experiments/<experiment>/index.jsonl` contains one row
+`{"store":"<public HTTPS base>","card":<run.json as a JSON value>}` per run.
+The card is compactly re-serialized with Unicode retained and key order
+preserved. This derived cache is never authoritative. Opening a run fetches the
+original card and compressed stream from the row's store; raw display uses those
+original bytes and decompressed lines.
+
+The build includes current manifests, versioned render hints and experiment
+README assets. Unknown schema versions
+fall back to shared hints. Published mode hides launch, publish and jobs controls;
+it requires no Node process. Without `site.json`, the app uses its local server.
+
+The browser reads `index/index.json` and
+`index/experiments/<experiment>/index.jsonl` relative to the app's own directory.
+An app served at `/adb/` reads `/adb/index/index.json`; the same layout works
+at the site root. It revalidates the index once a minute and caches `runs/`
+objects for the session. Run objects are fetched from each row's `store`,
+following redirects, including signed CDN URLs, with credentials omitted on
+every hop. Damaged rows and missing shards appear as diagnostic entries without
+hiding healthy runs.

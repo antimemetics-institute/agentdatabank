@@ -9,37 +9,14 @@ import { needsDisplayRecord } from "./event-transport";
 import type { JsonSchema } from "./render-hints";
 import { object } from "./run-readability";
 
-/* Resolve "/api/..." against the directory the app is served from, not the origin
-   root: behind a path-stripping proxy (code-server's /proxy/8340/) the browser must
-   request /proxy/8340/api/..., while a direct visit stays /api/... . Hash routing
-   keeps location.pathname stable, so this is computed once per request safely. */
-function withBase(path: string): string {
-  const p = window.location.pathname;
-  return (p.endsWith("/") ? p : p + "/") + path.replace(/^\//, "");
-}
+import { dataSource, publishedMode } from "./data-source";
 
 export async function api<T>(path: string): Promise<T> {
-  const r = await fetch(withBase(path));
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(body.error ?? `${r.status} ${path}`);
-  }
-  return r.json() as Promise<T>;
+  return await dataSource().json(path) as T;
 }
 
-/* POST with the server's {error} body surfaced — the launch/credential endpoints
-   answer 4xx with a human sentence (loopback-only, validation, runner refusals)
-   that the UI shows verbatim rather than a bare status code */
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(withBase(path), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data: unknown = await r.json().catch(() => ({}));
-  if (!r.ok)
-    throw new Error((data as { error?: string }).error ?? `${r.status} ${path}`);
-  return data as T;
+  return await dataSource().post(path, body) as T;
 }
 
 /* experiment manifests (schema for the run-config builder). Per-build-immutable, so
@@ -81,8 +58,8 @@ export function useManifests(): Manifest[] | null {
    with current data and refreshes in the background — no "loading…" flash */
 let runsCache: RunMeta[] | null = null;
 
-/* the list pages' liveness loop: poll /api/runs every 2s, hydrating the condition
-   cache along the way. null only before the first-ever response of the session. */
+/* Local lists poll every 2s; published indexes revalidate each minute.
+   null only before the first-ever response of the session. */
 export function useRunsPoll(): RunMeta[] | null {
   const [runs, setRuns] = useState<RunMeta[] | null>(runsCache);
   useEffect(() => {
@@ -96,7 +73,7 @@ export function useRunsPoll(): RunMeta[] | null {
       if (!stopped) setRuns(fresh);
     };
     void load();
-    const t = setInterval(() => void load(), 2000);
+    const t = setInterval(() => void load(), dataSource().pollMs);
     return () => { stopped = true; clearInterval(t); };
   }, []);
   return runs;
@@ -116,6 +93,7 @@ export const JOB_TERMINAL = new Set<JobInfo["state"]>(
 function useGatedPoll<T>(path: string): T | null | undefined {
   const [data, setData] = useState<T | null | undefined>(undefined);
   useEffect(() => {
+    if (publishedMode()) { setData(null); return; }
     let stopped = false;
     const load = () =>
       api<T>(path)
@@ -124,7 +102,7 @@ function useGatedPoll<T>(path: string): T | null | undefined {
           if (!stopped && /^40[34] /.test(e.message)) setData(null);
         });
     void load();
-    const t = setInterval(() => void load(), 2000);
+    const t = setInterval(() => void load(), dataSource().pollMs);
     return () => { stopped = true; clearInterval(t); };
   }, [path]);
   return data;
@@ -156,7 +134,7 @@ export function usePollHealth(): { live: boolean; lastOkAt: number } {
   const [state, setState] = useState({ live: false, lastOkAt: 0 });
   useEffect(() => {
     const update = () =>
-      setState({ live: Date.now() - lastPollOk < 6000, lastOkAt: lastPollOk });
+      setState({ live: Date.now() - lastPollOk < dataSource().pollMs * 3, lastOkAt: lastPollOk });
     update();
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
@@ -179,12 +157,7 @@ export function displayState(r: RunMeta, now = Date.now()): string {
 }
 
 export async function fetchRunJson(cid: string, rid: string): Promise<string> {
-  const response = await fetch(withBase(`/api/runs/${encodeURIComponent(cid)}/${encodeURIComponent(rid)}/run.json`));
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error ?? `run.json unavailable (${response.status})`);
-  }
-  return response.text();
+  return dataSource().text(`/api/runs/${encodeURIComponent(cid)}/${encodeURIComponent(rid)}/run.json`);
 }
 
 /* run-reference lookup (lineage navigation): resolve a bare run id to its run */
@@ -222,12 +195,7 @@ export function fetchFullEvent(cid: string, rid: string, seq: number): Promise<F
   let request = fullEventCache.get(key);
   if (!request) {
     request = (async () => {
-      const response = await fetch(withBase(`/api/runs/${cid}/${rid}/event/${seq}`));
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Could not read event ${seq}: ${response.status}`);
-      }
-      const line = await response.text();
+      const line = await dataSource().text(`/api/runs/${cid}/${rid}/event/${seq}`);
       return { record: parseEventLine(line), line };
     })().catch((error) => { fullEventCache.delete(key); throw error; });
     fullEventCache.set(key, request);

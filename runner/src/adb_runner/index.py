@@ -1,0 +1,170 @@
+"""Build a local index directory from experiment buckets, using only ListObjectsV2 and GetObject."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import shutil
+import sys
+from typing import Any, TYPE_CHECKING
+from urllib.parse import urlsplit
+
+import boto3
+from botocore.exceptions import ClientError
+from adb_events import Json
+from adb_events.models.base import serialize_utc_datetime
+
+from .publish import PublishError, Target, failure, parse_target
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.client import S3Client
+
+
+@dataclass(frozen=True)
+class Store:
+    target: Target
+    profile: str | None
+    url: str
+    filters: dict[str, list[str]]
+
+
+def read_stores(path: Path) -> list[Store]:
+    value: Json = json.loads(path.read_bytes())
+    if not isinstance(value, dict) or type(value.get("v")) is not int or value.get("v") != 0:
+        raise PublishError("store list must be {v: 0, stores: [...]}")
+    entries = value.get("stores")
+    if not isinstance(entries, list):
+        raise PublishError("store list stores must be an array")
+    stores: list[Store] = []
+    for row in entries:
+        if not isinstance(row, dict):
+            raise PublishError("each store must be an object")
+        s3, public = row.get("s3"), row.get("url")
+        if not isinstance(s3, str) or not isinstance(public, str):
+            raise PublishError("each store needs s3 and url strings")
+        url = urlsplit(public)
+        if url.scheme != "https" or not url.netloc or url.username or url.password or url.query or url.fragment:
+            raise PublishError("store url must be a public HTTPS base without credentials, query or fragment")
+        profile = row.get("profile")
+        if profile is not None and (not isinstance(profile, str) or "=" in profile):
+            raise PublishError("store profile must be an AWS profile name")
+        filters: dict[str, list[str]] = {}
+        for key in ("experiments", "conditions", "runs"):
+            if key in row:
+                values = row[key]
+                if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+                    raise PublishError(f"store {key} must be a list of strings")
+                filters[key] = [item for item in values if isinstance(item, str)]
+        stores.append(Store(parse_target(s3), profile, public.rstrip("/"), filters))
+    return stores
+
+
+def client(profile: str | None) -> S3Client:
+    return boto3.Session(profile_name=profile).client("s3")
+
+
+def get(s3: S3Client, target: Target, key: str) -> bytes | None:
+    try:
+        response = s3.get_object(Bucket=target.bucket, Key=key)
+        try:
+            return response["Body"].read()
+        finally:
+            response["Body"].close()
+    except ClientError as error:
+        if error.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+            return None
+        raise
+
+
+def keys(s3: S3Client, target: Target, prefix: str) -> set[str]:
+    return {obj["Key"]
+            for page in s3.get_paginator("list_objects_v2").paginate(Bucket=target.bucket, Prefix=prefix)
+            for obj in page.get("Contents", []) if "Key" in obj}
+
+
+def encode(value: Any) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def collect(stores: list[Store]) -> dict[str, list[bytes]]:
+    grouped: dict[str, list[bytes]] = {}
+    for store in stores:
+        s3 = client(store.profile)
+        prefix = store.target.key("runs/")
+        objects = keys(s3, store.target, prefix)
+        count = 0
+        for key in sorted(objects):
+            if not re.fullmatch(r"[^/]+/[^/]+/run\.json", key[len(prefix):]):
+                continue
+            if key[:-len("run.json")] + "events.jsonl.zst" not in objects:
+                continue
+            try:
+                body = get(s3, store.target, key)
+                if body is None:
+                    raise PublishError("card disappeared while indexing")
+                card: Json = json.loads(body)
+                if not isinstance(card, dict):
+                    raise PublishError("card must be an object with an identity object")
+                identity = card.get("identity")
+                if not isinstance(identity, dict):
+                    raise PublishError("card must be an object with an identity object")
+                for field in ("experiment", "condition", "run"):
+                    if not isinstance(identity.get(field), str) or not identity[field]:
+                        raise PublishError(f"card identity.{field} must be a non-empty string")
+                name = identity["experiment"]
+                if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name):
+                    raise PublishError("invalid experiment name")
+                if any(identity[field] not in store.filters[plural]
+                       for plural, field in (("experiments", "experiment"), ("conditions", "condition"), ("runs", "run"))
+                       if plural in store.filters):
+                    continue
+                row = encode({"store": store.url, "card": card})
+            except Exception as error:
+                print(f"index: WARNING: skipping s3://{store.target.bucket}/{key}: {failure(error)}", file=sys.stderr)
+                continue
+            grouped.setdefault(name, []).append(row)
+            count += 1
+        print(f"STORE s3://{store.target.bucket}/{store.target.prefix} {count} runs")
+    return grouped
+
+
+def build(stores: list[Store], directory: Path, dry_run: bool) -> None:
+    # Read every source before replacing any destination projection.
+    grouped = collect(stores)
+    objects = {f"experiments/{name}/index.jsonl": b"".join(rows)
+               for name, rows in sorted(grouped.items())}
+    root = {"v": 0, "experiments": [{"name": name, "runs": len(rows)} for name, rows in sorted(grouped.items())],
+            "runs": sum(len(rows) for rows in grouped.values()),
+            "built_at": serialize_utc_datetime(datetime.now(timezone.utc))}
+    objects["index.json"] = encode(root)  # advertise the rebuilt shards last
+    if not dry_run:
+        if directory.exists():
+            shutil.rmtree(directory)
+        directory.mkdir(parents=True)
+    for key, body in objects.items():
+        path = directory / key
+        print(f"{'PLAN' if dry_run else 'WRITE'} {path} {len(body)} bytes")
+        if dry_run:
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+
+
+def index_cli(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="adb-runner index", description=__doc__)
+    parser.add_argument("--stores", required=True, type=Path, metavar="FILE")
+    parser.add_argument("--to", required=True, metavar="DIR", help="index directory, deleted and rewritten in full")
+    parser.add_argument("--dry-run", action="store_true", help="print filtered store counts, files and sizes; write nothing")
+    args = parser.parse_args(argv)
+    if "://" in args.to:
+        parser.error("--to must be a local directory")
+    try:
+        build(read_stores(args.stores), Path(args.to), args.dry_run)
+        return 0
+    except Exception as error:
+        print(f"index: FAIL: {failure(error)}", file=sys.stderr)
+        return 1

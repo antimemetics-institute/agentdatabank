@@ -135,6 +135,36 @@ refused without overwriting it. A changed immutable object uses a new prefix.
 Compression does not change `(run, seq)` record addresses.
 See [Publishing](../running/publishing.md) for commands and profile setup.
 
+## Derived indexes and static browsing
+
+Indexes live outside experiment buckets and are rebuilt in full from complete
+`runs/` object pairs. The root `index.json` has `v: 0`, `experiments` containing
+`{name, runs}` entries, total `runs`, and `built_at` in the stream's UTC timestamp
+format. Each `experiments/<experiment>/index.jsonl` contains rows of
+`{"store":"<public HTTPS base>","card":<run.json as a JSON value>}`.
+Card values are compactly re-serialized; the objects under `runs/` remain
+byte-authoritative. Index objects are replaceable and never authoritative.
+
+A user-written `stores.json` in the site repository supplies each S3 prefix,
+its AWS profile, the public HTTPS URL for the same prefix, and optional
+experiment, condition and run filters.
+The repository also contains `site.json` with exactly `{"v":0}`; unknown keys
+are rejected. CI builds `adb-web-dist`, copies the bundle and `site.json` into
+`site/`, runs `adb-runner index --stores stores.json --to site/index`, and deploys
+`site/`. The command deletes and rewrites `site/index` in full, writing
+`index.json` last. AWS profiles are used only to read source stores.
+
+The static bundle selects published mode when `site.json` is present. It reads
+`index/index.json` and `index/experiments/<experiment>/index.jsonl` relative to
+the app directory, including under a path prefix. The browser opens original
+run objects from each row's `store`, following redirects with credentials
+omitted, and uses bundled manifests and versioned render hints. It caches run
+objects for the session and revalidates indexes each minute. The Node server
+only serves local data and launches runs.
+
+See [Build and serve an index](../running/publishing.md#build-and-serve-an-index)
+for the site repository files and CI deployment.
+
 In an `llm.call`, model API evidence is stored in `call.request` and
 `call.response`; generation settings are read from the request. Inspect also saves every native
 transcript event as `inspect.event` with its JSON-mode dump as custom data. Each

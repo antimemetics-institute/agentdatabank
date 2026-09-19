@@ -13,6 +13,7 @@ import { RunResolver, RunsPage } from "@/pages/runs";
 import { RunPage } from "@/pages/run";
 import { JobsPage } from "@/pages/jobs";
 import { ConditionPage } from "@/pages/condition";
+import { publishedMode } from "@/lib/data-source";
 import { hashRoute } from "@/lib/run-view";
 
 function useHash(): string {
@@ -59,7 +60,7 @@ export function App() {
   } else if (parts[0] === "runs") {
     section = "runs";
     page = <RunsPage />;
-  } else if (parts[0] === "jobs") {
+  } else if (parts[0] === "jobs" && !publishedMode()) {
     section = "jobs";
     page = <JobsPage />;
   } else {

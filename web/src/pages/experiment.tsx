@@ -3,6 +3,7 @@
 
 import { displayState, useManifests, useRunsPoll } from "@/lib/data";
 import { ExtLinks, MdView, PageLoading, STATES, stateText } from "@/components/bits";
+import { dataSource, publishedMode } from "@/lib/data-source";
 import { Builder } from "@/components/builder";
 import { RunsTable } from "@/pages/runs";
 import { ExperimentResults } from "@/components/results";
@@ -12,7 +13,7 @@ export function ExperimentReadme({ readme, name }: { readme?: string; name?: str
   return (
     <details open className="rounded-md border p-4">
       <summary className="cursor-pointer text-sm font-medium">About this experiment</summary>
-      <MdView src={readme} showSourceToggle={false} imageBase={name ? `/api/experiments/${encodeURIComponent(name)}/assets/` : undefined}
+      <MdView src={readme} showSourceToggle={false} imageBase={name ? (publishedMode() ? dataSource().asset(`catalog/assets/${encodeURIComponent(name)}/`) : `/api/experiments/${encodeURIComponent(name)}/assets/`) : undefined}
         className="experiment-readme mt-3 min-w-0 [overflow-wrap:anywhere]" />
     </details>
   );
@@ -39,7 +40,7 @@ export function ExperimentPage({ name }: { name: string }) {
 
       <ExperimentReadme readme={manifest?.readme} name={name} />
       <ExperimentResults definitions={manifest?.results} />
-      <Builder name={name} />
+      {!publishedMode() && <Builder name={name} />}
 
       {runs === null ? <PageLoading /> : rs.length ? (
         <RunsTable runs={rs} hideExperiment />

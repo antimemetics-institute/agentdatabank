@@ -9,6 +9,7 @@
    and llm params on a fresh form seed from the last model entered anywhere.
    Degrades to a note when the server has no manifests dir (bare dev.sh). */
 
+import { publishedMode } from "@/lib/data-source";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { buildCmd, defaultStr, effectiveStr, initialStr, orderedParams } from "@/lib/cmd-build";
 import { useCmdPrefs } from "@/lib/cmd-prefs";
@@ -437,6 +438,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
    draft initializer would not rerun (and one experiment's edits would bleed into
    the next's form) */
 export function Builder({ name }: { name: string }) {
+  if (publishedMode()) return null;
   return <BuilderForm key={name} name={name} />;
 }
 
@@ -461,6 +463,7 @@ function BuilderForm({ name }: { name: string }) {
   const [publishProfile, setPublishProfile] = useState("");
   const [awsProfiles, setAwsProfiles] = useState<string[]>([]);
   useEffect(() => {
+    if (publishedMode()) return;
     fetch("/api/publish-profiles").then((res) => res.ok ? res.json() : []).then(setAwsProfiles).catch(() => {});
   }, []);
   const publication = useMemo(() => publishEnabled ? { to: publishTarget, profile: publishProfile || undefined } : undefined,

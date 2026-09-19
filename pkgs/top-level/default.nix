@@ -95,10 +95,10 @@ let
         pnpmDeps = pkgs.fetchPnpmDeps {
           inherit (finalAttrs) pname version src;
           fetcherVersion = 4;
-          hash = "sha256-F5wFobrDLLR9ju4XtQ9uN5UCOwc8Vg4A9JvldjZ34rU=";
+          hash = "sha256-MdoCuwmHSwt2+Zk9l+srKqUO+pVjtvExviKgpuDp8XM=";
         };
         nativeBuildInputs = [ pkgs.nodejs pkgs.pnpm pkgs.pnpmConfigHook ];
-        buildPhase = ''bash ./build.sh'';
+        buildPhase = ''ADB_WEB_CATALOG=${catalog} bash ./build.sh'';
         installPhase = ''cp -r dist $out'';
       });
 

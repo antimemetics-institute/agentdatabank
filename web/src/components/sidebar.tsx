@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { CmdSettings } from "@/components/cmd-settings";
 import { cn } from "@/lib/utils";
 
+import { publishedMode } from "@/lib/data-source";
+
 const NAV = [
   { section: "experiments", href: "#/", label: "Experiments", Icon: FlaskConical },
   { section: "runs", href: "#/runs", label: "Runs", Icon: List },
@@ -56,8 +58,7 @@ export function Sidebar({
         ))}
       </nav>
       <div className="space-y-1 border-t p-2">
-        <ConnectedDot />
-        <CmdSettings />
+        {!publishedMode() && <><ConnectedDot /><CmdSettings /></>}
         <Button
           variant="ghost"
           size="sm"

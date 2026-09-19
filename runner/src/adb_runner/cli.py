@@ -119,7 +119,7 @@ def seed(raw: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="adb-runner", add_help=True,
-                                epilog="Management commands: credentials …; verify RUN_ID_OR_DIR; publish --to s3://BUCKET/PREFIX …")
+                                epilog="Management commands: credentials …; verify RUN_ID_OR_DIR; publish --to s3://BUCKET/PREFIX …; index --stores FILE --to DIR …")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                    help="set a param (JSON, @file, or bare string); repeatable")
     # profile NAMES are argv-safe (values never are — they live in the 0600 store);
@@ -195,6 +195,10 @@ def resolve_condition(args: argparse.Namespace, manifest: Manifest,
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["index"]:
+        from .index import index_cli
+        return index_cli(sys.argv[2:])
+
     if sys.argv[1:2] == ["publish"]:
         from .publish import publish_cli
         return publish_cli(sys.argv[2:])

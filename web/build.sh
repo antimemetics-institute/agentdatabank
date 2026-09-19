@@ -10,6 +10,8 @@ cd "$(dirname "$0")"
 # 1. browser app (React + Tailwind, hashed assets, index.html entry)
 node_modules/.bin/vite build
 
+node ./build-catalog.mjs "${ADB_WEB_CATALOG:-}" dist
+
 # 2. server bundle — the server itself has zero runtime dependencies (node stdlib);
 #    esbuild here only strips types and inlines src/shared/types.ts. .cjs so the
 #    bundle runs identically in-repo (package.json says type=module) and from $out

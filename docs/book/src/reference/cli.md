@@ -60,6 +60,17 @@ Without stems, all runs are considered, optionally filtered by experiment.
 Verification resolves manifests as `adb-runner verify` does. Each run uploads
 only its compressed stream and card under `runs/`. See [Publishing](../running/publishing.md).
 
+## Build a derived index
+
+```text
+adb-runner index --stores FILE --to DIR [--dry-run]
+```
+
+The store list provides source profiles, public URLs and optional filters. Each
+invocation deletes and rewrites `DIR`, writing `index.json` last. The site deploys
+this directory. Dry-run prints filtered store counts, files and sizes without
+creating or deleting anything. See [Build and serve an index](../running/publishing.md#build-and-serve-an-index).
+
 ## Credential commands
 
 Credential management is a standalone use of `adb-runner`; these commands

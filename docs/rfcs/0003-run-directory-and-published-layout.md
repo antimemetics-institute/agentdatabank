@@ -73,3 +73,83 @@ explicitly supplied experiment credential sets are preserved.
 ## 6. Deferred
 
 Chunked objects for live runs are deferred because record identity is independent of transport boundaries, so a later uploader can partition the same stream. Derived Parquet tables are deferred because they can be rebuilt from frozen records without changing producers. A fingerprint-keyed manifest registry is deferred because source fingerprints already identify the manifests to index; the registry adds a lookup location rather than changing saved records.
+
+## 7. Indexes
+
+Indexes are derived from the JSON objects under `runs/`. They live outside
+experiment buckets, are rebuilt in full on each invocation, and are never
+authoritative. The index command writes a directory that the site deploys.
+The original card and stream in each experiment bucket retain their bytes.
+
+A user-written store list selects sources; ADB never maps S3 addresses to public
+URLs. Its version is `0` and `stores` contains one entry per experiment bucket:
+
+```json
+{"v":0,"stores":[{"s3":"s3://bucket/adb-v1","profile":"hf","url":"https://data.example.org/resolve/adb-v1","experiments":["govsim"],"conditions":["condition-id"],"runs":["run-id"]}]}
+```
+
+`data.example.org` is an example hostname. `s3` and `profile` select boto3 access;
+`url` is the public HTTPS base for the same prefix. Each filter is an optional
+list of exact recorded IDs or experiment names. Omission selects everything;
+an empty list selects nothing. Present filters intersect. An omitted profile
+uses boto3's normal resolution.
+
+`adb-runner index --stores FILE --to DIR [--dry-run]` lists each store's
+`<prefix>/runs/`, retaining each `run.json` only when its sibling
+`events.jsonl.zst` exists, then reads and filters the cards.
+Source profiles belong to the store list. Sessions and S3 clients have no
+configuration overrides; the command opens only source clients and uses only
+ListObjectsV2 and GetObject. Dry-run prints each store's filtered run count and
+every output file and byte size, creating or deleting nothing.
+Unreadable, malformed or disappeared cards are skipped with an object-specific
+warning; healthy cards from that store and other stores remain in the rebuilt index.
+A failure to list a store aborts before replacing the destination.
+
+The destination contains two forms:
+
+```text
+index.json
+experiments/<experiment>/index.jsonl
+```
+
+`index.json` is `{"v":0,"experiments":[{"name":"govsim","runs":1}],"runs":1,
+"built_at":"2026-09-18T12:00:00.000000Z"}`. The total and per-experiment counts
+count rows. `built_at` uses the event stream's UTC formatter, with six fractional
+digits and `Z`. Each experiment shard has one compact JSON row per card:
+
+```text
+{"store":"<public HTTPS base>","card":<run.json as a JSON value>}
+```
+
+The card is represented as a JSON value, re-serialized compactly with
+`ensure_ascii=False` and key order preserved. The index adds no fields to the
+card. A rebuild deletes `DIR` and rewrites it in full, with `index.json` written
+last. Files for experiments no longer present are removed.
+
+The site repository contains `stores.json` and `site.json`. The complete
+`site.json` is `{"v":0}`; unknown keys are rejected. CI builds `adb-web-dist`, copies it into
+`site/`, copies `site.json` beside `site/index.html`, runs
+`adb-runner index --stores stores.json --to site/index`, and deploys `site/`.
+The browser reads `index/index.json` and
+`index/experiments/<experiment>/index.jsonl` relative to the app's own directory,
+including when the app is served under a path prefix. Without `site.json` the
+application uses the local server. Published mode projects cards into run-list
+entries and resolves `(condition, run)` to the row's store. Opening a run fetches that store's
+`runs/<condition>-<experiment>/<run>/run.json` and `events.jsonl.zst`. A pure-JS
+zstd decoder preserves the decompressed lines for raw display. Raw card display
+uses the fetched `run.json`, never the re-serialized index value. Large params
+are thinned in the browser and expand from the original card.
+
+Objects under `runs/` are immutable session caches. The index is revalidated
+once a minute. Damaged rows, missing shards, unreadable objects and
+identity mismatches become diagnostic run entries with reasons; healthy
+neighbors remain visible. Manifests and render hints ship with the static
+bundle, keyed by experiment and schema version; unmatched versions use shared
+hints. Execution surfaces, publication controls and jobs are hidden. Fetches
+omit credentials on every hop and follow redirects, including to signed CDN URLs
+on other hosts. The local Node server has no role in this flow and never
+reads a bucket.
+
+The client holds the whole list today, so JSONL shards are the initial transport.
+If querying is needed, it is a browser-side question; `index.sqlite` from the
+same command is the candidate. Analysis tables in Parquet remain the §6 deferral.

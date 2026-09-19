@@ -42,6 +42,7 @@ runnables
 // {
   inherit pkgs;
   manifests = adbPkgs.manifests;
+  adb-web-dist = adbPkgs.adb-web-dist;
 
 
   # `exec.<name>`: the classic mirror of the flake's APP namespace — bare names for

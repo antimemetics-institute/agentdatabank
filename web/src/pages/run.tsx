@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Ev, FullEvent, Manifest, RunMeta } from "@/shared/types";
-import { displayState, fmtVal, loadRunEvents, runCache, useManifests, useRunSchemas, useRunsPoll } from "@/lib/data";
+import { publishedMode } from "@/lib/data-source";
+import { displayState, fetchRunJson, fmtVal, loadRunEvents, runCache, useManifests, useRunSchemas, useRunsPoll } from "@/lib/data";
 import { LiveDot, LoadingBar, StateBadge, Skeleton } from "@/components/bits";
 import { RunResults } from "@/components/results";
 import { EventStream } from "@/components/event-stream";
@@ -186,6 +187,7 @@ function ReadableRunView({ cid, rid, query = "", preferredTab = null, events, de
         {Object.keys(runtime.endpoints ?? {}).length ? <Facts values={runtime.endpoints} />
           : <p className="text-sm text-muted-foreground">No endpoint origins recorded.</p>}
       </section>
+      {publishedMode() && <RawRunCard cid={cid} rid={rid} />}
     </div> : <div className="min-h-0 flex-1" data-run-tab="stream">
       <EventStream events={events} visibleEvents={visible} definitions={definitions} state={state} cid={cid} rid={rid} review={review}
         paramDeclarations={manifest?.params}
@@ -262,4 +264,18 @@ function RunFacets({ events, activity, definitions, filter, link }: {
     </div>}
     {!!actors.length && <div className="flex flex-wrap items-center gap-1.5" aria-label="Actor filters">{actors.map(chip)}</div>}
   </nav>;
+}
+
+/** The index is a cache; raw metadata always comes from the run object. */
+function RawRunCard({ cid, rid }: { cid: string; rid: string }) {
+  const [raw, setRaw] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  return <details data-raw-run-json="" onToggle={(event) => {
+    if (event.currentTarget.open && raw === null && error === null)
+      void fetchRunJson(cid, rid).then(setRaw).catch((error) => setError(oneLineReason(error)));
+  }}>
+    <summary className="cursor-pointer text-xs text-muted-foreground">raw run.json</summary>
+    {raw === null ? <p>{error ?? "Loading run.json…"}</p>
+      : <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-xs">{raw}</pre>}
+  </details>;
 }
