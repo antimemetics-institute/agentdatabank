@@ -14,9 +14,9 @@ _CREDENTIAL_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.IGNORE
 type _Json = str | int | float | bool | None | list[_Json] | dict[str, _Json]
 _PATTERNS = (
     ("API key", re.compile(
-        r"sk-[A-Za-z0-9]{8,}|sk-[A-Za-z0-9_-]{20,}"
+        r"(?<![A-Za-z0-9])(?:sk-[A-Za-z0-9]{8,}|sk-[A-Za-z0-9_-]{20,}"
         r"|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}"
-        r"|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|hf_[A-Za-z0-9]{30,}"
+        r"|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|hf_[A-Za-z0-9]{30,})"
     )),
     ("Bearer credential", re.compile(r"Bearer\s+\S+", re.IGNORECASE)),
     ("URL userinfo", re.compile(r'(?:[A-Za-z][A-Za-z0-9+.-]*:)?//[^/?#\s<>"\\]*@')),

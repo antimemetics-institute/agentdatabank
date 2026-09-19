@@ -36,6 +36,9 @@ def test_every_file_is_scanned(tmp_path, relative):
 @pytest.mark.parametrize("leak, category", [
     ("sk-12345678", "API key"),
     ("sk-proj-" + "a" * 40, "API key"),
+    ("sk-abcdEFGH1234", "API key"),
+    ('"api_key":"sk-12345678"', "API key"),
+    (" \tsk-12345678", "API key"),
     ("Bearer opaque-credential", "Bearer credential"),
     ("Bearer\nopaque-credential", "Bearer credential"),
     ("https://user:password@host.invalid/path", "URL userinfo"),
@@ -82,6 +85,19 @@ def test_clean_run_ignores_empty_secrets_and_noncredential_environment(tmp_path)
     (tmp_path / "events-00000.jsonl").write_text(json.dumps({"text": text}) + "\n")
     (tmp_path / "artifact.bin").write_bytes(b"\xff\x00\xfe")
     assert_run_has_no_secrets(tmp_path, environment={"TEST_KEY": "", "PLAIN_VALUE": "ordinary"})
+
+
+@pytest.mark.parametrize("text", [
+    "risk-management",
+    "risk-adjusted",
+    "Storage name: dummy-jcpqcesk-jcpqcesk",
+])
+@pytest.mark.parametrize("suffix", ["txt", "jsonl"])
+def test_key_pattern_does_not_match_inside_prose(tmp_path, text, suffix):
+    (tmp_path / f"output.{suffix}").write_text(
+        json.dumps({"text": text}) if suffix == "jsonl" else text,
+    )
+    assert_run_has_no_secrets(tmp_path, environment={})
 
 
 def test_missing_directory_is_not_a_successful_scan(tmp_path):
