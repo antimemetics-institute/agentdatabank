@@ -31,6 +31,8 @@ import { copyBadRunCorpus, badRunNames } from "./bad-run-corpus";
 import { hashRoute } from "../src/lib/run-view";
 import { jsonTokens } from "../src/lib/json-text";
 import { ExperimentReadme } from "../src/pages/experiment";
+import { GetData } from "../src/components/get-data";
+import { dataSource, setDataSource } from "../src/lib/data-source";
 import { RunDataContext, VegaChart } from "../src/components/vega-chart";
 import { AggChips, ResultChips, ResultFacts, ResultRows, ExperimentResults, InstanceScoreChips } from "../src/components/results";
 import type { ResultDecl } from "../src/shared/types";
@@ -242,6 +244,22 @@ assert.match(readmeHtml, /<pre class="code"><code>adb-runner --describe/);
 assert.ok(!readmeHtml.includes('<script>'));
 assert.match(readmeHtml, /&lt;script&gt;/);
 console.log('experiment README render guard ok — optional, rendered Markdown, inert raw HTML');
+
+const localSource = dataSource();
+assert.equal(renderToStaticMarkup(<GetData name="govsim" runCount={245} />), "");
+try {
+  const noRequest = async (): Promise<never> => { throw new Error("GetData must not fetch"); };
+  setDataSource({ mode: "published", pollMs: 0, asset: (path) => `/site/${path}`,
+    json: noRequest, text: noRequest, post: noRequest });
+  const downloadHtml = renderToStaticMarkup(<GetData name="govsim" runCount={245} />);
+  assert.match(downloadHtml, /Get the data/);
+  assert.match(downloadHtml, /245 runs · 490 files/);
+  assert.match(downloadHtml, /\/site\/index\/experiments\/govsim\/index.jsonl/);
+  assert.match(downloadHtml, /read_json_objects/);
+  assert.match(downloadHtml, /unnest\(inputs.params\), unnest\(derived.results\)/);
+  assert.equal((downloadHtml.match(/<pre /g) ?? []).length, 2);
+} finally { setDataSource(localSource); }
+console.log("Get the data snippets render in published mode only");
 
 const emptyChart = renderToStaticMarkup(<RunDataContext value={[]}>
   <VegaChart spec={{ data: { name: "runs" }, mark: "point" }} />
