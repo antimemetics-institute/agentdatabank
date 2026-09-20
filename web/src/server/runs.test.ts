@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { readFile, writeFile, rm, readdir, mkdir, rename, utimes, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { copyBadRunCorpus, badRunNames } from "../../test/bad-run-corpus.ts";
+import { copyBadRunCorpus, badCardNames, badStreamNames, badRunNames } from "../../test/bad-run-corpus.ts";
 import { RunReader } from "./runs.ts";
 import { runSummary } from "../lib/run-view.ts";
 import { envelope, fixtureCard } from "../../test/event-fixtures.ts";
@@ -49,7 +49,7 @@ test("record identity resolves suffixed paths, condition params and raw lines be
   } finally { await rm(root, { recursive: true }); }
 });
 
-test("bad-run corpus stays listed; only missing/unparseable run.json is skipped once", async () => {
+test("listings diagnose cards and event reads diagnose streams; missing/unparseable cards are skipped once", async () => {
   const root = await copyBadRunCorpus();
   try {
     assert.deepEqual(await readdir(join(root, "runs/corpus-corpus/20260916t120000z-000000000005")), []);
@@ -59,10 +59,13 @@ test("bad-run corpus stays listed; only missing/unparseable run.json is skipped 
     assert.deepEqual(rows.map((r) => r.run).sort(), [...badRunNames, "20260916t120000z-000000000000"].sort());
     for (const name of badRunNames) {
       const row = rows.find((r) => r.run === name)!;
-      assert.equal(row.readable, false, name);
-      assert.ok(row.reason?.length, name);
-      assert.ok(!row.reason.includes("\n"));
-      assert.equal((await reader.read("corpus", name, true))?.meta.reason, row.reason);
+      assert.equal(row.readable, !badCardNames.includes(name), name);
+      const opened = (await reader.read("corpus", name, true))!.meta;
+      assert.equal(opened.readable, false, name);
+      assert.ok(opened.reason?.length, name);
+      assert.ok(!opened.reason.includes("\n"));
+      if (badCardNames.includes(name)) assert.equal(opened.reason, row.reason);
+      else assert.equal(row.reason, undefined);
     }
     assert.deepEqual(rows.find((r) => r.run === "20260916t120000z-000000000000")?.summary, { score: 42 });
     assert.equal(rows.find((r) => r.run === "20260916t120000z-000000000000")?.readable, true);
@@ -73,11 +76,41 @@ test("bad-run corpus stays listed; only missing/unparseable run.json is skipped 
     await writeFile(join(root, "runs/corpus-corpus/20260916t120000z-000000000005/run.json"), "{");
     await reader.list();
     assert.equal(warnings.length, 1);
-    // Appending the missing bytes repairs a tail; cached read errors must recover.
+    // Repairing a tail is visible on the next event read.
     const path = join(root, "runs/corpus-corpus/20260916t120000z-000000000003/events.jsonl");
     const text = await readFile(path, "utf8");
     await writeFile(path, text.slice(0, text.lastIndexOf("\n") + 1));
+    assert.equal((await reader.read("corpus", "20260916t120000z-000000000003", true))?.meta.readable, true);
     assert.equal((await reader.list()).find((r) => r.run === "20260916t120000z-000000000003")?.readable, true);
+  } finally { await rm(root, { recursive: true }); }
+});
+
+test("cards remain available without event files; concurrent listings share a scan and later scans see edits", async () => {
+  const root = await copyBadRunCorpus();
+  const rid = "20260916t120000z-000000000000";
+  const dir = join(root, "runs/corpus-corpus", rid);
+  try {
+    const stream = await readFile(join(dir, "events.jsonl"), "utf8");
+    await rm(join(dir, "events.jsonl"));
+    const reader = new RunReader(root, () => {});
+    const [rows, sameScan] = await Promise.all([reader.list(), reader.list()]);
+    assert.equal(rows, sameScan);
+    assert.equal(rows.find((row) => row.run === rid)?.readable, true);
+    const cardOnly = (await reader.read("corpus", rid))!;
+    assert.equal(cardOnly.meta.readable, true);
+    assert.deepEqual(cardOnly.meta.summary, { score: 42 });
+    assert.equal(cardOnly.records, undefined);
+    const opened = (await reader.read("corpus", rid, true))!;
+    assert.equal(opened.meta.readable, false);
+    assert.match(opened.meta.reason!, /events.jsonl.*ENOENT/);
+    await writeFile(join(dir, "events.jsonl"), stream);
+    const repaired = (await reader.read("corpus", rid, true))!;
+    assert.equal(repaired.meta.readable, true);
+    assert.equal(repaired.records!.map(({ line }) => line).join(""), stream);
+    const card = JSON.parse(await reader.raw("corpus", rid));
+    card.derived.results.score = 99;
+    await writeFile(join(dir, "run.json"), JSON.stringify(card));
+    assert.deepEqual((await reader.list()).find((row) => row.run === rid)?.summary, { score: 99 });
   } finally { await rm(root, { recursive: true }); }
 });
 
@@ -111,13 +144,26 @@ test("summary treats non-array declarations as undeclared", () => {
     assert.deepEqual(runSummary(events, definitions), {});
 });
 
-test("HTTP listing and both event endpoints expose identical corpus diagnostics; raw metadata stays verbatim", async () => {
+test("HTTP cards and hints load independently of streams; event endpoints agree on diagnostics and raw metadata stays verbatim", async () => {
   const root = await copyBadRunCorpus();
   const bundle = join(root, "server.cjs");
   let child: ReturnType<typeof spawn> | undefined;
   try {
+    const catalog = join(root, "catalog");
+    await mkdir(catalog);
+    const schema = { title: "corpus schema" }, shared = { title: "shared schema" };
+    await writeFile(join(root, "schema.json"), JSON.stringify(schema));
+    await writeFile(join(root, "shared-schema.json"), JSON.stringify(shared));
+    await writeFile(join(catalog, "corpus.json"), JSON.stringify({ name: "corpus", params: {},
+      schema: { version: 0, models: "corpus:Payload", path: join(root, "schema.json") } }));
+    for (const name of badStreamNames) {
+      const path = join(root, "runs/corpus-corpus", name, "run.json");
+      const card = JSON.parse(await readFile(path, "utf8"));
+      card.inputs.params.model = "example-model";
+      await writeFile(path, JSON.stringify(card));
+    }
     execFileSync(resolve("node_modules/.bin/esbuild"), ["src/server.ts", "--bundle", "--platform=node", "--format=cjs", `--outfile=${bundle}`], { stdio: "pipe" });
-    child = spawn(process.execPath, [bundle, "--viewer-only", "--data-dir", root, "--host", "127.0.0.1", "--port", "0", "--no-open"], { stdio: ["ignore", "pipe", "pipe"] });
+    child = spawn(process.execPath, [bundle, "--viewer-only", "--data-dir", root, "--catalog", catalog, "--host", "127.0.0.1", "--port", "0", "--no-open"], { stdio: ["ignore", "pipe", "pipe"] });
     let logs = "";
     child.stderr!.on("data", (chunk) => { logs += chunk; });
     const base = await new Promise<string>((resolve, reject) => {
@@ -131,13 +177,24 @@ test("HTTP listing and both event endpoints expose identical corpus diagnostics;
     const rows = await (await fetch(base + "/api/runs")).json();
     for (const name of badRunNames) {
       const row = rows.find((r: { run: string }) => r.run === name);
-      assert.equal(row.readable, false);
+      assert.equal(row.readable, !badCardNames.includes(name));
+      let reason = row.reason;
       for (const endpoint of ["events", "events?after=9999", "event/0"]) {
         const response = await fetch(`${base}/api/runs/corpus/${name}/${endpoint}`);
         assert.equal(response.status, 422);
         const body = await response.json();
-        assert.equal(body.error, row.reason);
-        assert.equal(body.reason, row.reason);
+        reason ??= body.reason;
+        assert.ok(reason);
+        assert.equal(body.error, reason);
+        assert.equal(body.reason, reason);
+      }
+      if (badStreamNames.includes(name)) {
+        const params = await fetch(`${base}/api/runs/corpus/${name}/params/model`);
+        assert.equal(params.status, 200);
+        assert.deepEqual(await params.json(), { value: "example-model" });
+        const hints = await fetch(`${base}/api/runs/corpus/${name}/schemas`);
+        assert.equal(hints.status, 200);
+        assert.deepEqual(await hints.json(), [shared, schema]);
       }
       const raw = await fetch(`${base}/api/runs/corpus/${name}/run.json`);
       assert.deepEqual(Buffer.from(await raw.arrayBuffer()), await readFile(join(root, `runs/corpus-corpus/${name}/run.json`)));

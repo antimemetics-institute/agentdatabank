@@ -7,10 +7,11 @@ import { readEventRecords } from "./events.ts";
 
 export interface RunSnapshot { meta: RunMeta; records?: FullEvent[] }
 
-/** One read policy for listings and endpoints. The card owns summaries; no server summary cache. */
+/** Listings read cards only; event requests validate the selected stream on demand. */
 export class RunReader {
   private readonly locations = new Map<string, string>();
   private readonly skipped = new Set<string>();
+  private listing?: Promise<RunMeta[]>;
   readonly root: string;
   private readonly log: (message: string) => void;
   constructor(root: string, log: (message: string) => void = console.warn) { this.root = root; this.log = log; }
@@ -71,9 +72,10 @@ export class RunReader {
       readable: !reason };
     if (reason) { meta.reason = reason; return { meta }; }
     Object.assign(meta, cardMeta(value as RunCard), { heartbeat_at: heartbeatAt });
+    if (!withRecords) return { meta };
     let records: FullEvent[] | undefined;
     try {
-      // Read for integrity diagnostics, never to calculate summary values.
+      // Validate only the requested stream, never to calculate summary values.
       records = await readEventRecords(dir) ?? [];
       const events = records.map(({ record }) => record);
       if (events.some((record) => record.run !== rid || record.experiment !== full.experiment))
@@ -82,10 +84,15 @@ export class RunReader {
       if (start && start.condition !== cid) throw new Error("run.start.condition does not match run.json");
     } catch (error) { meta.readable = false; meta.reason = oneLineReason(error); }
 
-    return { meta, ...(withRecords && meta.readable ? { records: records ?? [] } : {}) };
+    return { meta, ...(meta.readable ? { records: records ?? [] } : {}) };
   }
 
-  async list(): Promise<RunMeta[]> {
+  list(): Promise<RunMeta[]> {
+    // Share an in-flight scan across tabs/clients without caching stale cards.
+    return this.listing ??= this.scan().finally(() => { this.listing = undefined; });
+  }
+
+  private async scan(): Promise<RunMeta[]> {
     const runs: RunMeta[] = [];
     this.locations.clear();
     let conditions: string[];

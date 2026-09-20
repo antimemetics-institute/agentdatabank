@@ -8,7 +8,7 @@ import { cp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { join, resolve } from "node:path";
-import { copyBadRunCorpus, badRunNames } from "./bad-run-corpus.ts";
+import { copyBadRunCorpus, badCardNames, badRunNames } from "./bad-run-corpus.ts";
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
 const root = await copyBadRunCorpus();
@@ -37,16 +37,27 @@ try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const go = (path) => page.goto(base + path);
+  // A response slower than the two-second poll interval must not start more scans.
+  let activeLists = 0, maxActiveLists = 0;
+  await page.route("**/api/runs", async (route) => {
+    maxActiveLists = Math.max(maxActiveLists, ++activeLists);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await route.fulfill({ response: await route.fetch() });
+    } finally { activeLists--; }
+  });
   await go("/#/runs");
   await page.locator('[data-run="20260916t120000z-000000000000"]').waitFor();
-  assert.equal(await page.locator("[data-unreadable-badge]").count(), 4);
+  assert.equal(maxActiveLists, 1, "Slow list requests must not overlap");
+  await page.unroute("**/api/runs");
+  assert.equal(await page.locator("[data-unreadable-badge]").count(), badCardNames.length);
   assert.match(await page.locator('[data-run="20260916t120000z-000000000000"]').innerText(), /42/);
   await page.locator('[data-run="20260916t120000z-000000000001"] a').click();
   await page.locator("[data-unreadable-run]").waitFor();
   await go("/#/");
   await page.locator('[data-run="20260916t120000z-000000000001"]').waitFor();
-  assert.equal(await page.locator("[data-unreadable-badge]").count(), 4);
-  assert.match(await page.locator("main").innerText(), /1 completed/);
+  assert.equal(await page.locator("[data-unreadable-badge]").count(), badCardNames.length);
+  assert.match(await page.locator("main").innerText(), /2 completed/);
   for (const name of badRunNames) {
     for (const tab of ["summary", "stream"]) {
       await go(`/#/run/corpus/${name}?tab=${tab}`);

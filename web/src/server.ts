@@ -472,7 +472,9 @@ const server = createServer(async (req, res) => {
             return res.end(raw);
           } catch (error) { return json(req, res, 404, { error: `run.json unavailable: ${oneLineReason(error)}` }); }
         }
-        const snapshot = await runReader.read(cid, rid, true);
+        const withRecords = (parts.length === 5 && parts[4] === "events")
+          || (parts.length === 6 && parts[4] === "event");
+        const snapshot = await runReader.read(cid, rid, withRecords);
         if (!snapshot) return json(req, res, 404, { error: "no parseable run.json" });
         if (snapshot.meta.readable === false)
           return json(req, res, 422, { readable: false, reason: snapshot.meta.reason, error: snapshot.meta.reason });
@@ -483,24 +485,21 @@ const server = createServer(async (req, res) => {
           return withEtag(req, res, `"param-${createHash("sha256").update(JSON.stringify(params[key])).digest("hex")}"`,
             IMMUTABLE, () => ({ value: params[key] }));
         }
-        const records = snapshot.records!;
         const state = snapshot.meta.state;
         if (parts.length === 5 && parts[4] === "schemas") {
-          const first = records[0];
-          if (!first) return json(req, res, 200, []);
           const schemas = await readRunSchemas(
-            await readManifests() as Manifest[], first.record.experiment, first.record.schema);
+            await readManifests() as Manifest[], snapshot.meta.experiment, snapshot.meta.schema);
           return json(req, res, 200, schemas, { "cache-control": "no-cache" });
         }
         if (parts.length === 5 && parts[4] === "events") {
           const after = Number(url.searchParams.get("after") ?? "-1");
-          const events = records.filter(({ record }) => record.seq > after).map(({ record }) => elideEvent(record));
+          const events = snapshot.records!.filter(({ record }) => record.seq > after).map(({ record }) => elideEvent(record));
           if (state && TERMINAL.has(state))
             return withEtag(req, res, `"ev-${rid}-${state}-${events.length}"`, IMMUTABLE, () => events);
           return json(req, res, 200, events, { "cache-control": "no-store" });
         }
         if (parts.length === 6 && parts[4] === "event") {
-          const ev = records.find(({ record }) => record.seq === Number(parts[5]));
+          const ev = snapshot.records!.find(({ record }) => record.seq === Number(parts[5]));
           if (!ev) return json(req, res, 404, { error: "no such event" });
           const cc = state && TERMINAL.has(state) ? IMMUTABLE : "no-cache";
           res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": cc });

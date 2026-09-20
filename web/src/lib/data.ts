@@ -64,13 +64,18 @@ export function useRunsPoll(): RunMeta[] | null {
   const [runs, setRuns] = useState<RunMeta[] | null>(runsCache);
   useEffect(() => {
     let stopped = false;
+    let loading = false;
     const load = async () => {
-      let fresh: RunMeta[];
-      try { fresh = await api<RunMeta[]>("/api/runs"); } catch { return; }
-      if (!Array.isArray(fresh)) return;
-      notePollOk();
-      runsCache = fresh;
-      if (!stopped) setRuns(fresh);
+      if (stopped || loading) return;
+      loading = true;
+      try {
+        const fresh = await api<RunMeta[]>("/api/runs");
+        if (!Array.isArray(fresh)) return;
+        notePollOk();
+        runsCache = fresh;
+        if (!stopped) setRuns(fresh);
+      } catch { /* Keep the last successful list on transient failures. */ }
+      finally { loading = false; }
     };
     void load();
     const t = setInterval(() => void load(), dataSource().pollMs);

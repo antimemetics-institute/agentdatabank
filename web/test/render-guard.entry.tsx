@@ -27,7 +27,7 @@ import { RunsTable } from "../src/pages/runs";
 import { ConditionView } from "../src/pages/condition";
 import { OverviewView } from "../src/pages/overview";
 import { RunReader } from "../src/server/runs";
-import { copyBadRunCorpus, badRunNames } from "./bad-run-corpus";
+import { copyBadRunCorpus, badCardNames, badRunNames } from "./bad-run-corpus";
 import { hashRoute } from "../src/lib/run-view";
 import { jsonTokens } from "../src/lib/json-text";
 import { ExperimentReadme } from "../src/pages/experiment";
@@ -667,25 +667,27 @@ async function unreadableCorpusGuard() {
     const overview = renderToStaticMarkup(<OverviewView runs={rows} manifests={[{ name: "corpus", params: {} }]} />);
     const listing = renderToStaticMarkup(<RunsTable runs={rows} />);
     for (const view of [overview, listing]) {
-      assert.equal(badgeCount(view), badRunNames.length);
-      for (const name of badRunNames) {
+      assert.equal(badgeCount(view), badCardNames.length);
+      for (const name of badCardNames) {
         assert.match(view, new RegExp(`data-run="${name}"`));
         assert.ok(htmlText(view).includes(rows.find((r) => r.run === name)!.reason!));
       }
     }
+    for (const name of badRunNames) assert.match(listing, new RegExp(`data-run="${name}"`));
     assert.match(listing, /data-run="20260916t120000z-000000000000"/);
     assert.match(listing, /Score/);
     assert.match(listing, /42/);
-    assert.match(htmlText(overview), /1 completed/);
+    assert.match(htmlText(overview), /2 completed/);
     for (const row of rows) {
       const snapshot = (await reader.read(row.condition, row.run, true))!;
       const rawRunJson = await reader.raw(row.condition, row.run);
       for (const tab of ["summary", "stream"]) {
         const page = renderToStaticMarkup(<RunView cid={row.condition} rid={row.run} query={`tab=${tab}`}
-          events={snapshot.records?.map(({ record }) => record) ?? []} meta={row} rawRunJson={rawRunJson} />);
-        assert.equal(badgeCount(page), row.readable ? 0 : 1);
-        if (!row.readable) {
-          assert.ok(htmlText(page).includes(row.reason!));
+          events={snapshot.records?.map(({ record }) => record) ?? []} meta={row}
+          readError={snapshot.meta.reason ?? null} rawRunJson={rawRunJson} />);
+        assert.equal(badgeCount(page), snapshot.meta.readable ? 0 : 1);
+        if (!snapshot.meta.readable) {
+          assert.ok(htmlText(page).includes(snapshot.meta.reason!));
           assert.match(page, /data-raw-run-json/);
           assert.equal(htmlText(page.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)![1]!), rawRunJson);
         } else assert.match(page, new RegExp(`data-run-tab="${tab}"`));
