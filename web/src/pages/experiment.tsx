@@ -7,6 +7,7 @@ import { dataSource, publishedMode } from "@/lib/data-source";
 import { Builder } from "@/components/builder";
 import { RunsTable } from "@/pages/runs";
 import { ExperimentResults } from "@/components/results";
+import { ExperimentNarrative, hasNarrative } from "@/components/experiment-narrative";
 
 export function ExperimentReadme({ readme, name }: { readme?: string; name?: string }) {
   if (!readme?.trim()) return null;
@@ -38,7 +39,8 @@ export function ExperimentPage({ name }: { name: string }) {
         </span>
       </div>
 
-      <ExperimentReadme readme={manifest?.readme} name={name} />
+      {hasNarrative(name) ? <ExperimentNarrative name={name} runs={runs === null ? null : rs} />
+        : <ExperimentReadme readme={manifest?.readme} name={name} />}
       <ExperimentResults definitions={manifest?.results} />
       {!publishedMode() && <Builder name={name} />}
 

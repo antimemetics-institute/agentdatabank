@@ -183,3 +183,13 @@
   .result-value-rows .result-description,
   .result-value-rows .result-details { grid-column: 2; padding-left: 1rem; }
 }
+
+/* MDX uses native heading levels; ordinary Markdown keeps its existing renderer. */
+.narrative h1 { font-size: 2em; font-weight: 600; margin-bottom: 1rem; }
+.narrative h2 { font-size: 1.5em; font-weight: 600; margin: 2rem 0 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: .3em; }
+.narrative a { text-decoration: underline; text-underline-offset: 3px; }
+.vega-figure { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: .5rem; }
+.vega-host { width: 100%; min-width: 0; overflow-x: auto; }
+.vega-host > .vega-embed { width: 100%; }
+.vega-figure pre { white-space: pre; overflow-wrap: normal; }
+@media (max-width: 600px) { .vega-figure { padding: .5rem; } }

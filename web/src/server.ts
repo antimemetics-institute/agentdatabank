@@ -110,6 +110,7 @@ const startupAbort = new AbortController();
 const PARAM_REF_LIMIT = 2048; /* param values above this become descriptors */
 
 const MIME: Record<string, string> = {
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",

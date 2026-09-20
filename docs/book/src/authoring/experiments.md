@@ -222,6 +222,40 @@ If the change makes the experiment incompatible with its earlier meaning or beha
 
 ## What belongs in the pull request?
 
-Add a README in the experiment directory explaining the research question, upstream source, required services, input meanings, result interpretation and a small runnable example. Keep experiment-specific usage there rather than adding a catalog page to this book.
+Add exactly one readme in the experiment directory: `README.md` for ordinary Markdown or `README.mdx` for a page with charts. Never keep both; the Nix registry rejects that split. Explain the research question, upstream source, required services, input meanings, result interpretation and a small runnable example. Keep experiment-specific usage there rather than adding a catalog page to this book.
 
 Describe what the new experiment or change does, the evidence it records, and the checks you ran. Include updated locks and fixtures needed to reproduce those checks. Submit the code and documentation through an ordinary repository pull request.
+
+### How can I weave charts into an experiment page?
+
+Charts require `README.mdx` beside `package.nix`. Each experiment has exactly one
+readme, `README.md` or `README.mdx`, never both. When converting a Markdown page,
+move all its documentation into MDX before deleting the Markdown file.
+The website compiles MDX and its imported assets during its build; neither its
+text nor duplicate assets are included in the manifest catalog. Ordinary Markdown
+remains supported through the manifest's `readme` field and catalog assets.
+MDX can import local images, chart specifications and components. Treat it as
+trusted application code when reviewing changes.
+
+For a Vega-Lite chart, import a specification and pass it to `VegaChart`:
+
+```mdx
+import harvest from "./views/harvest.vl.json";
+
+## Was the harvest shared equally?
+
+Read equality alongside the amount collected.
+
+<VegaChart spec={harvest} />
+```
+
+Use `"data": {"name": "runs"}` in the specification. ADB supplies one row per run,
+with `run`, `condition`, `state` and `seed`, plus `param_<name>` and
+`result_<name>` scalar columns. Results come from each run’s recorded summary. Define filters,
+selections and chart layout using Vega-Lite itself. The chart can include failed
+or unfinished runs unless its specification filters them out. Missing values are
+null. GovSim's `README.mdx` and `views/` show linked selections and narrative.
+
+Readers can download each specification with its data. The charts run in the
+browser; they do not execute Python. Changes to existing MDX files and their
+imports reload in `task web:dev`. Restart development after adding a new MDX page.

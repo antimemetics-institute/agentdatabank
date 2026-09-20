@@ -14,6 +14,8 @@ dir, same as the web suite's sweep); skips without it.
 
 import json
 import os
+import shutil
+import subprocess
 import types
 import typing
 from pathlib import Path
@@ -144,7 +146,7 @@ def test_walker_rejects_wrong_types():
             _check(bad, Manifest, why)
 
 
-def test_shipped_readme_is_embedded_in_catalog():
+def test_shipped_readmes_follow_presentation_format():
     manifests_dir = os.environ.get("ADB_TEST_MANIFESTS")
     if not manifests_dir:
         pytest.skip("ADB_TEST_MANIFESTS unset (run via `task test:python`)")
@@ -155,7 +157,61 @@ def test_shipped_readme_is_embedded_in_catalog():
         "rounds", "collapsed", "survival_months", "total_harvest", "gain_per_agent",
         "final_resource", "equality", "over_usage",
     ]
-    assert govsim["readme"] == (root / "experiments/govsim/README.md").read_text()
+    assert (root / "experiments/govsim/README.mdx").is_file()
+    assert not (root / "experiments/govsim/README.md").exists()
+    assert "readme" not in govsim
+    assert not (catalog / "assets/govsim").exists()
     # An experiment directory without a README stays valid and omits the field.
     if not (root / "experiments/inspect_evals/README.md").exists():
         assert "readme" not in json.loads((catalog / "inspect-hello.json").read_text())
+
+
+@pytest.mark.skipif(shutil.which("nix-build") is None, reason="requires Nix")
+@pytest.mark.parametrize("formats", [("md",), ("mdx",), ("md", "mdx")])
+def test_registry_readme_formats(tmp_path, formats):
+    """Build the real registry against one disposable experiment directory."""
+    root = Path(__file__).resolve().parents[2]
+    fixture = tmp_path / "checkout"
+    shutil.copytree(root / "pkgs", fixture / "pkgs")
+    for name in ("runner", "lib"):
+        (fixture / name).symlink_to(root / name, target_is_directory=True)
+    experiment = fixture / "experiments/readme-fixture"
+    experiment.mkdir(parents=True)
+    text = "# Fixture\n\nDocumentation from the experiment directory.\n"
+    for suffix in formats:
+        (experiment / f"README.{suffix}").write_text(text)
+    (experiment / "overview.svg").write_text("<svg/>")
+    (experiment / "package.nix").write_text('''{ adb }: {
+      readme-fixture = adb.mkExperiment {
+        name = "readme-fixture"; summary = "README registry fixture";
+        params = {}; program = "/unused"; src = ./package.nix;
+      };
+    }''')
+    expression = tmp_path / "manifests.nix"
+    expression.write_text('''{ repo, fixture }:
+      let
+        root = builtins.toPath repo;
+        sources = import (root + "/pkgs/locked-sources.nix") {};
+        adb = import (builtins.toPath fixture + "/pkgs/top-level") {
+          pkgs = (import (root + "/default.nix") {}).pkgs;
+          inherit (sources) pyproject-nix uv2nix pyproject-build-systems;
+        };
+      in adb.manifests
+    ''')
+    result = subprocess.run([
+        "nix-build", "--no-out-link", str(expression), "--argstr", "repo", str(root),
+        "--argstr", "fixture", str(fixture),
+    ], capture_output=True, text=True, timeout=180)
+    if len(formats) == 2:
+        assert result.returncode != 0
+        assert "experiment readme-fixture has both README.md and README.mdx; keep exactly one" in result.stderr
+        return
+    assert result.returncode == 0, result.stderr
+    catalog = Path(result.stdout.strip())
+    manifest = json.loads((catalog / "readme-fixture.json").read_text())
+    if formats == ("md",):
+        assert manifest["readme"] == text
+        assert (catalog / "assets/readme-fixture/overview.svg").read_text() == "<svg/>"
+    else:
+        assert "readme" not in manifest
+        assert not (catalog / "assets/readme-fixture").exists()

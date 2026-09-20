@@ -95,10 +95,20 @@ let
         pnpmDeps = pkgs.fetchPnpmDeps {
           inherit (finalAttrs) pname version src;
           fetcherVersion = 4;
-          hash = "sha256-MdoCuwmHSwt2+Zk9l+srKqUO+pVjtvExviKgpuDp8XM=";
+          hash = "sha256-p0yW3cerwwW2dvclr5UNX1EjKRaVBm485r8Z5YAhAfg=";
         };
         nativeBuildInputs = [ pkgs.nodejs pkgs.pnpm pkgs.pnpmConfigHook ];
-        buildPhase = ''bash ./build.sh'';
+        # Compile trusted repository MDX at build time, never downloaded run data.
+        preBuild = ''
+          cp -r ${lib.cleanSourceWith {
+            src = experimentsDir;
+            name = "adb-experiment-presentation";
+            filter = path: type:
+              (type == "directory" && !(builtins.elem (baseNameOf path) [ "node_modules" "__pycache__" ".git" ])) ||
+              (type == "regular" && builtins.match ".*\\.(mdx|json|tsx|ts|jsx|js|svg|png|jpg|webp)" path != null);
+          }} experiment-content
+        '';
+        buildPhase = ''runHook preBuild; bash ./build.sh; runHook postBuild'';
         installPhase = ''cp -r dist $out'';
       });
 
@@ -129,24 +139,32 @@ let
     }
     # experiments/<dir>/package.nix → { <experiment-name> = mkExperiment …; }
     // lib.mapAttrs'
-      (name: _: lib.nameValuePair "experiments-${name}"
-        (final.callPackage (experimentsDir + "/${name}/package.nix") {
+      (name: _:
+        let
+          directory = experimentsDir + "/${name}";
+          markdown = directory + "/README.md";
+          hasMarkdown = builtins.pathExists markdown;
+          hasMdx = builtins.pathExists (directory + "/README.mdx");
+        in
+        if hasMarkdown && hasMdx then
+          throw "experiment ${name} has both README.md and README.mdx; keep exactly one"
+        else lib.nameValuePair "experiments-${name}"
+        (final.callPackage (directory + "/package.nix") {
           # A directory can declare several experiments; they share its README.
-          # Embed the text in each manifest so packaged viewers need no checkout.
+          # Markdown ships in manifests; MDX and its imports ship in the web bundle.
           adb = final.adb // {
-            mkExperiment = args: final.adb.mkExperiment ({
-              readme = let path = experimentsDir + "/${name}/README.md";
-                in if builtins.pathExists path then builtins.readFile path else null;
+            mkExperiment = args: final.adb.mkExperiment (args // {
+              readme = if hasMarkdown then builtins.readFile markdown else null;
               # Package committed images; illustration tools are never build inputs.
-              readmeAssets = lib.cleanSourceWith {
-                src = experimentsDir + "/${name}";
+              readmeAssets = if hasMdx then null else lib.cleanSourceWith {
+                src = directory;
                 name = "adb-readme-assets-${name}";
                 filter = path: type: (type == "directory"
                   && !(lib.hasPrefix "." (baseNameOf path))
                   && !(builtins.elem (baseNameOf path) [ "node_modules" "__pycache__" ])) ||
                   (type == "regular" && builtins.match ".*\\.(svg|png|jpg|jpeg|gif|webp)" path != null);
               };
-            } // args);
+            });
           };
         }))
       (lib.genAttrs dirNames (_: null)));

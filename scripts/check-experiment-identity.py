@@ -58,7 +58,7 @@ in builtins.mapAttrs (_: exp: exp.source) {
     probe("lib/adb-events/adb_events/emit.py", set(before))
     probe("lib/adb-inspect/adb_inspect/translate.py", {"inspect-hello"})
     probe("lib/adb-events/tests/test_emit.py", set())
-    probe("experiments/govsim/README.md", set())
+    probe("experiments/govsim/README.mdx", set())
     cache = checkout / "lib/adb-events/adb_events/__pycache__"
     cache.mkdir()
     (cache / "ignored.pyc").write_bytes(b"development artifact")

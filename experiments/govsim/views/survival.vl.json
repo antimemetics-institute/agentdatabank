@@ -1,0 +1,167 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "description": "Survival duration and final post-harvest resources, one point per completed run. Click a model in the legend to highlight it across both charts.",
+  "data": {
+    "name": "runs"
+  },
+  "transform": [
+    {
+      "filter": "datum.state === 'completed'"
+    }
+  ],
+  "params": [
+    {
+      "name": "model",
+      "select": {
+        "type": "point",
+        "fields": [
+          "param_model"
+        ]
+      },
+      "bind": "legend"
+    }
+  ],
+  "vconcat": [
+    {
+      "width": "container",
+      "height": 160,
+      "mark": {
+        "type": "circle",
+        "size": 110,
+        "stroke": "white",
+        "strokeWidth": 0.5
+      },
+      "encoding": {
+        "x": {
+          "field": "result_survival_months",
+          "type": "quantitative",
+          "title": "Resource survival (months)",
+          "scale": {
+            "zero": true
+          },
+          "axis": {
+            "tickMinStep": 1,
+            "tickCount": 5
+          }
+        },
+        "y": {
+          "field": "param_experiment",
+          "type": "nominal",
+          "title": null,
+          "axis": {
+            "labelLimit": 130
+          }
+        },
+        "color": {
+          "field": "param_model",
+          "type": "nominal",
+          "title": "Model"
+        },
+        "opacity": {
+          "condition": {
+            "param": "model",
+            "value": 0.9
+          },
+          "value": 0.15
+        },
+        "tooltip": [
+          {
+            "field": "run",
+            "title": "Run"
+          },
+          {
+            "field": "condition",
+            "title": "Condition"
+          },
+          {
+            "field": "param_model",
+            "title": "Model"
+          },
+          {
+            "field": "param_max_rounds",
+            "title": "Configured round limit"
+          },
+          {
+            "field": "result_survival_months",
+            "title": "Survival (months)"
+          },
+          {
+            "field": "result_collapsed",
+            "title": "Resource collapsed"
+          }
+        ]
+      }
+    },
+    {
+      "width": "container",
+      "height": 160,
+      "mark": {
+        "type": "circle",
+        "size": 110,
+        "stroke": "white",
+        "strokeWidth": 0.5
+      },
+      "encoding": {
+        "x": {
+          "field": "result_final_resource",
+          "type": "quantitative",
+          "title": "Resource remaining after the last harvest",
+          "scale": {
+            "zero": true
+          },
+          "axis": {
+            "tickCount": 5
+          }
+        },
+        "y": {
+          "field": "param_experiment",
+          "type": "nominal",
+          "title": null,
+          "axis": {
+            "labelLimit": 130
+          }
+        },
+        "color": {
+          "field": "param_model",
+          "type": "nominal",
+          "title": "Model"
+        },
+        "opacity": {
+          "condition": {
+            "param": "model",
+            "value": 0.9
+          },
+          "value": 0.15
+        },
+        "tooltip": [
+          {
+            "field": "run",
+            "title": "Run"
+          },
+          {
+            "field": "condition",
+            "title": "Condition"
+          },
+          {
+            "field": "param_model",
+            "title": "Model"
+          },
+          {
+            "field": "result_final_resource",
+            "title": "Final resource"
+          }
+        ]
+      }
+    }
+  ],
+  "resolve": {
+    "scale": {
+      "color": "shared"
+    }
+  },
+  "config": {
+    "legend": {
+      "orient": "bottom"
+    }
+  }
+}

@@ -10,6 +10,9 @@
   getItem: () => null,
   setItem: () => {},
 };
+(globalThis as Record<string, unknown>).document = {
+  documentElement: { classList: { contains: () => false } },
+};
 
 import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
@@ -28,6 +31,7 @@ import { copyBadRunCorpus, badRunNames } from "./bad-run-corpus";
 import { hashRoute } from "../src/lib/run-view";
 import { jsonTokens } from "../src/lib/json-text";
 import { ExperimentReadme } from "../src/pages/experiment";
+import { RunDataContext, VegaChart } from "../src/components/vega-chart";
 import { AggChips, ResultChips, ResultFacts, ResultRows, ExperimentResults, InstanceScoreChips } from "../src/components/results";
 import type { ResultDecl } from "../src/shared/types";
 import { parseEnvelope, parseEventLine } from "../src/lib/envelope";
@@ -238,6 +242,13 @@ assert.match(readmeHtml, /<pre class="code"><code>adb-runner --describe/);
 assert.ok(!readmeHtml.includes('<script>'));
 assert.match(readmeHtml, /&lt;script&gt;/);
 console.log('experiment README render guard ok — optional, rendered Markdown, inert raw HTML');
+
+const emptyChart = renderToStaticMarkup(<RunDataContext value={[]}>
+  <VegaChart spec={{ data: { name: "runs" }, mark: "point" }} />
+</RunDataContext>);
+assert.match(emptyChart, /No recorded runs yet\. This figure will appear after a run\./);
+assert.ok(!emptyChart.includes("vega-host") && !emptyChart.includes('role="alert"'));
+console.log("VegaChart empty state renders without initializing a chart");
 
 const definitions: ResultDecl[] = [
   { name: "collapsed", type: { kind: "bool" }, label: "Resource collapsed", description: "Simulation outcome, not execution failure.", details: "The resource fell below its threshold. <script>unsafe</script>" },

@@ -1,8 +1,12 @@
+import survival from "./views/survival.vl.json";
+import fairness from "./views/fairness.vl.json";
+import overview from "./overview.svg";
+
 # GovSim
 
 Can a group of AI agents share a resource without exhausting it?
 
-![Five agents discuss catch limits around a shared lake. Leaving enough fish allows recovery; taking too many depletes the stock.](overview.svg)
+<img src={overview} alt="Five agents discuss catch limits around a shared lake. Leaving enough fish allows recovery; taking too many depletes the stock." />
 
 GovSim puts language-model agents in a small society where each agent benefits
 from taking a shared resource, but taking too much threatens everyone's future.
@@ -79,6 +83,34 @@ passes the effective run seed to environment reset, and perturbation environment
 forward it to the resource-allocation RNG. This makes random allocation under
 contention repeatable for the same seed and actions. It does not guarantee that
 a hosted model will produce identical actions on repeated runs.
+
+## Did the resource survive?
+
+Each point below is a completed run. Click a model in the legend to highlight it
+in both charts; hover over a point for its run and condition. Identical results
+can overlap. Failed and unfinished runs remain in the runs table below.
+
+<VegaChart spec={survival} />
+
+Survival duration needs context: surviving a one-month demonstration is different
+from surviving a full scenario. Hover to check the configured round limit
+(`0` means the scenario's full length). The second chart shows what remained
+immediately after the final harvest, before any subsequent recovery.
+
+## Was the harvest both useful and equal?
+
+An equality score of 1 means everyone collected the same amount. It also describes
+a group that collected nothing. Read equality alongside the amount collected and
+the resource left behind.
+
+Drag a rectangle in the first chart to highlight those runs in the second.
+Double-click to clear the selection.
+
+<VegaChart spec={fairness} />
+
+These figures show the runs available in this ADB, including any workflow tests
+using `mock/model`. They do not establish a model ranking: scenarios, round limits,
+and other settings may differ. Check each run's condition before comparing it.
 
 ## Choosing settings
 
