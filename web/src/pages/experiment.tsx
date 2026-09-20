@@ -13,7 +13,7 @@ export function ExperimentReadme({ readme, name }: { readme?: string; name?: str
   return (
     <details open className="rounded-md border p-4">
       <summary className="cursor-pointer text-sm font-medium">About this experiment</summary>
-      <MdView src={readme} showSourceToggle={false} imageBase={name ? (publishedMode() ? dataSource().asset(`catalog/assets/${encodeURIComponent(name)}/`) : `/api/experiments/${encodeURIComponent(name)}/assets/`) : undefined}
+      <MdView src={readme} showSourceToggle={false} imageBase={name ? (publishedMode() ? dataSource().asset(`index/catalog/assets/${encodeURIComponent(name)}/`) : `/api/experiments/${encodeURIComponent(name)}/assets/`) : undefined}
         className="experiment-readme mt-3 min-w-0 [overflow-wrap:anywhere]" />
     </details>
   );

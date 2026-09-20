@@ -121,6 +121,8 @@ test("startup reads the index beside the app, at the root or under a path prefix
     try {
       assert.equal((await startupSource(f.app)).mode, "local");
       f.site.files.set(appPath + "site.json", JSON.stringify({ v: 0 }));
+      // The former build location must not supply experiments to a published site.
+      f.site.files.set(appPath + "catalog.json", JSON.stringify({ v: 0, manifests: [{ name: "unindexed" }], shared: {}, hints: {} }));
       for (const page of [f.app, f.app + "index.html?view=runs#/runs"]) {
         const source = await startupSource(page);
         assert.equal(source.mode, "published");
@@ -129,13 +131,15 @@ test("startup reads the index beside the app, at the root or under a path prefix
         assert.equal(rows.length, 1);
         assert.equal(rows[0]!.readable, true);
         assert.equal(rows[0]!.run, f.card.identity.run);
-        assert.equal(source.asset("catalog/assets/example/figure.svg"), f.app + "catalog/assets/example/figure.svg");
-        assert.equal((await source.json("/api/experiments") as unknown[]).length, 1);
+        assert.equal(source.asset("index/catalog/assets/example/figure.svg"), f.app + "index/catalog/assets/example/figure.svg");
+        assert.deepEqual((await source.json("/api/experiments") as { name: string }[]).map((manifest) => manifest.name), ["example"]);
         await assert.rejects(source.post("/api/jobs", {}), /unavailable/);
         await assert.rejects(source.json("/api/credentials"), /unavailable/);
       }
       assert.ok(f.site.requests.some((request) => request.path === appPath + "index/index.json"));
       assert.ok(f.site.requests.some((request) => request.path === appPath + "index/experiments/example/index.jsonl"));
+      assert.ok(f.site.requests.some((request) => request.path === appPath + "index/catalog.json"));
+      assert.ok(f.site.requests.every((request) => request.path !== appPath + "catalog.json"));
       assert.ok(f.site.requests.every((request) => request.path.startsWith(appPath) && !request.path.includes("/api/")));
     } finally { await f.close(); }
   }
@@ -153,7 +157,7 @@ test("site.json rejects unknown keys and unsupported versions before loading the
   } finally { await f.close(); }
 });
 
-test("bundled hints fall back to shared hints for an unknown schema version", async () => {
+test("indexed hints fall back to shared hints for an unknown schema version", async () => {
   const f = await publishedFixture();
   try {
     const card = structuredClone(f.card);

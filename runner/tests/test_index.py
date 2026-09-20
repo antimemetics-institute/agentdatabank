@@ -16,7 +16,42 @@ from test_verify import saved
 
 
 @pytest.fixture
-def stores(saved, tmp_path, monkeypatch):
+def catalog(tmp_path):
+    directory = tmp_path / "manifests"
+    directory.mkdir()
+    (directory / "assets").mkdir()
+    readonly = []
+    for name in ["alpha", "beta", "unindexed"]:
+        package = tmp_path / name
+        package.mkdir()
+        (package / "schema.json").write_text(json.dumps({"title": name}))
+        (package / "shared-schema.json").write_text('{"title":"shared"}')
+        (package / "manifest.json").write_text(json.dumps({
+            "name": name, "readme": "![Figure](images/figure.svg)",
+            "schema": {"version": 0, "models": f"{name}:Payload", "path": str(package / "schema.json")},
+        }))
+        (directory / f"{name}.json").symlink_to(package / "manifest.json")
+        assets = package / "assets"
+        assets.mkdir()
+        (assets / "empty").mkdir()
+        (package / "images").mkdir()
+        (package / "figure.svg").write_bytes(b"<svg>figure</svg>")
+        (package / "images/figure.svg").symlink_to(package / "figure.svg")
+        (assets / "images").symlink_to(package / "images", target_is_directory=True)
+        (directory / "assets" / name).symlink_to(assets, target_is_directory=True)
+        # Match the read-only trees reached through a Nix linkFarm.
+        for parent in [assets, assets / "empty", package / "images"]:
+            parent.chmod(0o555)
+            readonly.append(parent)
+    try:
+        yield directory
+    finally:
+        for parent in readonly:
+            parent.chmod(0o755)
+
+
+@pytest.fixture
+def stores(saved, tmp_path, monkeypatch, catalog):
     directory, _ = saved
     for name in list(os.environ):
         if name.startswith("AWS_"):
@@ -55,7 +90,7 @@ def stores(saved, tmp_path, monkeypatch):
         ]}
         path.write_text(json.dumps(value))
         def invoke(to, *args):
-            monkeypatch.setattr(sys, "argv", ["adb-runner", "index", "--stores", str(path), "--to", str(to), *args])
+            monkeypatch.setattr(sys, "argv", ["adb-runner", "index", "--stores", str(path), "--to", str(to), "--catalog", str(catalog), *args])
             return cli.main()
         yield s3, path, value, originals, invoke
         for (bucket, key), raw in originals.items():
@@ -118,6 +153,54 @@ def test_store_filters(stores, tmp_path, filters, expected):
     root = json.loads((destination / "index.json").read_bytes())
     assert root["runs"] == expected
     assert re.fullmatch(r".*\.\d{6}Z", root["built_at"])
+    catalog = json.loads((destination / "catalog.json").read_bytes())
+    assert [manifest["name"] for manifest in catalog["manifests"]] == [entry["name"] for entry in root["experiments"]]
+
+
+def test_catalog_only_indexes_selected_manifests_hints_and_dereferenced_assets(stores, catalog, tmp_path, monkeypatch):
+    _, _, _, _, invoke = stores
+    # An unused registry entry must never be opened.
+    (catalog / "unindexed.json").write_text("not JSON")
+    shared_reads = []
+    read_bytes = Path.read_bytes
+    def reading(path):
+        if path.name == "shared-schema.json":
+            shared_reads.append(path)
+        return read_bytes(path)
+    monkeypatch.setattr(Path, "read_bytes", reading)
+    destination = tmp_path / "index"
+    assert invoke(destination) == 0
+    value = json.loads((destination / "catalog.json").read_bytes())
+    assert set(value) == {"v", "manifests", "shared", "hints"}
+    assert value["v"] == 0
+    assert [manifest["name"] for manifest in value["manifests"]] == ["alpha", "beta"]
+    assert value["shared"] == {"title": "shared"}
+    assert value["hints"] == {name: {"0": {"title": name}} for name in ["alpha", "beta"]}
+    assert len(shared_reads) == 1
+    for manifest in value["manifests"]:
+        name = manifest["name"]
+        original = json.loads((catalog / f"{name}.json").read_bytes())
+        assert "path" in original["schema"]  # Export never edits the source manifest.
+        del original["schema"]["path"]
+        assert manifest == original
+        assert (destination / f"catalog/assets/{name}/images/figure.svg").read_bytes() == b"<svg>figure</svg>"
+        assert not (destination / f"catalog/assets/{name}/empty").exists()
+    assert not (destination / "catalog/assets/unindexed").exists()
+    assert not any(path.is_symlink() for path in destination.rglob("*"))
+
+
+def test_missing_manifest_warns_and_keeps_run_only_experiment(stores, catalog, tmp_path, capsys):
+    _, _, _, _, invoke = stores
+    (catalog / "beta.json").unlink()
+    destination = tmp_path / "index"
+    assert invoke(destination) == 0
+    assert f"WARNING: skipping missing manifest {catalog / 'beta.json'}" in capsys.readouterr().err
+    assert json.loads((destination / "index.json").read_bytes())["runs"] == 3
+    assert (destination / "experiments/beta/index.jsonl").is_file()
+    value = json.loads((destination / "catalog.json").read_bytes())
+    assert [manifest["name"] for manifest in value["manifests"]] == ["alpha"]
+    assert set(value["hints"]) == {"alpha"}
+    assert not (destination / "catalog/assets/beta").exists()
 
 
 def test_rebuild_removes_obsolete_shards_and_writes_root_last(stores, tmp_path, monkeypatch):
@@ -140,7 +223,9 @@ def test_rebuild_removes_obsolete_shards_and_writes_root_last(stores, tmp_path, 
     assert len((destination / "experiments/alpha/index.jsonl").read_bytes().splitlines()) == 1
     assert not (destination / "experiments/beta").exists()
     assert not (destination / "stale.txt").exists()
-    assert written == ["experiments/alpha/index.jsonl", "index.json"]
+    assert not (destination / "catalog/assets/beta").exists()
+    assert [manifest["name"] for manifest in json.loads((destination / "catalog.json").read_bytes())["manifests"]] == ["alpha"]
+    assert written == ["experiments/alpha/index.jsonl", "catalog.json", "index.json"]
 
 
 def test_dry_run_counts_and_sizes_without_creating_or_deleting(stores, tmp_path, capsys):
@@ -154,6 +239,10 @@ def test_dry_run_counts_and_sizes_without_creating_or_deleting(stores, tmp_path,
     assert "STORE s3://store-two/prefix 1 runs" in output
     assert re.search(r"PLAN .*experiments/alpha/index.jsonl \d+ bytes", output)
     assert re.search(r"PLAN .*index.json \d+ bytes", output)
+    assert re.search(r"PLAN .*catalog.json \d+ bytes", output)
+    assert "catalog/assets/alpha/images/figure.svg 17 bytes" in output
+    assert "catalog/assets/beta" not in output
+    assert "catalog/assets/unindexed" not in output
     assert not destination.exists()
     destination.mkdir()
     marker = destination / "stale.txt"
@@ -164,13 +253,49 @@ def test_dry_run_counts_and_sizes_without_creating_or_deleting(stores, tmp_path,
 
 
 @pytest.mark.parametrize("removed", [["--profile", "first"], ["--to", "s3://indexes/public"]])
-def test_removed_destination_options_are_rejected(tmp_path, monkeypatch, removed):
+def test_removed_destination_options_are_rejected(tmp_path, monkeypatch, removed, catalog):
     monkeypatch.setattr(sys, "argv", ["adb-runner", "index", "--stores", str(tmp_path / "stores.json"),
-                                     "--to", str(tmp_path / "index"), *removed])
+                                     "--to", str(tmp_path / "index"), "--catalog", str(catalog), *removed])
     with pytest.raises(SystemExit) as error:
         cli.main()
     assert error.value.code == 2
     assert not (tmp_path / "index").exists()
+
+
+def test_catalog_is_required(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "index", "--stores", str(tmp_path / "stores.json"),
+                                     "--to", str(tmp_path / "index")])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+    assert "--catalog" in capsys.readouterr().err
+    assert not (tmp_path / "index").exists()
+
+
+@pytest.mark.parametrize("catalog_kind", ["missing", "file"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_invalid_catalog_fails_before_collecting_or_replacing_output(tmp_path, monkeypatch, capsys, catalog_kind, dry_run):
+    catalog = tmp_path / "catalog"
+    if catalog_kind == "file":
+        catalog.write_text("not a directory")
+    stores = tmp_path / "stores.json"
+    stores.write_text('{"v":0,"stores":[]}')
+    destination = tmp_path / "index"
+    destination.mkdir()
+    marker = destination / "existing.txt"
+    marker.write_bytes(b"keep existing index")
+    def unexpected_collect(_):
+        pytest.fail("invalid catalog must be rejected before collect()")
+    monkeypatch.setattr(index, "collect", unexpected_collect)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "index", "--stores", str(stores),
+                                     "--catalog", str(catalog), "--to", str(destination),
+                                     *(["--dry-run"] if dry_run else [])])
+    assert cli.main() == 1
+    output = capsys.readouterr()
+    assert f"index: FAIL: --catalog must be an existing directory: {catalog}" in output.err
+    assert not output.out
+    assert list(destination.iterdir()) == [marker]
+    assert marker.read_bytes() == b"keep existing index"
 
 
 def test_bad_and_disappearing_cards_warn_without_blocking_healthy_stores(stores, tmp_path, monkeypatch, capsys):

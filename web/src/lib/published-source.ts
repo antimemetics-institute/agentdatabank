@@ -39,7 +39,7 @@ export class PublishedSource implements DataSource {
   private indexes = new Map<string, CachedText>();
   private refreshAt = 0;
   private refreshing?: Promise<RunMeta[]>;
-  private bundled?: Promise<Catalog>;
+  private indexedCatalog?: Promise<Catalog>;
   private readonly now: () => number;
   constructor(site: string, now: () => number = Date.now) {
     this.now = now;
@@ -69,10 +69,10 @@ export class PublishedSource implements DataSource {
     return request;
   }
   private catalog(): Promise<Catalog> {
-    return this.bundled ??= this.immutable(new URL("catalog.json", this.siteBase)).then((bytes) => {
+    return this.indexedCatalog ??= this.immutable(new URL("catalog.json", this.indexBase)).then((bytes) => {
       const value = JSON.parse(decoder().decode(bytes)) as Catalog;
       if (value.v !== 0 || !Array.isArray(value.manifests) || !object(value.shared) || !object(value.hints))
-        throw new Error("Invalid bundled catalog");
+        throw new Error("Invalid index catalog");
       return value;
     });
   }

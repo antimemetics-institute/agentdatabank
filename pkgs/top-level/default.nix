@@ -98,7 +98,7 @@ let
           hash = "sha256-MdoCuwmHSwt2+Zk9l+srKqUO+pVjtvExviKgpuDp8XM=";
         };
         nativeBuildInputs = [ pkgs.nodejs pkgs.pnpm pkgs.pnpmConfigHook ];
-        buildPhase = ''ADB_WEB_CATALOG=${catalog} bash ./build.sh'';
+        buildPhase = ''bash ./build.sh'';
         installPhase = ''cp -r dist $out'';
       });
 

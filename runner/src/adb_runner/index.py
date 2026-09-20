@@ -132,11 +132,45 @@ def collect(stores: list[Store]) -> dict[str, list[bytes]]:
     return grouped
 
 
-def build(stores: list[Store], directory: Path, dry_run: bool) -> None:
+def read_catalog(directory: Path, names: list[str]) -> tuple[dict[str, Json], dict[str, Path]]:
+    manifests: list[Json] = []
+    hints: dict[str, Json] = {}
+    shared: Json = None
+    assets: dict[str, Path] = {}
+    for name in sorted(names):
+        path = directory / f"{name}.json"
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            print(f"index: WARNING: skipping missing manifest {path}", file=sys.stderr)
+            continue
+        manifest: Json = json.loads(raw)
+        if not isinstance(manifest, dict):
+            raise PublishError(f"{path}: manifest must be an object")
+        schema = manifest.get("schema")
+        schema_file = schema.get("path") if isinstance(schema, dict) else None
+        if isinstance(schema, dict) and isinstance(schema_file, str):
+            schema_path = Path(schema_file)
+            hints[name] = {str(schema["version"]): json.loads(schema_path.read_bytes())}
+            if shared is None:
+                shared = json.loads((schema_path.parent / "shared-schema.json").read_bytes())
+            del schema["path"]
+        manifests.append(manifest)
+        source = directory / "assets" / name
+        if source.is_dir():
+            assets[f"catalog/assets/{name}"] = source
+    return {"v": 0, "manifests": manifests, "shared": shared if shared is not None else {}, "hints": hints}, assets
+
+
+def build(stores: list[Store], directory: Path, catalog: Path, dry_run: bool) -> None:
+    if not catalog.is_dir():
+        raise PublishError(f"--catalog must be an existing directory: {catalog}")
     # Read every source before replacing any destination projection.
     grouped = collect(stores)
+    manifests, assets = read_catalog(catalog, list(grouped))
     objects = {f"experiments/{name}/index.jsonl": b"".join(rows)
                for name, rows in sorted(grouped.items())}
+    objects["catalog.json"] = encode(manifests)
     root = {"v": 0, "experiments": [{"name": name, "runs": len(rows)} for name, rows in sorted(grouped.items())],
             "runs": sum(len(rows) for rows in grouped.values()),
             "built_at": serialize_utc_datetime(datetime.now(timezone.utc))}
@@ -145,6 +179,17 @@ def build(stores: list[Store], directory: Path, dry_run: bool) -> None:
         if directory.exists():
             shutil.rmtree(directory)
         directory.mkdir(parents=True)
+    for key, source in assets.items():
+        # Path.walk follows the linkFarm and any nested asset-directory symlinks.
+        for parent, dirs, files in source.walk(follow_symlinks=True):
+            dirs.sort()
+            for name in sorted(files):
+                asset = parent / name
+                path = directory / key / asset.relative_to(source)
+                print(f"{'PLAN' if dry_run else 'WRITE'} {path} {asset.stat().st_size} bytes")
+                if not dry_run:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(asset, path)
     for key, body in objects.items():
         path = directory / key
         print(f"{'PLAN' if dry_run else 'WRITE'} {path} {len(body)} bytes")
@@ -157,13 +202,14 @@ def build(stores: list[Store], directory: Path, dry_run: bool) -> None:
 def index_cli(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="adb-runner index", description=__doc__)
     parser.add_argument("--stores", required=True, type=Path, metavar="FILE")
+    parser.add_argument("--catalog", required=True, type=Path, metavar="DIR", help="manifest directory (<name>.json and assets/<name>/)")
     parser.add_argument("--to", required=True, metavar="DIR", help="index directory, deleted and rewritten in full")
     parser.add_argument("--dry-run", action="store_true", help="print filtered store counts, files and sizes; write nothing")
     args = parser.parse_args(argv)
     if "://" in args.to:
         parser.error("--to must be a local directory")
     try:
-        build(read_stores(args.stores), Path(args.to), args.dry_run)
+        build(read_stores(args.stores), Path(args.to), args.catalog, args.dry_run)
         return 0
     except Exception as error:
         print(f"index: FAIL: {failure(error)}", file=sys.stderr)

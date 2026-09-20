@@ -120,21 +120,27 @@ and `adb-runner` available in CI:
 
 ```bash
 web_dist="$(nix build .#adb-web-dist --no-link --print-out-paths)"
+catalog="$(nix build .#manifests --no-link --print-out-paths)"
 mkdir -p site
 cp -R "$web_dist"/. site/
 chmod -R u+w site
 cp site.json site/site.json
-adb-runner index --stores stores.json --to site/index
+adb-runner index --stores stores.json --catalog "$catalog" --to site/index
 ```
 
 Deploy the resulting `site/` directory. Only CI uses AWS profiles; the browser
 reads the generated index and public run objects.
 
+`--catalog DIR` is required and points to the built manifest directory:
+`<name>.json` files and optional `assets/<name>/` trees, as with `verify --catalog`.
+The site's catalog is derived from the index, so an experiment with no published
+runs never appears. The web build itself contains no experiment catalog.
+
 `--dry-run` prints each store's filtered run count and the files and sizes it
 would write, without creating or deleting anything. Every invocation rebuilds
 the whole index from complete run-object pairs. It deletes the output directory
 and rewrites it in full, writing `index.json` last. Shards for experiments no
-longer present are removed.
+longer present are removed, together with their catalog entries and assets.
 Unreadable, malformed or disappeared cards produce warnings and are skipped,
 so healthy runs can still be indexed. Failure to list a store aborts the rebuild
 before replacing the destination.
@@ -147,12 +153,15 @@ preserved. This derived cache is never authoritative. Opening a run fetches the
 original card and compressed stream from the row's store; raw display uses those
 original bytes and decompressed lines.
 
-The build includes current manifests, versioned render hints and experiment
-README assets. Unknown schema versions
+The index includes `catalog.json` with current manifests, shared render hints and
+versioned experiment hints for indexed experiments only. README assets are copied
+to `catalog/assets/<name>/`, dereferencing the manifest directory's symlinks.
+A missing manifest warns and leaves the experiment visible through its runs,
+without a manifest or experiment assets. Unknown schema versions
 fall back to shared hints. Published mode hides launch, publish and jobs controls;
 it requires no Node process. Without `site.json`, the app uses its local server.
 
-The browser reads `index/index.json` and
+The browser reads `index/catalog.json`, `index/catalog/assets/<name>/`, `index/index.json` and
 `index/experiments/<experiment>/index.jsonl` relative to the app's own directory.
 An app served at `/adb/` reads `/adb/index/index.json`; the same layout works
 at the site root. It revalidates the index once a minute and caches `runs/`

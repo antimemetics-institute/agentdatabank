@@ -31,6 +31,9 @@ try {
   await page.locator(`[data-run="${f.card.identity.run}"]`).waitFor();
   await page.goto(app + "#/experiments/example");
   await page.locator("h2").filter({ hasText: "example" }).waitFor();
+  const image = page.getByRole("img", { name: "Indexed figure" });
+  await image.waitFor();
+  assert.equal(await image.getAttribute("src"), app + "index/catalog/assets/example/figure.svg");
   assert.equal(await page.getByText("Publish on completion", { exact: true }).count(), 0);
   assert.equal(await page.locator('a[href="#/jobs"]').count(), 0);
   assert.equal(await page.getByText("oneliner", { exact: true }).count(), 0);
@@ -67,9 +70,14 @@ try {
   assert.ok(site.requests.some((request) => request.path === appPath + "index/index.json"));
   assert.ok(site.requests.some((request) => request.path === appPath + "index/experiments/example/index.jsonl"));
   assert.ok(site.requests.every((request) => request.path.startsWith(appPath)));
-  const catalog = JSON.parse(site.files.get(appPath + "catalog.json").toString());
-  assert.ok(catalog.manifests.some((manifest) => manifest.name === "govsim"));
-  assert.ok(catalog.hints.govsim["0"]);
+  assert.ok(site.requests.some((request) => request.path === appPath + "index/catalog.json"));
+  assert.ok(site.requests.some((request) => request.path === appPath + "index/catalog/assets/example/figure.svg"));
+  assert.ok(!site.files.has(appPath + "catalog.json"), "Web dist must not bundle a catalog");
+  assert.ok(!site.requests.some((request) => request.path === appPath + "catalog.json"));
+  const catalog = JSON.parse(site.files.get(appPath + "index/catalog.json").toString());
+  assert.deepEqual(catalog.manifests.map((manifest) => manifest.name), ["example"]);
+  assert.ok(catalog.hints.example["0"]);
+  assert.deepEqual(catalog.shared, { title: "shared" });
   assert.deepEqual(errors, []);
   console.log(`Static published bundle: ${requests.length} requests, including redirects to a signed URL on another host; no credentials on either hop or Node API requests; original card and decompressed raw line preserved.`);
 } finally {

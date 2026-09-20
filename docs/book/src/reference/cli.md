@@ -63,10 +63,12 @@ only its compressed stream and card under `runs/`. See [Publishing](../running/p
 ## Build a derived index
 
 ```text
-adb-runner index --stores FILE --to DIR [--dry-run]
+adb-runner index --stores FILE --catalog DIR --to DIR [--dry-run]
 ```
 
-The store list provides source profiles, public URLs and optional filters. Each
+The store list provides source profiles, public URLs and optional filters.
+`--catalog` supplies the manifest directory (`<name>.json` and `assets/<name>/`);
+only indexed experiments' manifests, hints and assets are exported. Each
 invocation deletes and rewrites `DIR`, writing `index.json` last. The site deploys
 this directory. Dry-run prints filtered store counts, files and sizes without
 creating or deleting anything. See [Build and serve an index](../running/publishing.md#build-and-serve-an-index).

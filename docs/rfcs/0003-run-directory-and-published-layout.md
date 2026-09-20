@@ -94,7 +94,7 @@ list of exact recorded IDs or experiment names. Omission selects everything;
 an empty list selects nothing. Present filters intersect. An omitted profile
 uses boto3's normal resolution.
 
-`adb-runner index --stores FILE --to DIR [--dry-run]` lists each store's
+`adb-runner index --stores FILE --catalog DIR --to DIR [--dry-run]` lists each store's
 `<prefix>/runs/`, retaining each `run.json` only when its sibling
 `events.jsonl.zst` exists, then reads and filters the cards.
 Source profiles belong to the store list. Sessions and S3 clients have no
@@ -105,11 +105,13 @@ Unreadable, malformed or disappeared cards are skipped with an object-specific
 warning; healthy cards from that store and other stores remain in the rebuilt index.
 A failure to list a store aborts before replacing the destination.
 
-The destination contains two forms:
+The destination contains the run index and its experiment catalog:
 
 ```text
 index.json
 experiments/<experiment>/index.jsonl
+catalog.json
+catalog/assets/<experiment>/
 ```
 
 `index.json` is `{"v":0,"experiments":[{"name":"govsim","runs":1}],"runs":1,
@@ -126,10 +128,16 @@ The card is represented as a JSON value, re-serialized compactly with
 card. A rebuild deletes `DIR` and rewrites it in full, with `index.json` written
 last. Files for experiments no longer present are removed.
 
+The required `--catalog` points to the built manifest directory. Only experiments
+with indexed runs contribute manifests, shared and versioned render hints, and
+README assets (copied with symlinks dereferenced). Missing manifests warn and leave
+run-only experiments visible. The web build has no experiment catalog; an experiment
+without indexed runs never appears on the published site.
+
 The site repository contains `stores.json` and `site.json`. The complete
 `site.json` is `{"v":0}`; unknown keys are rejected. CI builds `adb-web-dist`, copies it into
 `site/`, copies `site.json` beside `site/index.html`, runs
-`adb-runner index --stores stores.json --to site/index`, and deploys `site/`.
+`adb-runner index --stores stores.json --catalog DIR --to site/index`, and deploys `site/`.
 The browser reads `index/index.json` and
 `index/experiments/<experiment>/index.jsonl` relative to the app's own directory,
 including when the app is served under a path prefix. Without `site.json` the
@@ -143,8 +151,8 @@ are thinned in the browser and expand from the original card.
 Objects under `runs/` are immutable session caches. The index is revalidated
 once a minute. Damaged rows, missing shards, unreadable objects and
 identity mismatches become diagnostic run entries with reasons; healthy
-neighbors remain visible. Manifests and render hints ship with the static
-bundle, keyed by experiment and schema version; unmatched versions use shared
+neighbors remain visible. Manifests and render hints come from `index/catalog.json`,
+keyed by experiment and schema version; unmatched versions use shared
 hints. Execution surfaces, publication controls and jobs are hidden. Fetches
 omit credentials on every hop and follow redirects, including to signed CDN URLs
 on other hosts. The local Node server has no role in this flow and never

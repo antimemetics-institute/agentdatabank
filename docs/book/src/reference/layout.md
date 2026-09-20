@@ -150,7 +150,7 @@ its AWS profile, the public HTTPS URL for the same prefix, and optional
 experiment, condition and run filters.
 The repository also contains `site.json` with exactly `{"v":0}`; unknown keys
 are rejected. CI builds `adb-web-dist`, copies the bundle and `site.json` into
-`site/`, runs `adb-runner index --stores stores.json --to site/index`, and deploys
+`site/`, runs `adb-runner index --stores stores.json --catalog DIR --to site/index`, and deploys
 `site/`. The command deletes and rewrites `site/index` in full, writing
 `index.json` last. AWS profiles are used only to read source stores.
 
@@ -158,7 +158,9 @@ The static bundle selects published mode when `site.json` is present. It reads
 `index/index.json` and `index/experiments/<experiment>/index.jsonl` relative to
 the app directory, including under a path prefix. The browser opens original
 run objects from each row's `store`, following redirects with credentials
-omitted, and uses bundled manifests and versioned render hints. It caches run
+omitted, and uses manifests and versioned render hints from `index/catalog.json`.
+The catalog contains only indexed experiments; their README assets live under
+`index/catalog/assets/<name>/`. The web build contains no experiment catalog. It caches run
 objects for the session and revalidates indexes each minute. The Node server
 only serves local data and launches runs.
 

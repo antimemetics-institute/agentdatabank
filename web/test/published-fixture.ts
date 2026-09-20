@@ -53,7 +53,8 @@ export async function publishedFixture(redirectObjects = false, appPath = "/app/
   const indexPath = appPath + "index/";
   site.files.set(indexPath + "index.json", JSON.stringify({ v: 0, experiments: [{ name: "example", runs: 1 }], runs: 1, built_at: "2026-09-18T12:00:00.000000Z" }));
   site.files.set(indexPath + "experiments/example/index.jsonl", JSON.stringify(row) + "\n");
-  site.files.set(appPath + "catalog.json", JSON.stringify({ v: 0, manifests: [{ name: "example", params: {} }], shared: { title: "shared" }, hints: { example: { 0: { title: "specific" } } } }));
+  site.files.set(indexPath + "catalog.json", JSON.stringify({ v: 0, manifests: [{ name: "example", params: {}, readme: "![Indexed figure](figure.svg)" }], shared: { title: "shared" }, hints: { example: { 0: { title: "specific" } } } }));
+  site.files.set(indexPath + "catalog/assets/example/figure.svg", '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>');
   return { store, site, cdn, app: site.origin + appPath, appPath, indexPath, row, card, raw, stem, long, lines,
     close: async () => { await store.close(); await site.close(); await cdn.close(); } };
 }
