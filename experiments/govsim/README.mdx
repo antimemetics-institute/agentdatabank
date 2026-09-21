@@ -1,128 +1,101 @@
 import survival from "./views/survival.vl.json";
-import fairness from "./views/fairness.vl.json";
 import overview from "./overview.svg";
 
 # GovSim
 
-Can a group of AI agents share a resource without exhausting it?
+Can AI agents share a resource without exhausting it?
+
+Five agents benefit from taking a shared resource, but overuse threatens
+everyone’s future. GovSim tests whether they can agree on limits and follow them.
 
 <img src={overview} alt="Five agents discuss catch limits around a shared lake. Leaving enough fish allows recovery; taking too many depletes the stock." />
 
-GovSim puts language-model agents in a small society where each agent benefits
-from taking a shared resource, but taking too much threatens everyone's future.
-In the fishing scenario, for example, agents decide how many fish to catch from
-a lake. They can discuss their catches and agree on limits, but each agent still
-chooses its own actions.
+Based on [Cooperate or Collapse](https://arxiv.org/abs/2404.16698)
+(Piatti et al., NeurIPS 2024). [Original code](https://github.com/giorgiopiatti/GovSim).
 
-The experiment comes from [Cooperate or Collapse](https://arxiv.org/abs/2404.16698)
-(Piatti et al., NeurIPS 2024). The [GovSim source](https://github.com/giorgiopiatti/GovSim)
-contains the original simulation.
+## How it works
 
-## What happens in a run?
+Each round represents a month: agents harvest, observe each other’s actions,
+discuss limits, and reflect. The resource can recover between rounds if enough
+remains. Scenarios cover **fishing**, **sheep grazing**, and **river pollution**
+from production.
 
-Each round represents a month. Agents harvest, observe what others did, discuss
-how to manage the resource, and reflect on their experience. The resource can
-recover between rounds if enough remains.
+- **Baseline:** agents act and communicate freely.
+- **Universalization:** agents consider what happens if everyone acts as they do.
+- **No discussion:** agents cannot communicate.
+- **Outsider:** a selfish newcomer tests the group’s cooperation.
 
-The scenarios cover fishing, sheep grazing, and pollution. Variants test what
-changes when agents cannot discuss their actions, when a profit-seeking outsider
-joins, or when agents are prompted to consider what would happen if everyone
-acted as they did. Fishing also has variants with reworded prompts.
+<details>
+<summary>Additional variants in the upstream code</summary>
 
-## What to look for
+**Paraphrase 1 and 2** change the wording of the fishing baseline’s instructions,
+while retaining its rules. They are optional upstream variants, not listed in
+the authors’ [table of paper experiments](https://github.com/giorgiopiatti/GovSim#table-of-experiments).
+Their configurations select the
+[alternative fishing prompts](https://github.com/giorgiopiatti/GovSim/blob/1d11adf047b24fa2ba0d44a1d4931015ea2e5210/simulation/scenarios/fishing/agents/persona_v3/cognition/utils.py).
+The code also supports combining an outsider with universalization.
 
-Watch whether agents agree on limits, follow those agreements, and leave enough
-resource for later rounds. Model calls and resource updates appear during the
-run; the group conversation is added after the simulation finishes.
+</details>
 
-**Resource collapse is a simulation outcome, not an execution failure.**
-`collapsed = false` means no collapse was recorded during the run. A short run
-without collapse does not establish that cooperation would last.
+## Compare outcomes
 
-Results describe how long the resource survived, how much agents collected,
-how evenly they shared it, and how much remained. Equality alone is not success:
-agents who all collect nothing are also equal.
+Select a scenario and treatment below. Compare runs of the same length and
+check sample sizes before drawing conclusions. These results describe the
+available runs; they are not a controlled model ranking.
 
-The runner records launch parameters, seeds, source references and build
-information in `run.json` and `run.start`. GovSim adds its resolved configuration
-as `govsim.config` and every upstream simulation-log row under an action kind:
-`govsim.harvest`, `govsim.utterance`, `govsim.summary`, or `govsim.resource_limit`.
-Unrecognized actions remain `govsim.record`. These custom
-events preserve the original fields, including interaction HTML and nulls.
-Schema render hints label each row in sequence; facet filters narrow the stream.
-Summary interactions retain their original HTML on disk; the viewer strips tags
-and displays plain text. The resource series is `govsim.state.resource`.
-GovSim exports no artifact events; upstream working files are implementation details.
+<GovSimFigure spec={survival} />
 
-Record timestamps reflect post-run ingestion, not when agents acted. Each
-`log_env.json` or `persona_N/nodes.json` file has one `govsim.upstream_log` marker
-before its rows: `source` is relative to the storage directory, `bytes` and
-`sha256` describe the original file bytes, and `records` counts ingested records.
-Environment rows retain their own round fields; there are no synthetic round
-or replay boundary events. Each node becomes `govsim.memory` with its `persona`
-ID and untouched `node`; the viewer shows the persona, node type and description.
-Embeddings are not ingested: they are recomputable from node text and the
-configured embedder (recorded as `govsim.config.data.embedder`).
+The **Outcome** selector switches between these four measures:
 
-On failure, available environment and memory checkpoints are still ingested.
-Malformed files get a marker with zero ingested records and their text in
-`govsim.unparsed_log`. Missing files get an `unparsed_log` diagnostic with empty
-text, since there are no bytes to hash. Other files are captured before the
-error fails the run.
+<div className="outcome-guide" role="region" aria-label="What each outcome measures" tabIndex={0}>
 
-Model calls identify personas by their upstream IDs (`persona_N`). Framework calls
-use `framework/summarize_conversation`, `framework/find_harvesting_limit`, or
-`framework/text_to_triple`; `govsim.phase` and `govsim.query` metadata retain the
-upstream context. Replay rows keep their original IDs and names. The config hint declares
-the persona roster as an actor registry, so the viewer labels silent personas too.
-Per-row labels are applied after roster labels; IDs remain visible on hover. The Mayor's utterances are templated framework output with no model call
-behind them.
+| Outcome | What it measures |
+| --- | --- |
+| Resource survival | Months observed before collapse or the run’s time limit. |
+| Remaining resource | Stock after the final harvest, before recovery. |
+| Harvest per agent | Mean total collected over the run. |
+| Harvest equality | 1 means equal harvests—even if everyone collected nothing. |
 
-The packaged upstream source includes a small `seed.patch`: each scenario
-passes the effective run seed to environment reset, and perturbation environments
-forward it to the resource-allocation RNG. This makes random allocation under
-contention repeatable for the same seed and actions. It does not guarantee that
-a hosted model will produce identical actions on repeated runs.
+</div>
 
-## Did the resource survive?
+**Resource collapse is an outcome, not an execution failure.** A short run
+without collapse does not demonstrate lasting cooperation. Resource units differ
+across scenarios; cumulative harvest also depends on run length.
 
-Each point below is a completed run. Click a model in the legend to highlight it
-in both charts; hover over a point for its run and condition. Identical results
-can overlap. Failed and unfinished runs remain in the runs table below.
+## Run settings
 
-<VegaChart spec={survival} />
+- **Quick demonstration:** one round with `mock/model` and the `hash` embedder.
+  These use scripted replies and artificial memory similarities.
+- **Model behavior:** use a real model and `mxbai` for memory retrieval.
+- **Full scenario:** set `max_rounds = 0`; normally 12 months, or 15 with outsiders.
 
-Survival duration needs context: surviving a one-month demonstration is different
-from surviving a full scenario. Hover to check the configured round limit
-(`0` means the scenario's full length). The second chart shows what remained
-immediately after the final harvest, before any subsequent recovery.
+<details>
+<summary>Reproducibility and recorded data</summary>
 
-## Was the harvest both useful and equal?
+These runs are not automatically reproductions of the paper. Inspect each
+recorded condition for its model, generation settings, embedder, and seeds.
+The `mxbai` model revision is pinned in the adapter. A seed patch makes resource
+allocation repeatable for the same seed and actions; hosted-model replies may
+still vary.
 
-An equality score of 1 means everyone collected the same amount. It also describes
-a group that collected nothing. Read equality alongside the amount collected and
-the resource left behind.
+`over_usage` measures requests above an agent’s sustainable share. Its calculation
+uses the current number of harvesters, which differs from the upstream
+simulation’s fixed count when an outsider joins.
 
-Drag a rectangle in the first chart to highlight those runs in the second.
-Double-click to clear the selection.
+Model calls and resource updates appear during execution; conversations and
+memories are imported afterward. Imported timestamps record ingestion time,
+not when agents acted. The Mayor’s messages are templated, with no model call.
 
-<VegaChart spec={fairness} />
+The runner saves parameters, seeds, source references, and build information in
+`run.json` and `run.start`. GovSim records its resolved configuration in
+`govsim.config`, resource history in `govsim.state.resource`, and simulation rows
+as `govsim.harvest`, `govsim.utterance`, `govsim.summary`, or
+`govsim.resource_limit`. Other actions remain `govsim.record`.
 
-These figures show the runs available in this ADB, including any workflow tests
-using `mock/model`. They do not establish a model ranking: scenarios, round limits,
-and other settings may differ. Check each run's condition before comparing it.
+Each upstream log has a `govsim.upstream_log` marker with its path, byte count,
+SHA-256 hash, and ingested record count. Memory nodes become `govsim.memory`;
+embeddings are not imported. Original fields and interaction HTML are retained
+on disk; the viewer displays plain text. Available checkpoints are retained on
+failure, with unreadable or missing logs reported as `govsim.unparsed_log`.
 
-## Choosing settings
-
-Use a real model and the `mxbai` memory embedder to explore model behavior.
-`mock/model` gives scripted replies, and `hash` gives artificial memory
-similarities; both are for testing the workflow.
-
-A one-round run is a quick demonstration. Set `max_rounds` to `0` to use the
-scenario's full length: normally 12 months, or 15 for outsider scenarios.
-
-These runs are not automatically reproductions of the paper's results. In
-particular, `mxbai` downloads model weights whose revision is not pinned.
-The `over_usage` result measures how often agents request more than their
-sustainable share; its calculation uses the current number of harvesters, which
-differs from the original simulation's fixed count when an outsider joins.
+</details>

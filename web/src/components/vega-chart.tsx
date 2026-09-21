@@ -6,7 +6,7 @@ export const RunDataContext = createContext<ExplorationRow[] | null>(null);
 
 // Authors use Vega-Lite's grammar directly. The sole ADB convention is a named
 // dataset, "runs", containing the same scalar rows used by the run explorer.
-export function VegaChart({ spec }: { spec: TopLevelSpec }) {
+export function VegaChart({ spec, horizontalPadding, minPlotWidth = 100 }: { spec: TopLevelSpec; horizontalPadding?: number; minPlotWidth?: number }) {
   const rows = useContext(RunDataContext);
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
@@ -27,27 +27,62 @@ export function VegaChart({ spec }: { spec: TopLevelSpec }) {
       if (!active) return;
       // Vega-Lite concatenations do not support fit-x autosizing. Reserve room
       // for labels and size their shared plotting width from the actual host.
-      const plotWidth = () => Math.max(100, host.current!.clientWidth - 160);
-      const chart = JSON.parse(serialized, (key, value) => key === "width" && value === "container" ? plotWidth() : value);
+      const plotWidth = () => Math.max(minPlotWidth, host.current!.clientWidth - (horizontalPadding ?? ("facet" in spec ? 40 : 160)));
+      const initialWidth = plotWidth();
+      const background = dark ? "#09090b" : "#ffffff";
+      const foreground = dark ? "#fafafa" : "#18181b";
+      const secondary = dark ? "#d4d4d8" : "#3f3f46";
+      const markStyles: Record<string, { stroke: string; fill?: string }> = {
+        "observation": { stroke: background },
+        "summary-interval": { stroke: dark ? "#e4e4e7" : "#475569" },
+        "summary-median": { fill: background, stroke: dark ? "#fafafa" : "#334155" },
+      };
+      const chart = JSON.parse(serialized, (key, value) => {
+        if (key === "width" && value === "container") return initialWidth;
+        // Expand semantic styles before compilation: explicit mark properties
+        // prevent default Vega encodings from replacing the theme colors.
+        if (key === "mark" && value && typeof value === "object") {
+          const styles: string[] = Array.isArray(value.style) ? value.style : [value.style];
+          return { ...Object.assign({}, ...styles.map(style => markStyles[style])), ...value };
+        }
+        return value;
+      });
       const result = await embed(host.current!, chart, {
         renderer: "svg", actions: { export: true, source: false, compiled: false, editor: false },
         config: {
-          background: "transparent",
-          axis: { labelLimit: 130, labelColor: dark ? "#d4d4d8" : "#3f3f46", titleColor: dark ? "#fafafa" : "#18181b", gridColor: dark ? "#3f3f46" : "#e4e4e7" },
-          legend: { labelColor: dark ? "#d4d4d8" : "#3f3f46", titleColor: dark ? "#fafafa" : "#18181b" },
-          title: { color: dark ? "#fafafa" : "#18181b" },
+          // Explicit backgrounds also keep exported SVGs readable on their own.
+          background,
+          axis: { labelLimit: 130, labelColor: secondary, titleColor: foreground, gridColor: dark ? "#3f3f46" : "#e4e4e7", domainColor: dark ? "#71717a" : "#a1a1aa", tickColor: dark ? "#71717a" : "#a1a1aa" },
+          header: { labelColor: foreground, titleColor: foreground },
+          legend: { labelColor: secondary, titleColor: foreground },
+          title: { color: foreground, subtitleColor: secondary },
+          text: { color: foreground },
           view: { stroke: null },
         },
       });
       if (!active) { result.finalize(); return; }
-      const observer = new ResizeObserver(() => { void result.view.width(plotWidth()).resize().runAsync(); });
+      // Facets and concatenations compile their panel widths into separate
+      // signals; changing only the outer width leaves those panels clipped.
+      const widthSignals = (result.vgSpec.signals ?? []).filter(signal =>
+        /(^|_)width$/.test(signal.name) && "value" in signal && signal.value === initialWidth);
+      const observer = new ResizeObserver(() => {
+        // Measure actual label/header space after layout. Long model labels
+        // must remain intact without pushing the rightmost observations offscreen.
+        const svgWidth = host.current?.querySelector("svg")?.getBoundingClientRect().width;
+        const currentWidth = widthSignals[0] ? Number(result.view.signal(widthSignals[0].name)) : initialWidth;
+        const width = horizontalPadding !== undefined && svgWidth && Number.isFinite(currentWidth)
+          ? Math.max(minPlotWidth, host.current!.clientWidth - (svgWidth - currentWidth) - 2)
+          : plotWidth();
+        for (const signal of widthSignals) result.view.signal(signal.name, width);
+        void result.view.resize().runAsync();
+      });
       observer.observe(host.current!);
       dispose = () => { observer.disconnect(); result.finalize(); };
       setReady(true);
     }).catch((reason: unknown) => { if (active) setError(String(reason)); });
     return () => { active = false; dispose?.(); };
   // Serialized inputs stay stable across identical polling responses.
-  }, [serialized, dark]);
+  }, [serialized, dark, horizontalPadding, minPlotWidth]);
   return <figure className="vega-figure">
     {rows === null ? <p>Loading run data…</p> : !rows.length ? <p>No recorded runs yet. This figure will appear after a run.</p> : <>
       {!ready && !error && <p role="status">Loading chart…</p>}

@@ -191,5 +191,45 @@
 .vega-figure { margin: 1.5rem 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: .5rem; }
 .vega-host { width: 100%; min-width: 0; overflow-x: auto; }
 .vega-host > .vega-embed { width: 100%; }
+.vega-host .chart-wrapper { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+.vega-host .vega-bindings { order: -1; display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; margin-bottom: 1.5rem; width: 100%; }
+.vega-host .vega-bind { max-width: 100%; }
+.vega-host .vega-bind label { display: flex; flex-direction: column; gap: .25rem; font-size: .875rem; }
+.vega-host .vega-bind select,
+.vega-host .vega-bind input { max-width: 100%; padding: .4rem .6rem; border: 1px solid var(--color-border); border-radius: .375rem; color: var(--color-foreground); background: var(--color-background); }
+.vega-host .vega-bind input[type="number"] { width: 8rem; }
 .vega-figure pre { white-space: pre; overflow-wrap: normal; }
 @media (max-width: 600px) { .vega-figure { padding: .5rem; } }
+
+/* GovSim figures retain complete labels; narrow displays scroll the figure. */
+.govsim-results { margin-block: 1.5rem; }
+.govsim-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-muted); }
+.govsim-controls label { display: flex; flex-direction: column; gap: .4rem; font-size: .85rem; font-weight: 600; }
+.govsim-controls select { width: 100%; padding: .55rem; border: 1px solid var(--color-border); border-radius: .3rem; background: var(--color-background); color: var(--color-foreground); font-weight: 400; }
+.govsim-sample-note { margin-top: 1rem !important; font-size: .9rem; }
+.govsim-results .vega-figure { margin-bottom: .75rem; }
+.govsim-results .govsim-caption { font-size: .875rem; line-height: 1.6; color: var(--color-muted-foreground); }
+.govsim-results h3 { font-size: 1.05rem !important; border: 0 !important; margin-bottom: .75rem !important; }
+.govsim-table-scroll { overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid var(--color-border); border-radius: .4rem; }
+.govsim-table-scroll table { width: 100%; border-collapse: collapse; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.govsim-table-scroll caption { text-align: left; padding: .8rem; color: var(--color-muted-foreground); caption-side: bottom; }
+.govsim-table-scroll th, .govsim-table-scroll td { padding: .65rem .8rem; border-bottom: 1px solid var(--color-border); text-align: right; white-space: nowrap; }
+.govsim-table-scroll th:first-child { text-align: left; }
+.govsim-table-scroll thead { background: var(--color-muted); }
+.govsim-table-scroll thead th { white-space: normal; min-width: 100px; overflow-wrap: anywhere; }
+.govsim-table-scroll tbody th { font-weight: 500; }
+.govsim-table-scroll th a { display: block; margin-top: .2rem; font-size: .75rem; font-weight: 400; color: var(--color-muted-foreground); }
+.govsim-table-scroll button { text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.govsim-table-scroll .selected-condition { background: var(--color-muted); }
+.govsim-empty { padding: 1.5rem; border: 1px dashed var(--color-border); margin-top: 1rem !important; }
+.govsim-methods { margin-bottom: 1.5rem; font-size: .875rem; }
+.govsim-methods summary, .narrative > details > summary { cursor: pointer; font-weight: 600; margin-bottom: .75rem; }
+.narrative > details { margin-block: 1rem; }
+.outcome-guide { margin-bottom: 1rem; overflow-x: auto; border: 1px solid var(--color-border); border-radius: .4rem; }
+.outcome-guide table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: .9rem; line-height: 1.5; }
+.outcome-guide th, .outcome-guide td { padding: .75rem 1rem; text-align: left; vertical-align: top; }
+.outcome-guide thead { background: var(--color-muted); }
+.outcome-guide th { font-weight: 600; }
+.outcome-guide th:first-child, .outcome-guide td:first-child { width: 30%; min-width: 150px; border-right: 1px solid var(--color-border); }
+.outcome-guide tbody td { border-top: 1px solid var(--color-border); }
+.outcome-guide tbody td:first-child { font-weight: 500; }
