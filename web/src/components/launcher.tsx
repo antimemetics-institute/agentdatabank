@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { buildArgs, type PublishOptions } from "@/lib/cmd-build";
 import { initialProfile, needsSetup, setsUsed, templateRows } from "@/lib/creds";
 import { api, apiPost, JOB_TERMINAL, useExecutorPoll } from "@/lib/data";
+import { publishedMode } from "@/lib/data-source";
 import type { CredsInfo, JobInfo, ParamDecl } from "@/shared/types";
 
 const INPUT =
@@ -36,6 +37,7 @@ export function useLaunchSurface(): {
 } {
   const [creds, setCreds] = useState<CredsInfo | null | undefined>(undefined);
   const refresh = () => {
+    if (publishedMode()) { setCreds(null); return; }
     /* a successful fetch (even with runner:false) means this server has the
        launch surface at all; a 403/404 hides the run tab entirely */
     api<CredsInfo>("/api/credentials")

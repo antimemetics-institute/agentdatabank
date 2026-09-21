@@ -438,11 +438,11 @@ function CopyIcon({ copied }: { copied: boolean }) {
    draft initializer would not rerun (and one experiment's edits would bleed into
    the next's form) */
 export function Builder({ name }: { name: string }) {
-  if (publishedMode()) return null;
   return <BuilderForm key={name} name={name} />;
 }
 
 function BuilderForm({ name }: { name: string }) {
+  const published = publishedMode();
   const manifests = useManifests();
   /* edits survive navigating away and back: seeded from the stored draft, written
      back on every change. The draft holds user edits only — materialized defaults
@@ -450,14 +450,16 @@ function BuilderForm({ name }: { name: string }) {
      params. */
   const [vals, setVals] = useState<Record<string, string>>(() => loadDraft(name));
   const [copied, setCopied] = useState(false);
-  /* open by default: the overview's zero-run cards point here to compose a first
-     command, so the form is the page's primary content */
-  const [open, setOpen] = useState(true);
+  /* Local pages open the form for composing a first run; published pages keep
+     it collapsed until the reader wants a command to reproduce the experiment. */
+  const [open, setOpen] = useState(!published);
 
   /* Local execution offers Run; read-only viewers expose the oneliner alone. */
   const { creds, refresh } = useLaunchSurface();
   const executor = useExecutorPoll();
   const dataDir = useDataDir();
+  /* Published commands use the CLI's default data directory. */
+  const dataDirReady = published || dataDir !== undefined;
   const [publishEnabled, setPublishEnabled] = useState(false);
   const [publishTarget, setPublishTarget] = useState("");
   const [publishProfile, setPublishProfile] = useState("");
@@ -518,7 +520,7 @@ function BuilderForm({ name }: { name: string }) {
   }, [name, params, seeded, prefs, dataDir, publication]);
 
   const copy = () => {
-    if (missing.length > 0 || dataDir === undefined) return;
+    if (missing.length > 0 || !dataDirReady) return;
     void navigator.clipboard?.writeText(oneliner).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -538,6 +540,7 @@ function BuilderForm({ name }: { name: string }) {
   return (
     <Card className="p-0">
       <button type="button" onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className="flex w-full items-baseline justify-between gap-2 p-4 text-left hover:bg-muted/40">
         <h3 className="text-sm font-semibold">
           <span className="mr-1.5 inline-block w-2 text-muted-foreground">{open ? "▾" : "▸"}</span>
@@ -609,7 +612,7 @@ function BuilderForm({ name }: { name: string }) {
             })}
           </div>
 
-          <fieldset className="space-y-2 rounded border p-3 text-xs">
+          {!published && <fieldset className="space-y-2 rounded border p-3 text-xs">
             <legend className="px-1 font-medium">Publish</legend>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={publishEnabled} onChange={(event) => setPublishEnabled(event.target.checked)} />
@@ -625,13 +628,13 @@ function BuilderForm({ name }: { name: string }) {
                 {awsProfiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
               </select>
             </label>
-          </fieldset>
+          </fieldset>}
 
           {/* the two outputs of the same condition: submit it (run tab) or copy it
               (oneliner tab). No launch surface → no tabs, the oneliner alone. The
               run tab stays mounted while hidden (forceMount) so an in-flight job
               keeps polling; its trigger pulses while one is live. */}
-          {creds ? (
+          {!published && creds ? (
             <Tabs value={tab} onValueChange={(t) => { setTabChoice(t); setComposerTab(t); }}>
               <TabsList className="h-7">
                 <TabsTrigger value="run" className="gap-1.5 px-3 text-xs">
@@ -646,12 +649,12 @@ function BuilderForm({ name }: { name: string }) {
               </TabsContent>
               <TabsContent value="oneliner">
                 <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-                  copy={copy} dataDirReady={dataDir !== undefined} />
+                  copy={copy} dataDirReady={dataDirReady} />
               </TabsContent>
             </Tabs>
           ) : (
             <Oneliner oneliner={oneliner} missing={missing} copied={copied}
-              copy={copy} dataDirReady={dataDir !== undefined} />
+              copy={copy} dataDirReady={dataDirReady} />
           )}
         </div>
       )}

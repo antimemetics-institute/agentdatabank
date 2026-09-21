@@ -20,6 +20,7 @@ try {
   site.files.set(appPath + "site.json", JSON.stringify({ v: 0 }));
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM, args: ["--no-sandbox", "--disable-gpu"] });
   const page = await browser.newPage();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.context().addCookies([
     { name: "store-session", value: "must-not-be-sent", url: f.store.origin + f.stem + "/" },
     { name: "cdn-session", value: "must-not-be-sent", url: f.cdn.origin + "/objects/" },
@@ -34,9 +35,24 @@ try {
   const image = page.getByRole("img", { name: "Indexed figure" });
   await image.waitFor();
   assert.equal(await image.getAttribute("src"), app + "index/catalog/assets/example/figure.svg");
-  assert.equal(await page.getByText("Publish on completion", { exact: true }).count(), 0);
-  assert.equal(await page.locator('a[href="#/jobs"]').count(), 0);
+  const configure = page.getByRole("button", { name: /configure a run/ });
+  await configure.waitFor();
+  assert.equal(await configure.getAttribute("aria-expanded"), "false");
   assert.equal(await page.getByText("oneliner", { exact: true }).count(), 0);
+  await configure.click();
+  await page.getByText("oneliner", { exact: true }).waitFor();
+  assert.equal(await configure.getAttribute("aria-expanded"), "true");
+  assert.equal(await page.getByText("Publish on completion", { exact: true }).count(), 0);
+  assert.equal(await page.getByRole("tab", { name: /run/ }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: /^▶?\s*run/i }).count(), 0);
+  assert.equal(await page.locator('a[href="#/jobs"]').count(), 0);
+  const command = configure.locator("..").locator('[role="button"][title="click to copy"]');
+  const oneliner = await command.locator("pre").textContent();
+  assert.match(oneliner, /-A exec\.example/);
+  assert.ok(!oneliner.includes("--data-dir"));
+  await command.click();
+  await page.getByText("copied ✓", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), oneliner);
   await page.goto(app + `#/run/condition/${f.card.identity.run}?tab=stream`);
   await page.locator("#ev-1").waitFor();
   await page.locator("#ev-1 > summary").click();

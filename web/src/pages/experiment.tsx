@@ -44,7 +44,7 @@ export function ExperimentPage({ name }: { name: string }) {
         : <ExperimentReadme readme={manifest?.readme} name={name} />}
       <ExperimentResults definitions={manifest?.results} />
       {runs !== null && <GetData name={name} runCount={rs.length} />}
-      {!publishedMode() && <Builder name={name} />}
+      <Builder name={name} />
 
       {runs === null ? <PageLoading /> : rs.length ? (
         <RunsTable runs={rs} hideExperiment />
