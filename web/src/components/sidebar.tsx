@@ -58,7 +58,8 @@ export function Sidebar({
         ))}
       </nav>
       <div className="space-y-1 border-t p-2">
-        {!publishedMode() && <><ConnectedDot /><CmdSettings /></>}
+        {!publishedMode() && <ConnectedDot />}
+        <CmdSettings />
         <Button
           variant="ghost"
           size="sm"
