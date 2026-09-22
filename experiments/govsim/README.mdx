@@ -1,5 +1,6 @@
 import survival from "./views/survival.vl.json";
-import overview from "./overview.svg";
+import figureOne from "./figures/figure-1.png";
+import figureTwo from "./figures/figure-2.png";
 
 # GovSim
 
@@ -8,7 +9,12 @@ Can AI agents share a resource without exhausting it?
 Five agents benefit from taking a shared resource, but overuse threatens
 everyone’s future. GovSim tests whether they can agree on limits and follow them.
 
-<img src={overview} alt="Five agents discuss catch limits around a shared lake. Leaving enough fish allows recovery; taking too many depletes the stock." />
+<figure className="paper-figure">
+  <a className="paper-figure-image" href={figureOne} target="_blank" rel="noreferrer" aria-label="Open Figure 1 at full size">
+    <img src={figureOne} width="1500" height="438" alt="Figure 1: a community of AI agents shares resources in pasture, fishery, and pollution scenarios, leading to cooperation or resource collapse." />
+  </a>
+  <figcaption><strong>Figure 1.</strong> GovSim’s three resource-sharing scenarios. From <a href="https://arxiv.org/html/2404.16698v4">Piatti et al. (2024)</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. <a href={figureOne} target="_blank" rel="noreferrer">Open full-size figure</a>.</figcaption>
+</figure>
 
 Based on [Cooperate or Collapse](https://arxiv.org/abs/2404.16698)
 (Piatti et al., NeurIPS 2024). [Original code](https://github.com/giorgiopiatti/GovSim).
@@ -17,13 +23,51 @@ Based on [Cooperate or Collapse](https://arxiv.org/abs/2404.16698)
 
 Each round represents a month: agents harvest, observe each other’s actions,
 discuss limits, and reflect. The resource can recover between rounds if enough
-remains. Scenarios cover **fishing**, **sheep grazing**, and **river pollution**
-from production.
+remains. Memories of earlier actions and conversations inform later decisions.
 
-- **Baseline:** agents act and communicate freely.
-- **Universalization:** agents consider what happens if everyone acts as they do.
-- **No discussion:** agents cannot communicate.
-- **Outsider:** a selfish newcomer tests the group’s cooperation.
+<figure className="paper-figure">
+  <a className="paper-figure-image" href={figureTwo} target="_blank" rel="noreferrer" aria-label="Open Figure 2 at full size">
+    <img src={figureTwo} width="1499" height="777" loading="lazy" alt="Figure 2: the fishing agent’s monthly cycle of harvesting, discussion, and reflection. Example prompts combine simulation rules and memories to choose a catch, speak in a group, and record insights for future decisions." />
+  </a>
+  <figcaption><strong>Figure 2.</strong> The baseline fishing agent’s cycle and example prompts. From <a href="https://arxiv.org/html/2404.16698v4">Piatti et al. (2024)</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. <a href={figureTwo} target="_blank" rel="noreferrer">Open full-size figure</a>.</figcaption>
+</figure>
+
+## Scenarios and conditions
+
+The **scenario** changes the agents’ roles, decisions, and shared resource:
+
+<div className="outcome-guide condition-guide" role="region" aria-label="How the scenarios differ" tabIndex={0}>
+
+| Scenario | What each agent decides each month | Shared resource |
+| --- | --- | --- |
+| Fishing (fishery) | A fisher chooses how many tons of fish to catch. | A lake holding up to 100 tons of fish; each ton caught removes one ton. |
+| Sheep herding (pasture) | A shepherd chooses how many sheep to graze. | Up to 100 hectares of grass; each sheep consumes one hectare. |
+| Pollution | A factory owner chooses how many pallets of widgets to produce. | A river with up to 100% clean water; each pallet pollutes one percentage point. |
+
+</div>
+
+All three use the **same resource dynamics**: after each month, the remaining
+fish, grass, or clean water doubles, up to its starting capacity. At full capacity,
+the group can use 50 units per month without reducing next month’s supply—10 each
+for five agents. The scenarios test whether the same cooperation problem elicits
+different behavior when framed as extraction, grazing, or pollution
+([paper, §§2.2–2.3](https://arxiv.org/html/2404.16698v4#S2.SS2)).
+
+The **treatment** changes the agents’ instructions, information, or group membership:
+
+<div className="outcome-guide condition-guide" role="region" aria-label="How the treatments differ" tabIndex={0}>
+
+| Treatment | What changes from baseline | What it tests |
+| --- | --- | --- |
+| Baseline | Five agents choose their own harvests, see others’ harvests, and discuss limits. | Can cooperation emerge? |
+| Universalization | Adds a reminder that the resource shrinks if everyone exceeds the sustainable share. | Does guidance about collective consequences improve cooperation? |
+| No discussion | Removes group conversation and observations of others’ harvests. | Can cooperation persist with less social information? |
+| Outsider | Starts with four community-minded agents; a selfish newcomer joins after three months. | Can the group withstand a newcomer who disregards its norms? |
+
+</div>
+
+Each **recorded condition** also fixes the model and run settings. Repeated runs
+of that condition provide the observations shown in the charts.
 
 <details>
 <summary>Additional variants in the upstream code</summary>

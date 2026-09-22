@@ -233,3 +233,10 @@
 .outcome-guide th:first-child, .outcome-guide td:first-child { width: 30%; min-width: 150px; border-right: 1px solid var(--color-border); }
 .outcome-guide tbody td { border-top: 1px solid var(--color-border); }
 .outcome-guide tbody td:first-child { font-weight: 500; }
+.paper-figure { margin: 1.5rem 0; }
+.paper-figure-image { display: block; padding: .75rem; background: #fff; border: 1px solid var(--color-border); border-radius: .5rem; }
+.experiment-readme .md .paper-figure img { width: 100%; height: auto; margin: 0; }
+.paper-figure figcaption { margin-top: .6rem; font-size: .8rem; line-height: 1.5; color: var(--color-muted-foreground); }
+.condition-guide table { min-width: 640px; }
+.condition-guide th:first-child, .condition-guide td:first-child { width: 18%; }
+.condition-guide th:nth-child(2), .condition-guide td:nth-child(2) { width: 50%; border-right: 1px solid var(--color-border); }
