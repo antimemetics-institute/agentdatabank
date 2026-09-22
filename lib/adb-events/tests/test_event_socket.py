@@ -4,15 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import socket
-import subprocess
-import sys
 import threading
 
 import pytest
 
 from adb_events import CustomEvent, EventTransportError, Result, emit
 from adb_events.transport import send_event
-from adb_runner.event_socket import event_socket
+from adb_events.event_socket import event_socket
 
 
 def submit(path, data):
@@ -96,56 +94,10 @@ def test_storage_failure_is_not_acknowledged_as_success(monkeypatch):
             emit(Result(name="n", value=1))
 
 
-def test_cli_and_python_use_socket_without_stdout(monkeypatch, capsys):
-    records = []
-    with event_socket(records.append) as path:
-        monkeypatch.setenv("ADB_EVENT_SOCKET", path)
-        emit(Result(name="python", value=1))
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "adb_runner.emit",
-                "result",
-                "--name",
-                "cli",
-                "--value",
-                "2",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert completed.returncode == 0, completed.stderr
-        assert completed.stdout == ""
-    assert [e.name for e in records] == ["python", "cli"]
-    assert capsys.readouterr().out == ""
-
-
-def test_missing_socket_is_loud(monkeypatch):
-    monkeypatch.delenv("ADB_EVENT_SOCKET", raising=False)
-    with pytest.raises(EventTransportError, match="unset"):
-        emit(Result(name="n", value=1))
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "adb_runner.emit",
-            "result",
-            "--name",
-            "n",
-            "--value",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert completed.returncode == 2
-    assert completed.stdout == ""
-    assert "ADB_EVENT_SOCKET" in completed.stderr
 
 
 def test_incomplete_client_times_out_and_socket_cleans_up(monkeypatch):
-    import adb_runner.event_socket as module
+    import adb_events.event_socket as module
 
     monkeypatch.setattr(module, "TIMEOUT_S", 0.1)
     with event_socket(lambda event: None) as path:

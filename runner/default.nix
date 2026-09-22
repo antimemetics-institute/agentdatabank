@@ -1,4 +1,4 @@
-# boto3 and zstandard are runtime dependencies resolved through pyproject.toml and uv.lock.
+# The shipped CLI includes publishing; fixture consumers can use the base library.
 # adb-runner, packaged from its own uv.lock with the shared locked Python toolchain.
 # The interpreter is selected here, per project.
 { pkgs, pyproject-nix, uv2nix, pyproject-build-systems }:
@@ -25,5 +25,5 @@ in
 # mainProgram: the venv carries several bins (adb-runner, adb-emit, python…) —
 # name the canonical one so lib.getExe (and anything mainProgram-aware) resolves
 # to adb-runner instead of guessing from the derivation name
-(pythonSet.mkVirtualEnv "adb-runner-env" { adb-runner = [ ]; }).overrideAttrs
+(pythonSet.mkVirtualEnv "adb-runner-env" { adb-runner = [ "publish" ]; }).overrideAttrs
   (old: { meta = (old.meta or { }) // { mainProgram = "adb-runner"; }; })

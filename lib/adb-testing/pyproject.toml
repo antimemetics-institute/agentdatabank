@@ -3,14 +3,13 @@ name = "adb-testing"
 version = "0.1.0"
 description = "Shared pytest fixtures for ADB experiment authors"
 requires-python = ">=3.13"
-dependencies = ["pytest>=8", "adb-events", "adb-runner"]
+dependencies = ["pytest>=8", "adb-events"]
 
 [project.entry-points.pytest11]
 adb_testing = "adb_testing.plugin"
 
 [tool.uv.sources]
 adb-events = { path = "../adb-events", editable = true }
-adb-runner = { path = "../../runner", editable = true }
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { file = "adb_testing/**/*.py" }, { file = "adb_testing/py.typed" }]

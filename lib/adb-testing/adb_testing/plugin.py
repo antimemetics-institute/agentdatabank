@@ -1,4 +1,4 @@
-"""Explicit socket capture fixture using the production runner receiver."""
+"""Explicit socket capture fixture using the producer contract's reference receiver."""
 
 from collections.abc import Generator
 import threading
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from adb_events import ProducerPayload
-from adb_runner.event_socket import event_socket
+from adb_events.event_socket import event_socket
 
 
 class EventCapture:

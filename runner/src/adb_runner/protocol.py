@@ -38,7 +38,7 @@ from adb_events import (
 )
 from .schema import Manifest, Params
 from adb_providers import PROVIDERS
-from .event_socket import event_socket
+from adb_events.event_socket import event_socket
 from .store import RunStore
 from .card import CardProjection
 

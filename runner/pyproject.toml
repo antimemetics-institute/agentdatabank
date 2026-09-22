@@ -11,6 +11,12 @@ dependencies = [
     # the canonical provider registry (names + credential templates); the runner
     # uses it for the credential store's prompt templates and the missing-set gate
     "adb-providers",
+]
+
+# Publishing stays optional for integrations that use the runner locally.
+# The shipped runner and its own tests always install this extra; keep its floors.
+[project.optional-dependencies]
+publish = [
     "boto3>=1.43.97",
     "zstandard>=0.25.0",
 ]
@@ -27,6 +33,7 @@ adb-emit = "adb_runner.emit:main"
 
 [dependency-groups]
 dev = [
+    "adb-runner[publish]",
     "pytest>=8",
     "adb-testing",
     "moto[s3]>=5.2.3",

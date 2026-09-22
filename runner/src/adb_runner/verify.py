@@ -19,7 +19,7 @@ from adb_providers import PROVIDERS, served_model_matches
 from . import credentials
 from .card import derive_card
 from .schema import Manifest, load_manifest
-from .secrets import assert_run_has_no_secrets
+from adb_events.secrets import assert_run_has_no_secrets
 from .store import find_run, resolve_data_dir
 
 

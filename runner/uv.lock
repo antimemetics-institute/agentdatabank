@@ -32,13 +32,18 @@ source = { editable = "." }
 dependencies = [
     { name = "adb-events" },
     { name = "adb-providers" },
-    { name = "boto3" },
     { name = "rfc8785" },
+]
+
+[package.optional-dependencies]
+publish = [
+    { name = "boto3" },
     { name = "zstandard" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "adb-runner", extra = ["publish"] },
     { name = "adb-testing" },
     { name = "boto3-stubs-lite" },
     { name = "moto", extra = ["s3"] },
@@ -50,13 +55,15 @@ dev = [
 requires-dist = [
     { name = "adb-events", editable = "../lib/adb-events" },
     { name = "adb-providers", directory = "../lib/adb-providers" },
-    { name = "boto3", specifier = ">=1.43.97" },
+    { name = "boto3", marker = "extra == 'publish'", specifier = ">=1.43.97" },
     { name = "rfc8785", specifier = ">=0.1.4" },
-    { name = "zstandard", specifier = ">=0.25.0" },
+    { name = "zstandard", marker = "extra == 'publish'", specifier = ">=0.25.0" },
 ]
+provides-extras = ["publish"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "adb-runner", extras = ["publish"] },
     { name = "adb-testing", editable = "../lib/adb-testing" },
     { name = "boto3-stubs-lite", specifier = ">=1.43.97" },
     { name = "moto", extras = ["s3"], specifier = ">=5.2.3" },
@@ -70,14 +77,12 @@ version = "0.1.0"
 source = { editable = "../lib/adb-testing" }
 dependencies = [
     { name = "adb-events" },
-    { name = "adb-runner" },
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "adb-events", editable = "../lib/adb-events" },
-    { name = "adb-runner", editable = "." },
     { name = "pytest", specifier = ">=8" },
 ]
 

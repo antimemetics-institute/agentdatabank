@@ -109,42 +109,17 @@ version = "0.1.0"
 source = { directory = "../../lib/adb-providers" }
 
 [[package]]
-name = "adb-runner"
-version = "0.1.0"
-source = { editable = "../../runner" }
-dependencies = [
-    { name = "adb-events" },
-    { name = "adb-providers" },
-    { name = "rfc8785" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "adb-events", editable = "../../lib/adb-events" },
-    { name = "adb-providers", directory = "../../lib/adb-providers" },
-    { name = "rfc8785", specifier = ">=0.1.4" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "adb-testing", editable = "../../lib/adb-testing" },
-    { name = "pytest", specifier = ">=8" },
-]
-
-[[package]]
 name = "adb-testing"
 version = "0.1.0"
 source = { editable = "../../lib/adb-testing" }
 dependencies = [
     { name = "adb-events" },
-    { name = "adb-runner" },
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "adb-events", editable = "../../lib/adb-events" },
-    { name = "adb-runner", editable = "../../runner" },
     { name = "pytest", specifier = ">=8" },
 ]
 
@@ -1042,15 +1017,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d0/aa/f7605d38763770443bdc3d13f686765bf36169084be60951514fdfd193f5/reactivex-5.0.0.tar.gz", hash = "sha256:3b027c16e0476a2d3a81e8ee5780389cb16164b9e6eaae6a1df6ad796aa03a22", size = 136597, upload-time = "2026-07-20T20:04:03.713Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/97/45/fedda406c56dca118e29b907409570cc3e456555374989301cb4b6950cd1/reactivex-5.0.0-py3-none-any.whl", hash = "sha256:85f1c8e02b1fed9d8d4de2e42210beb3a8b4a0d7fe4ee4c1e1b236607363d26d", size = 256668, upload-time = "2026-07-20T20:04:02.475Z" },
-]
-
-[[package]]
-name = "rfc8785"
-version = "0.1.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ef/2f/fa1d2e740c490191b572d33dbca5daa180cb423c24396b856f5886371d8b/rfc8785-0.1.4.tar.gz", hash = "sha256:e545841329fe0eee4f6a3b44e7034343100c12b4ec566dc06ca9735681deb4da", size = 14321, upload-time = "2024-09-27T16:33:31.206Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/78/119878110660b2ad709888c8a1614fce7e2fab39080ab960656dc8605bf6/rfc8785-0.1.4-py3-none-any.whl", hash = "sha256:520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48", size = 9240, upload-time = "2024-09-27T16:33:29.683Z" },
 ]
 
 [[package]]
