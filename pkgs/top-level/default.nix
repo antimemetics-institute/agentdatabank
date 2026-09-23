@@ -200,7 +200,7 @@ in
 {
   experiments = registry;
   manifests = catalog;
-  inherit (scope) adb-runner;
+  inherit (scope) adb adb-runner;
 }
 // lib.optionalAttrs (builtins.pathExists ../../web) {
   inherit (scope) adb-web adb-web-dist adb-local;

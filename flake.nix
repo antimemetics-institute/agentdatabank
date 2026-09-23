@@ -85,7 +85,12 @@
             (nixpkgs.lib.filterAttrs (_: experiment: (experiment.passthru.tests or { }) != { })
               adbPkgs.experiments);
         in
-        { inherit (adbPkgs) manifests adb-runner; } // experimentChecks);
+        {
+          inherit (adbPkgs) manifests adb-runner;
+          identity-lock = pkgs.runCommand "identity-lock" { } ''
+            echo ${nixpkgs.lib.escapeShellArg (builtins.toJSON adbPkgs.adb.tests.identity-lock)} > $out
+          '';
+        } // experimentChecks);
 
       devShells = forAllSystems (pkgs: {
         default = import ./shell.nix { inherit pkgs; };

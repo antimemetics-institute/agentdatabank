@@ -1,0 +1,10 @@
+[[package]]
+name = "nested"
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "retained" }]

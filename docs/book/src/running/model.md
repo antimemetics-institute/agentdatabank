@@ -168,5 +168,8 @@ their surrounding tests, READMEs and project tooling are outside the source list
 Changes to shared execution code therefore change every dependent experiment's
 source hash. A GovSim adapter edit changes GovSim's hash without changing
 Concordia's. The runner, web application and documentation remain outside this hash.
+The lock is hashed without `[package.metadata.requires-dev]` tables, excluding
+repeated path-dependency test metadata while retaining runtime requirements.
+The filter is covered by `scripts/check-experiment-identity.py` and the synthetic-lock tests run by `nix flake check` (`checks.<system>.identity-lock`).
 
 When comparing outcomes, inspect the declared parameters, source reference, instance completion counts, errors and available environment and model metadata. Decide whether those differences matter for your question.

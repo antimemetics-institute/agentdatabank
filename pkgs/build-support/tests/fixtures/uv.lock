@@ -1,0 +1,5 @@
+[[package]]
+name = "root"
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]

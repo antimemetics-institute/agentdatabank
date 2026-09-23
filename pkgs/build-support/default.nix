@@ -66,6 +66,41 @@ let
     inherit name path;
     filter = p: _type: !isDevArtifact (baseNameOf p);
   };
+  # uv repeats path dependencies' test requirements in the lock. Exclude only
+  # these tables from identity, preserving every other byte and the build input.
+  identityLock = name: path:
+    let
+      filtered = lib.foldl' (state: line:
+        let
+          table = lib.hasPrefix "[" line;
+          skip = if table then line == "[package.metadata.requires-dev]" else state.skip;
+        in { inherit skip; lines = if skip then state.lines else [ line ] ++ state.lines; })
+        { skip = false; lines = [ ]; } (lib.splitString "\n" (builtins.readFile path));
+    in builtins.toFile name (lib.concatStringsSep "\n" (lib.reverseList filtered.lines));
+  # Directory declarations hash the unchanged tree separately from normalized
+  # locks, retaining each lock's relative path. No build or on-disk rewrite is
+  # needed to compute identity; the venv still consumes the original lock.
+  identityImport = name: path:
+    let
+      locksIn = directory: prefix: lib.concatMap (entry:
+        let relative = prefix + entry; child = directory + "/${entry}";
+        in if isDevArtifact entry then [ ]
+           else if (builtins.readDir directory).${entry} == "directory"
+           then locksIn child (relative + "/")
+           else lib.optional (entry == "uv.lock") relative)
+        (builtins.attrNames (builtins.readDir directory));
+      isDirectory = builtins.readFileType path == "directory";
+      locks = if isDirectory then locksIn path "" else [ ];
+    in if !isDirectory && baseNameOf path == "uv.lock" then identityLock name path
+       else if locks == [ ] then cleanImport name path
+       else builtins.toJSON {
+         tree = builtins.path {
+           inherit name path;
+           filter = p: type: !isDevArtifact (baseNameOf p)
+             && !(type != "directory" && baseNameOf p == "uv.lock");
+         };
+         locks = lib.genAttrs locks (relative: identityLock "uv.lock" (path + "/${relative}"));
+       };
   defaultSharedSrcs = [
     ../../lib/adb-events/adb_events
     ../../lib/adb-experiment/adb_experiment
@@ -75,6 +110,8 @@ in
   # exported for the other source-import sites (web dist, the runner workspace) —
   # every path that enters the store goes through the same dev-artifact filter
   inherit cleanImport;
+  # Pure evaluation checks exercise these private identity functions directly.
+  tests.identity-lock = import ./tests/identity-lock.nix { inherit identityLock identityImport; };
   inherit defaultSharedSrcs;
   inspectSharedSrcs = defaultSharedSrcs ++ [ ../../lib/adb-inspect/adb_inspect ];
 
@@ -231,14 +268,15 @@ in
       # each re-imported via builtins.path
       # so its hash depends ONLY on that subtree's content, never on the whole-repo
       # rev. So editing one experiment's directory cannot change another's condition_id.
-      # The runner, web, docs, interpreter and platform are NOT in identity.
+      # Interpreter declarations are source; platform and runner closures,
+      # web, docs and repeated lock dev metadata are outside identity.
       # The fetchable rev (`fetchRef`) is recorded
       # separately for reproducibility — also not identity.
       srcs = (if builtins.isList src then src else [ src ]) ++ sharedSrcs;
       # dev-loop artifacts are NOT identity (isDevArtifact above): a `uv run`
       # dropping a .venv into the subtree must not mint new conditions
       source = "content:sha256:" + builtins.hashString "sha256" (lib.concatStringsSep "\n"
-        (lib.imap0 (i: p: "${cleanImport "adb-src-${name}-${toString i}" p}") srcs));
+        (lib.imap0 (i: p: "${identityImport "adb-src-${name}-${toString i}" p}") srcs));
 
       # `origin` identifies the packaging repository in catalog metadata; it is
       # not part of `src` and is distinct from the pinned fetchRef

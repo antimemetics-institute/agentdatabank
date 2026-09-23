@@ -1,0 +1,1 @@
+Non-lock content stays in the tree.

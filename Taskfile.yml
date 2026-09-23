@@ -144,7 +144,7 @@ tasks:
     desc: verify every uv.lock is current with its pyproject (catches an edited dependency list shipped without a relock — nix builds strictly from the lock, so drift only surfaces at runtime)
     cmds:
       - |
-        for dir in $(git ls-files '*uv.lock' | xargs -n1 dirname); do
+        for dir in $(git ls-files '*uv.lock' ':!:pkgs/build-support/tests/fixtures/**' | xargs -n1 dirname); do
           echo "uv lock --check: $dir"
           (cd "$dir" && uv lock --check) || exit 1
         done
@@ -153,7 +153,7 @@ tasks:
     desc: relock every uv project — run after any pyproject edit; a lib change cascades (consumer locks embed path-dep metadata, e.g. adb-inspect deps → the inspect experiments' locks)
     cmds:
       - |
-        for dir in $(git ls-files '*uv.lock' | xargs -n1 dirname); do
+        for dir in $(git ls-files '*uv.lock' ':!:pkgs/build-support/tests/fixtures/**' | xargs -n1 dirname); do
           echo "uv lock: $dir"
           (cd "$dir" && uv lock) || exit 1
         done
