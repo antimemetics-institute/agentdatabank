@@ -26,7 +26,7 @@ A local run contains `run.json`, one `events.jsonl` stream file, and `workspace/
 
 ## 4. Directory names
 
-The final layout for local and published stores is `runs/<condition>-<experiment>/<run>/`, containing the card and stream (plus a local-only `workspace/`). There is no separate condition resource. The condition is the first 40 hexadecimal characters of SHA-256 over canonical JSON, as defined in RFC 0002; the suffix is informational and readers construct it from recorded fields, never parse it. Run IDs use the readable UTC form `yyyymmddthhmmssz-<12 lowercase hex random>` from the launching machine's clock. The whole string is the ID, and its date is a launch-time label, not evidence.
+The final layout for local and published stores is `runs/<condition>-<experiment>/<run>/`, containing the card and stream (plus a local-only `workspace/`). There is no separate condition resource. The condition is the first 40 hexadecimal characters of SHA-256 over canonical JSON, as defined in [RFC 0004 §4](0004-identity-provenance-and-pooling.md#4-condition-as-pooling-key); the suffix is informational and readers construct it from recorded fields, never parse it. Run IDs use the readable UTC form `yyyymmddthhmmssz-<12 lowercase hex random>` from the launching machine's clock. The whole string is the ID, and its date is a launch-time label, not evidence.
 
 ## 5. Published layout
 
@@ -47,28 +47,18 @@ Each `events.jsonl.zst` is one level-19 zstd frame, preserving the original JSON
 bytes when decompressed, with `Content-Type: application/zstd`. `run.json` is the
 full local card, copied byte-for-byte with `Content-Type: application/json`.
 Workspaces are never published. Indexes are derived, live outside experiment
-buckets, and are specified separately.
+buckets, and follow [§7](#7-indexes).
 
-The gate requires a terminal state and a passing `verify` audit, including model
-identity checks. Verification resolves the manifest in the same way as
-`adb-runner verify`. Failures are reported per run without aborting the batch.
-A run is refused if either destination run key exists, checked with HEAD on both
-keys. The stream is uploaded first, then the card. Partial uploads are not
-overwritten. The publisher uses only HeadObject and PutObject.
+Publication requires a terminal state, a pinned clean `fetch_ref`, and a passing
+`verify` audit, including model identity checks. Failures are reported per run
+without aborting other publications. An upload is refused if either destination
+run key exists. The stream is uploaded first, then the card; partial uploads are
+never overwritten. Publication errors do not change run state or exit code.
 
-`adb-runner publish --to s3://<bucket>/<prefix> [STEM ...]` selects all local runs
-unless stems or `--experiment` narrow the selection. Stems are
-`<condition>-<experiment>` or `<condition>-<experiment>/<run>`. `--data-dir` follows
-the shared flag, environment, XDG resolution. `--dry-run` verifies and
-prints keys and sizes without writing. `--profile NAME` selects a boto3 profile;
-without it, boto3 resolves configuration normally. No endpoint, region or client
-configuration overrides, host presets, remote registry, or target environment
-variable belong in ADB.
-
-`nix run .#<experiment> -- … --publish s3://<bucket>/<prefix>` uses the same gate and
-upload path after execution. Publication errors are logged without changing run
-state or exit code. Ambient AWS variables do not enter the experiment environment;
-explicitly supplied experiment credential sets are preserved.
+Storage uses the caller's boto3 configuration: no endpoint, region or client
+configuration overrides, host presets, remote registry or target environment
+variable belong in ADB. Ambient AWS variables do not enter the experiment
+environment; explicitly supplied experiment credential sets are preserved.
 
 ## 6. Deferred
 
@@ -76,36 +66,18 @@ Chunked objects for live runs are deferred because record identity is independen
 
 ## 7. Indexes
 
-Indexes are derived from the JSON objects under `runs/`. They live outside
-experiment buckets, are rebuilt in full on each invocation, and are never
-authoritative. The index command writes a directory that the site deploys.
-The original card and stream in each experiment bucket retain their bytes.
-
-A user-written store list selects sources; ADB never maps S3 addresses to public
-URLs. Its version is `0` and `stores` contains one entry per experiment bucket:
+Indexes are derived from complete card/stream pairs, rebuilt in full, never
+authoritative, and live outside experiment buckets. Original objects retain their bytes.
+A user-written store list selects sources; ADB never infers public URLs from S3:
 
 ```json
-{"v":0,"stores":[{"s3":"s3://bucket/adb-v1","profile":"hf","url":"https://data.example.org/resolve/adb-v1","experiments":["govsim"],"conditions":["condition-id"],"runs":["run-id"]}]}
+{"v":0,"stores":[{"s3":"s3://bucket/prefix","profile":"research","url":"https://data.example.org/prefix","experiments":["govsim"],"conditions":["condition-id"],"runs":["run-id"]}]}
 ```
 
-`data.example.org` is an example hostname. `s3` and `profile` select boto3 access;
-`url` is the public HTTPS base for the same prefix. Each filter is an optional
-list of exact recorded IDs or experiment names. Omission selects everything;
-an empty list selects nothing. Present filters intersect. An omitted profile
-uses boto3's normal resolution.
-
-`adb-runner index --stores FILE --catalog DIR --to DIR [--dry-run]` lists each store's
-`<prefix>/runs/`, retaining each `run.json` only when its sibling
-`events.jsonl.zst` exists, then reads and filters the cards.
-Source profiles belong to the store list. Sessions and S3 clients have no
-configuration overrides; the command opens only source clients and uses only
-ListObjectsV2 and GetObject. Dry-run prints each store's filtered run count and
-every output file and byte size, creating or deleting nothing.
-Unreadable, malformed or disappeared cards are skipped with an object-specific
-warning; healthy cards from that store and other stores remain in the rebuilt index.
-A failure to list a store aborts before replacing the destination.
-
-The destination contains the run index and its experiment catalog:
+`s3` and optional `profile` select access; `url` is the public HTTPS base for the
+same prefix. Optional filters match exact recorded values and intersect;
+omission includes everything, an empty list nothing. An omitted profile uses
+boto3's normal resolution. The destination contains:
 
 ```text
 index.json
@@ -114,50 +86,13 @@ catalog.json
 catalog/assets/<experiment>/
 ```
 
-`index.json` is `{"v":0,"experiments":[{"name":"govsim","runs":1}],"runs":1,
-"built_at":"2026-09-18T12:00:00.000000Z"}`. The total and per-experiment counts
-count rows. `built_at` uses the event stream's UTC formatter, with six fractional
-digits and `Z`. Each experiment shard has one compact JSON row per card:
+`index.json` has shape `{"v":0,"experiments":[{"name":"govsim","runs":1}],"runs":1,"built_at":"<UTC timestamp>"}`.
+Counts count rows; `built_at` uses the stream's six-fractional-digit UTC format.
+Each shard row has shape `{"store":"<public HTTPS base>","card":<run.json as a JSON value>}`.
+The index adds no fields to the card; its re-serialized value never substitutes
+for the original card bytes in raw display. Only indexed experiments contribute
+manifests, shared and versioned hints, and README assets. Missing manifests warn
+and leave run-only experiments visible. An experiment without indexed runs is absent.
 
-```text
-{"store":"<public HTTPS base>","card":<run.json as a JSON value>}
-```
-
-The card is represented as a JSON value, re-serialized compactly with
-`ensure_ascii=False` and key order preserved. The index adds no fields to the
-card. A rebuild deletes `DIR` and rewrites it in full, with `index.json` written
-last. Files for experiments no longer present are removed.
-
-The required `--catalog` points to the built manifest directory. Only experiments
-with indexed runs contribute manifests, shared and versioned render hints, and
-README assets (copied with symlinks dereferenced). Missing manifests warn and leave
-run-only experiments visible. The web build has no experiment catalog; an experiment
-without indexed runs never appears on the published site.
-
-The site repository contains `stores.json` and `site.json`. The complete
-`site.json` is `{"v":0}`; unknown keys are rejected. CI builds `adb-web-dist`, copies it into
-`site/`, copies `site.json` beside `site/index.html`, runs
-`adb-runner index --stores stores.json --catalog DIR --to site/index`, and deploys `site/`.
-The browser reads `index/index.json` and
-`index/experiments/<experiment>/index.jsonl` relative to the app's own directory,
-including when the app is served under a path prefix. Without `site.json` the
-application uses the local server. Published mode projects cards into run-list
-entries and resolves `(condition, run)` to the row's store. Opening a run fetches that store's
-`runs/<condition>-<experiment>/<run>/run.json` and `events.jsonl.zst`. A pure-JS
-zstd decoder preserves the decompressed lines for raw display. Raw card display
-uses the fetched `run.json`, never the re-serialized index value. Large params
-are thinned in the browser and expand from the original card.
-
-Objects under `runs/` are immutable session caches. The index is revalidated
-once a minute. Damaged rows, missing shards, unreadable objects and
-identity mismatches become diagnostic run entries with reasons; healthy
-neighbors remain visible. Manifests and render hints come from `index/catalog.json`,
-keyed by experiment and schema version; unmatched versions use shared
-hints. Execution surfaces, publication controls and jobs are hidden. Fetches
-omit credentials on every hop and follow redirects, including to signed CDN URLs
-on other hosts. The local Node server has no role in this flow and never
-reads a bucket.
-
-The client holds the whole list today, so JSONL shards are the initial transport.
-If querying is needed, it is a browser-side question; `index.sqlite` from the
-same command is the candidate. Analysis tables in Parquet remain the §6 deferral.
+The [publishing guide](../book/src/running/publishing.md) covers commands,
+deployment and browser behavior.

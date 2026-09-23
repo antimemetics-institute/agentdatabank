@@ -40,7 +40,10 @@ The run's data directory still follows `--data-dir`, `ADB_DATA_DIR`, then the
 `--profile NAME` selects the AWS profile for publication. Model credentials
 use `--credential SET=NAME`; both flags can appear in the same command.
 
-Publication requires a terminal state and a passing [verify audit](model.md#how-do-i-audit-the-first-real-run).
+Publication requires a terminal state, a pinned clean `provenance.fetch_ref`, and
+a passing [verify audit](model.md#how-do-i-audit-the-first-real-run).
+An unpinned run is refused, including with `--dry-run`; a later release label
+cannot supply its missing revision.
 Failed and interrupted runs can publish when their evidence passes that audit.
 A publishing error is logged without changing the run state or exit code.
 
@@ -68,6 +71,8 @@ built from the current checkout.
 Publication checks both destination run keys with HEAD. If either already exists,
 it refuses to overwrite that run, including a partial upload. Other runs continue.
 Choose a new prefix when you need different immutable objects.
+The publisher uses only `HeadObject` and `PutObject`: it uploads the stream
+first and the card last.
 
 Each run uploads exactly these two objects:
 
@@ -107,6 +112,8 @@ from an S3 address. `data.example.org` below is an example store hostname.
 Leave a filter out to include everything; an empty list includes nothing.
 Store profiles select source credentials. The index command writes to a local
 directory that the site deploys.
+The index reads only `ListObjectsV2` and `GetObject`, using each store's profile
+without endpoint, region or client-configuration overrides.
 
 The complete `site.json` is:
 
@@ -169,3 +176,8 @@ objects for the session. Run objects are fetched from each row's `store`,
 following redirects, including signed CDN URLs, with credentials omitted on
 every hop. Damaged rows and missing shards appear as diagnostic entries without
 hiding healthy runs.
+Unreadable run objects and identity mismatches also become diagnostic entries
+with reasons. A pure-JavaScript zstd decoder preserves the stream's decompressed
+lines for raw display. Large params are thinned for listings and expand from the
+original card; the index's re-serialized card never supplies raw card bytes.
+The local Node server does not read buckets in published mode.

@@ -6,8 +6,9 @@ Use the next available RFC number; `9999` is reserved for the template.
 Current documents:
 
 - [RFC 0001: Event basics and model API instrumentation](0001-event-basics.md) — draft.
-- [RFC 0002: Schema versioning, identity, and releases](0002-schema-versioning-identity-and-releases.md) — draft.
+- [RFC 0002: Schema versioning](0002-schema-versioning.md) — draft.
 - [RFC 0003: Run directory and published layout](0003-run-directory-and-published-layout.md) — draft.
+- [RFC 0004: Identity, provenance and pooling](0004-identity-provenance-and-pooling.md) — draft.
 
 Keep tabled or exploratory proposals in `drafts/` without an RFC number. They
 retain `title` and `status: draft` frontmatter and state that they are tabled in

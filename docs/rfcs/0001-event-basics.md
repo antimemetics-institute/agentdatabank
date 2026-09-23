@@ -12,7 +12,7 @@ vocabulary. Analysis requires Pydantic, with no Inspect or OpenTelemetry runtime
 
 ## 0. Shared v0 vocabulary
 
-The shared wire tags are exactly these nine:
+The shared wire tags are exactly these ten:
 
 | Tag | Meaning |
 | --- | --- |
@@ -25,6 +25,7 @@ The shared wire tags are exactly these nine:
 | `log` | A deliberate diagnostic with `debug`, `info`, `warn` or `error` severity. |
 | `stdout` | A captured stdout line, including text that happens to be JSON. |
 | `stderr` | A captured stderr line; stderr alone does not establish failure. |
+| `producer.python` | The producer's own toolchain, once, first: implementation, version, executable, platform, libc, locale, hash seed, flags. Per-language tags `producer.<language>` are owned by that language's events library. |
 
 Only the runner emits lifecycle records. Producers submit validated payloads
 through `adb_events.emit` or `adb-emit`. A valid partial transcript may lack
@@ -37,59 +38,37 @@ readers use to locate and pool runs; it is not precedent for other derived value
 
 ## 1. Model calls
 
-`LLMCall` keeps Inspect AI 0.3.263's boundary data fields: `model`, `input`,
-`tools`, `tool_choice`, `output`, `call`, `error`,
-`completed`, `working_time`, and `metadata`. Chat, content, citation, tool,
-output and usage models are vendored in
-[inspect_chat.py](../../lib/adb-events/adb_events/inspect_chat.py), with the
-source version, archive hash, local changes and MIT license in its header.
+`LLMCall` carries `model`, `input`, `tools`, `tool_choice`, `output`, `call`,
+`error`, `completed`, `working_time`, `metadata`, and ADB's `agent` attribution.
+Chat, content, citation, tool, output and usage models come from Inspect AI
+0.3.263, vendored in [inspect_chat.py](../../lib/adb-events/adb_events/inspect_chat.py).
 
 **Boundary rule.** `llm.call` holds what crossed the model API, plus ADB timing
-and agent attribution. Facts only a harness runtime knows, including roles,
-retries, local caches, sandbox error classes and viewer hints, are harness data
-recorded raw by that harness's adapter. Inspect is one such harness: its data
-models are vendored for the boundary, not its runtime. The worked example is
-removing `role`, `retries` and `cache` from `LLMCall`, `ChatMessageBase.source`,
-and `ToolCall.view` with its `ToolCallContent` viewer model. `ToolCall.parse_error`
-remains boundary parsing evidence; `ToolCallError.type` is an open string set
-from API evidence (Anthropic's error flag becomes `"error"`) or a harness's own
-error type. `instance_id` and `repeat` were also removed as deferred ADB
-attribution, expected to return with instance work; they are not harness data.
+and agent attribution. Harness-only facts are recorded raw by that harness's
+adapter. Fields earn a place as normalized projections (`tools`, `tool_choice`)
+or facts not derivable from raw payloads (`agent`). Read generation settings
+from `call.request`. Messages and calls are expanded.
 
-Generation settings are not projected: read them from `call.request`.
-`params` and the `temperature` / `max_tokens` convenience properties are removed.
-A normalized projection can be added as a field if a cross-experiment query
-needs one. Fields earn a place when they are normalized projections (`tools`,
-`tool_choice`) or not derivable from raw payloads (`agent`); an unnormalized
-subset of the raw payload does not. Inspect's `GenerateConfig` remains in its
-raw `inspect.event` record, with no copy on `llm.call`.
+`agent` is the backend's supplied attribution; Inspect uses the model role when
+set, otherwise caller attribution, never per-sample scope. Each Inspect event
+is recorded raw, immediately followed by `llm.call` for model events, including
+cached events. `ToolCall.parse_error` preserves parsing evidence;
+`ToolCallError.type` accepts API or harness error types.
 
-`agent` is the only ADB-added data field. The shared client uses the string the
-backend was constructed with; the Inspect adapter uses the model role when set,
-otherwise caller-provided attribution, never a per-sample scope string. Every
-Inspect transcript event is emitted raw, followed immediately by `llm.call` for
-each model event, including cached events. File-pool references, viewer
-tracebacks, streaming state and Inspect's envelope identity remain outside the
-boundary payload. Messages and calls are expanded.
+**Metadata rule.** Notes use producer-prefixed keys. Shared readers depend on no
+key; a key wanted by two producers becomes a field. The viewer does not read metadata.
 
-**Metadata rule.** `metadata` holds producer notes with producer-prefixed keys,
-such as `inspect.cache`, `inspect.sample_id` and `inspect.epoch`. No shared reader
-or web view depends on any metadata key. A key wanted by two producers becomes
-a field. The viewer does not read metadata.
+Capture preserves all available choices, tools, multimodal content, detailed
+usage and provider metadata. `call.request` and `call.response` are serialized
+SDK objects, not HTTP bytes. Tool requests do not establish execution.
+`input_tokens` excludes cached tokens; add cache read/write counts for total
+input usage. Missing usage is unknown.
 
-Capture preserves all available output choices, tool definitions and requests,
-multimodal content, detailed usage and provider metadata. `call.request` and
-`call.response` contain serialized SDK objects, not exact HTTP bytes. A model's
-tool request does not establish that the tool executed. `input_tokens` excludes
-cached tokens under Inspect's semantics since 0.3.184; consumers add cache
-read/write counts when aggregating input usage. Missing usage is unknown.
-
-A failed request retains its attempted input and error when available. Internal
-SDK retries count separately only if individually observed. Completion-time
-emission cannot preserve an operation if its process dies awaiting a response.
-The shared ChatClient captures the original response before returning text with
-think blocks removed; a changed return value sets
-`metadata["adb_experiment.returned_text_stripped"] = true` on that call.
+Failed requests retain available input and error. Internal SDK retries count
+separately only if observed individually. Completion-time capture cannot preserve
+an operation whose process dies awaiting a response. ChatClient records the
+original response before stripping think blocks from returned text; a changed
+return sets `metadata["adb_experiment.returned_text_stripped"] = true`.
 
 ## 2. Results
 
@@ -108,8 +87,9 @@ usage totals.
 
 ## 3. Stream and experiment schemas
 
-The envelope, timestamps, identity, compatibility and frozen-module rules are
-specified in [RFC 0002](0002-schema-versioning-identity-and-releases.md).
+The envelope, timestamps, compatibility and frozen-module rules are specified
+in [RFC 0002](0002-schema-versioning.md); identity is specified in
+[RFC 0004](0004-identity-provenance-and-pooling.md).
 Optional model values are omitted with `exclude_none=True`; explicit nulls in
 open JSON objects retain their meaning. Emission validates the exact serialized
 payload it writes.
@@ -124,9 +104,9 @@ Invalid or truncated records raise an error identifying the file and line.
 
 ## 4. Deferrals
 
-A concept gets a shared event only when its meaning is fixed by a technical
-boundary such as an API call, a process, a file, or a budget, never by an
-experiment's science.
+A tag is shared when the runner or verifier acts on it; promoting a custom kind
+is a read-time projection declared in adb-events, never a rewrite;
+cross-experiment views over raw kinds are projections, not tags.
 
 Deferred names are `instance`, `artifact`, `agent.event`, `tool.call`,
 `span.begin`, `span.end`, `limit`, and raw harness records.
