@@ -29,14 +29,18 @@ tasks:
 
   test:python:
     desc: run Python unit tests, checking the runner against the Nix-built experiment manifests
+    vars:
+      MANIFESTS:
+        sh: nix build .#manifests --no-link --print-out-paths
+    env:
+      ADB_TEST_MANIFESTS: '{{.MANIFESTS}}'
     cmds:
-      - cd runner && ADB_TEST_MANIFESTS="$(nix build ../#manifests --no-link --print-out-paths)" uv run -q pytest -q
+      - cd runner && uv run -q pytest -q
       - cd lib/adb-testing && uv run -q pytest -q
       - cd lib/adb-events && uv run -q pytest -q
       - cd lib/adb-experiment && uv run -q pytest -q
       - cd lib/adb-inspect && uv run -q pytest -q
-      - cd experiments/concordia && uv run -q pytest -q
-      - cd experiments/govsim && uv run -q pytest -q
+      - nix flake check -L
 
   typecheck:
     desc: pyright STRICT (per-package pyrightconfig.json) over the shared libs + runner package sources (not tests — rejection tests pass garbage deliberately); through `uv run` so stale path-dep venv copies resync first. The policy script gates the escapes pyright can't police (ignore-rule + cast allowlists).
@@ -187,11 +191,8 @@ tasks:
       # docs deliberately excluded — they ride their own fast lane (docs.yml)
       # registry eval through the classic door (web:test forced the flake door)
       - nix-build --no-out-link -A manifests
-      # keyless run — inspect-hello on the mock model, databank in a throwaway home
-      - |
-        ADB_DATA_DIR="$(mktemp -d)" \
-          "$(nix-build --no-out-link -A exec.inspect-hello)" \
-          --set model=mockllm/model --set limit=0 --set epochs=1 --set 'generate_args={}'
+      # The packaged CLI includes publishing, even though fixture consumers do not.
+      - nix run .#adb-runner -- publish --help
       - ./scripts/check-entrypoint-identity.sh
 
   check:

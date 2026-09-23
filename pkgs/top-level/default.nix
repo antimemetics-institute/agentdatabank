@@ -153,7 +153,7 @@ let
           # A directory can declare several experiments; they share its README.
           # Markdown ships in manifests; MDX and its imports ship in the web bundle.
           adb = final.adb // {
-            mkExperiment = args: final.adb.mkExperiment (args // {
+            mkExperiment = args: let experiment = final.adb.mkExperiment (args // {
               readme = if hasMarkdown then builtins.readFile markdown else null;
               # Package committed images; illustration tools are never build inputs.
               readmeAssets = if hasMdx then null else lib.cleanSourceWith {
@@ -164,7 +164,14 @@ let
                   && !(builtins.elem (baseNameOf path) [ "node_modules" "__pycache__" ])) ||
                   (type == "regular" && builtins.match ".*\\.(svg|png|jpg|jpeg|gif|webp)" path != null);
               };
-            });
+            }); in experiment // lib.optionalAttrs (builtins.pathExists (directory + "/tests/default.nix")) {
+              # Keep nixpkgs' passthru.tests convention on our experiment attrset.
+              passthru = (experiment.passthru or { }) // {
+                tests = removeAttrs
+                  (final.callPackage (directory + "/tests/default.nix") { inherit experiment; })
+                  [ "override" "overrideDerivation" ];
+              };
+            };
           };
         }))
       (lib.genAttrs dirNames (_: null)));

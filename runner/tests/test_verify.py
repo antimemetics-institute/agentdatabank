@@ -36,6 +36,7 @@ Payload = Annotated[Union[tuple({model for tag, model in EVENT_MODELS.items() if
     _, _, store = run_fixture(tmp_path, script='''#!/bin/sh
 adb-emit custom --kind t.note --data '{"value":3}'
 adb-emit result --name m --value 7
+adb-emit result --name missing --value 1.0
 ''')
     return store.dir, manifest
 
@@ -101,6 +102,33 @@ def rewrite_stream(directory, change):
     records = [json.loads(line) for line in path.read_text().splitlines()]
     change(records)
     path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+def test_missing_declared_result_fails_even_when_card_matches_stream(saved):
+    directory, manifest = saved
+
+    def omit_result(rows):
+        rows[:] = [row for row in rows if not (
+            row["event"]["type"] == "result" and row["event"]["name"] == "missing"
+        )]
+        for seq, row in enumerate(rows):
+            row["seq"] = seq
+
+    rewrite_stream(directory, omit_result)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+    before = digest_files(directory)
+    with pytest.raises(VerificationError, match=r"missing \['missing'\]; extra \[\]"):
+        verify_run(directory, manifest=manifest, environment={})
+    assert digest_files(directory) == before
+
+
+def test_extra_reported_result_fails_against_manifest(saved):
+    directory, manifest = saved
+    declaration = json.loads(manifest.read_text())
+    declaration["results"] = [result for result in declaration["results"] if result["name"] != "missing"]
+    manifest.write_text(json.dumps(declaration))
+    with pytest.raises(VerificationError, match=r"missing \[\]; extra \['missing'\]"):
+        verify_run(directory, manifest=manifest, environment={})
 
 
 @pytest.mark.parametrize("mismatch", [False, True])

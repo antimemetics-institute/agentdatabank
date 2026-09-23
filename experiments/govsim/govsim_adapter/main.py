@@ -5,9 +5,9 @@ Five LLM personas share a common-pool resource (fishery / pasture / river):
 each month they harvest concurrently, observe each other's catch, negotiate at
 the restaurant, and reflect at home; the pool regrows doubling-capped, and the
 commons collapses when it drops below 5. Upstream code runs from a pinned
-checkout with a seed-forwarding patch (``GOVSIM_UPSTREAM``, exported by the package.nix wrapper); this
-program mirrors upstream ``simulation/main.py``'s construction site — config
-composition, model injection, embedder substitution, wandb neutralization —
+package with a seed-forwarding patch; this program mirrors upstream
+``simulation/main.py``'s construction site — config composition, model injection,
+embedder substitution, wandb neutralization —
 and extracts the paper's metrics from the persisted ``log_env.json``.
 Persisted persona nodes are ingested too. ``persona_*/embeddings.json`` is
 recomputable from node descriptions and the embedder named in ``govsim.config``
@@ -76,25 +76,15 @@ class Params(BaseModel):
         return value
 
 
-def _upstream_root() -> str:
-    root = os.environ.get("GOVSIM_UPSTREAM")
-    if not root:
-        raise RuntimeError(
-            "GOVSIM_UPSTREAM is not set — run via the package.nix wrapper "
-            "(it exports the pinned upstream checkout and puts it on PYTHONPATH)"
-        )
-    return root
-
-
-def _compose(root: str, params: Params, seed: int):
-    """Hydra compose over the verbatim upstream conf tree. Absolute searchpath
+def _compose(params: Params, seed: int):
+    """Hydra compose over the installed upstream conf packages. Package searchpath
     entries replace upstream's cwd-relative ones (no chdir needed); compose
     strips the hydra node, so upstream's ``${uuid:}`` run-dir resolver is never
     consulted."""
-    from hydra import compose, initialize_config_dir
+    from hydra import compose, initialize_config_module
 
     searchpath = ",".join(
-        f"{root}/simulation/scenarios/{s}/conf"
+        f"pkg://simulation.scenarios.{s}.conf"
         for s in ("fishing", "sheep", "pollution")
     )
     overrides = [
@@ -113,8 +103,7 @@ def _compose(root: str, params: Params, seed: int):
     ]
     if params.max_rounds > 0:
         overrides.append(f"experiment.env.max_num_rounds={params.max_rounds}")
-    with initialize_config_dir(config_dir=f"{root}/simulation/conf",
-                               version_base=None):
+    with initialize_config_module(config_module="simulation.conf", version_base=None):
         return compose("config", overrides=overrides)
 
 
@@ -136,11 +125,7 @@ def run(params: Params) -> None:
     os.environ.setdefault("WANDB_MODE", "disabled")
     os.environ.setdefault("WANDB_DIR", os.getcwd())
 
-    root = _upstream_root()
-    if root not in sys.path:
-        sys.path.insert(0, root)
-
-    cfg = _compose(root, params, seed)
+    cfg = _compose(params, seed)
     # The composed upstream model path is bypassed by our injected backend.
     # Save the effective model in the simulation config. The runner records
     # launch parameters, source identity and build provenance for every experiment.

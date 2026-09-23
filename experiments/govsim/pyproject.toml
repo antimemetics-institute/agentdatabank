@@ -1,5 +1,5 @@
 [project]
-name = "govsim"
+name = "govsim-adapter"
 version = "0.1.0"  # version string does not increment, rely on git hash
 description = "GovSim (Cooperate or Collapse, NeurIPS 2024) as an ADB experiment."
 requires-python = ">=3.13"

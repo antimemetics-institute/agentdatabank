@@ -142,11 +142,12 @@ def _validate_union(run_dir: Path, manifest: Manifest, records: list[Envelope[An
 
 def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | None = None,
                environment: Mapping[str, str] | None = None) -> Verification:
-    """Audit all saved files, typed records, identity/order, and every card section.
+    """Audit saved files, typed records, identity/order, the card, and declared results.
 
-    Terminal failed/interrupted runs can also be audited; this checks evidence
-    integrity, not scientific outcomes or successful model responses. Never repairs
-    records or the card. Checks all local profiles matching the recorded endpoints.
+    Terminal failed/interrupted runs can also be audited, but missing declared
+    results are a finding. This checks evidence, not scientific outcomes or
+    successful model responses. Never repairs records or the card. Checks all
+    local profiles matching the recorded endpoints.
     """
     records = _records(run_dir)
     values = credential_snapshot(records[0].event.runtime.endpoints, environment)
@@ -170,6 +171,13 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
     for section in expected:
         if json.dumps(card[section], sort_keys=True) != json.dumps(expected[section], sort_keys=True):
             raise VerificationError(f"run.json.{section} differs from the stream projection")
+    declared_results = {result["name"] for result in declaration.get("results", [])}
+    reported_results = set(expected["derived"]["results"])
+    if reported_results != declared_results:
+        raise VerificationError(
+            f"reported results differ from manifest: missing {sorted(declared_results - reported_results)}; "
+            f"extra {sorted(reported_results - declared_results)}"
+        )
     for record in records:
         event = record.event
         if event.type == "llm.call" and event.call is not None and "seed" in event.call.request:
@@ -218,5 +226,5 @@ def verify_cli(argv: list[str]) -> int:
           f"content_filter stops: {result.content_filter_stops} (llm.call records)")
     state = "FAIL" if result.model_mismatches else "PASS"
     print(f"verify: {state}: {result.records} records; experiment union, secrets scan "
-          f"({result.credential_values} known credential values), card match, and request seeds match")
+          f"({result.credential_values} known credential values), card match, declared results, and request seeds match")
     return int(bool(result.model_mismatches))

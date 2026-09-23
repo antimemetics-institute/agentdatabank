@@ -119,12 +119,100 @@ set their display order and definitions; its adapter computes the scientific
 quantities. The viewer displays declared results without deriving experiment-specific
 metrics from native rows.
 
-Run the reusable secrets scan on the entire run directory with fake credentials
-seeded into the environment. GovSim's [end-to-end test](../../../../experiments/govsim/tests/test_end_to_end.py)
-checks the stream and every saved file, so a resolved config or raw request cannot
+Run the reusable [secrets scan](../../../../lib/adb-events/adb_events/secrets.py)
+from `adb_events.secrets` (also re-exported by `adb_testing`) on the entire run
+directory with fake credentials seeded into the environment. GovSim's
+`test_resolved_config_copies_no_secrets` in [test_adapter.py](../../../../experiments/govsim/tests/test_adapter.py)
+checks captured events and every workspace file, so a resolved config or raw request cannot
 silently copy those credentials into publishable data.
 
+### Upstreams without Python packaging
+
+For an upstream with no packaging metadata, add it with a patch and install the
+package into the experiment's venv. GovSim's
+[packaging.patch](../../../../experiments/govsim/packaging.patch) adds a minimal
+`pyproject.toml` that includes only `simulation` and its YAML configuration data.
+Its [package declaration](../../../../experiments/govsim/package.nix) defines the
+pinned upstream in the `overrides` overlay and selects it with `extraPackages`.
+Keep this packaging inline until another experiment needs the same mechanism.
+Address installed data through `importlib.resources` or the framework's package
+provider, never through a checkout path or an environment variable. Keep patches
+split: `seed.patch` edits existing upstream files and behavior; `packaging.patch`
+adds missing packaging files without changing behavior.
+
+`package.nix` declares the experiment and never declares tests. Put checks in
+`tests/default.nix`, outside the experiment's identity sources. Like nixpkgs'
+`testers.*`, the shared `adb.testers` builders take test data and return ordinary
+derivations; the registry attaches them as `passthru.tests` and discovers them
+for `nix flake check` and `task test:python`.
+
+```nix
+{ experiment, adb }: {
+  pytest = adb.testers.pytest { inherit experiment; tests = ./.; };
+  smoke = adb.testers.smoke {
+    inherit experiment;
+    params = {
+      experiment = "fish_baseline_concurrent";
+      model = "mock/model";
+      embedder = "hash";
+      max_rounds = 1;
+      max_tokens = 8000;
+      threads = 2;
+      reasoning_effort = null;
+      temperature = 0.0;
+      top_p = 1.0;
+    };
+  };
+}
+```
+
+`pytest` selects the Python program's `dev` group in its canonical Nix venv.
+Pass the test directory explicitly as `tests = ./.`; `flags` adds pytest arguments.
+Environment knobs such as `HF_HUB_OFFLINE` belong to the experiment: set `env` and
+`preCheck` in its `tests/default.nix`, like nixpkgs check hooks. `overrideAttrs`
+is the escape hatch. For example, Concordia's program is a shell adapter, so its
+[test declaration](../../../../experiments/concordia/tests/default.nix) supplies
+an explicit Python test venv through `nativeBuildInputs`. Nixpkgs `testers.*` are
+also fine for checks the two ADB testers do not cover.
+
+`smoke` takes the complete condition in `params`, runs the built launcher, and
+verifies its completed store. The oneliner IS the condition spec for a smoke run
+too: no defaults are hidden in the tester. Adding a parameter means adding it to
+the smoke check, just as to every oneliner and sweep script. Composer initials
+are independent of the smoke condition. The tester does not seed credentials;
+testing whether an adapter copies environment secrets is an adapter unit-test
+concern. Use `overrideAttrs` check hooks for offline fixtures,
+as in inspect-hello's [tokenizer cache](../../../../experiments/inspect_evals/tests/default.nix).
+For GovSim's focused loop, run `nix build .#checks.x86_64-linux.govsim -L` (using
+your machine's system).
+
 ## How do I check the integration?
+
+Keep the three test layers separate:
+
+- `experiments/*/tests` uses `adb-testing`: `event_capture` and
+  `assert_run_has_no_secrets` check that the adapter emits the right events, in
+  order, without secrets. Experiment tests never import `adb_runner`.
+- `runner/tests` uses small fixture programs to check that the runner executes
+  anything that speaks the producer protocol.
+- Each experiment's `passthru.tests.smoke` runs its **built launcher** on a mock
+  configuration, then `adb-runner verify` on the completed store. This is the
+  check that the runner executes that registered experiment offline, writes
+  conforming evidence and a matching card, and leaks nothing.
+
+Keep smoke parameters in the experiment's check, not in the shared declaration
+API. The smoke tester runs with `--non-interactive`, asserts that exactly one run
+completed, and passes that experiment's manifest directly to `adb-runner verify`.
+Verification checks that reported result names equal the manifest's declarations
+and reports missing or extra names. The separate completion check matters because
+`verify` can also audit failed or interrupted runs.
+See GovSim's [checks](../../../../experiments/govsim/tests/default.nix) and
+Concordia's [test wiring](../../../../experiments/concordia/tests/default.nix).
+Keep seeded-credential scans in adapter tests; verify real runs against the real
+credentials before publishing.
+`nix flake check -L` discovers these checks through the registry; `task ci` uses
+that same entry point. No test-specific runner dependency belongs in an
+experiment's development group.
 
 For local flakes, stage the new files so Nix includes them:
 
@@ -170,7 +258,7 @@ adb-testing = { path = "../../lib/adb-testing", editable = true }
 
 Merge these entries into existing sections. Pytest discovers the installed
 `adb-testing` plugin automatically; no `conftest.py` registration is needed.
-Tests that request `event_capture` receive the runner's actual socket receiver and its
+Tests that request `event_capture` receive the contract's reference socket receiver and its
 connection environment; the fixture cleans up afterward. It is not autouse:
 parameter-validation tests that do not emit events need not request it. Do not
 implement a test socket server or patch emission to print JSON.

@@ -75,9 +75,17 @@
       # The impure entrypoint identity checks
       # can't be derivations (they invoke nix itself / need network) and live in
       # scripts/ + CI instead.
-      checks = nixpkgs.lib.genAttrs systems (system: {
-        inherit (self.packages.${system}) manifests adb-runner;
-      });
+      checks = forAllSystems (pkgs:
+        let
+          adbPkgs = import ./pkgs/top-level { inherit pkgs pyproject-nix uv2nix pyproject-build-systems; rev = self.rev or null; narHash = self.narHash or null; };
+          experimentChecks = nixpkgs.lib.mapAttrs
+            (name: experiment: pkgs.linkFarm "${name}-tests"
+              (nixpkgs.lib.mapAttrsToList (test: path: { name = test; inherit path; })
+                experiment.passthru.tests))
+            (nixpkgs.lib.filterAttrs (_: experiment: (experiment.passthru.tests or { }) != { })
+              adbPkgs.experiments);
+        in
+        { inherit (adbPkgs) manifests adb-runner; } // experimentChecks);
 
       devShells = forAllSystems (pkgs: {
         default = import ./shell.nix { inherit pkgs; };

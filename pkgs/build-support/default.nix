@@ -108,11 +108,15 @@ in
   # mkPythonEnv: shared uv2nix setup using the toolchain supplied by the entrypoint.
   # Python sources come from uv.lock; local sources are filtered without
   # changing which directory or revision the lock selects.
-  mkPythonEnv =
-    { name
+  mkPythonEnv = lib.makeOverridable
+    ({ name
     , workspaceRoot
     , python ? pkgs.python313
     , sourcePreference ? "wheel"
+      # Upstreams without packaging cannot be uv dependencies. Define each
+      # package in the experiment's overrides overlay and install it here.
+    , extraPackages ? [ ]
+    , groups ? [ ]
       # extra pythonSet overlay for per-experiment-directory fixes (e.g. a git dep that ships a
       # legacy setup.py and needs setuptools injected as a build system). Receives
       # (final: prev: …) with uv2nix's pythonSet, where `final.resolveBuildSystem`
@@ -142,7 +146,41 @@ in
     in
     # Select the application only; editable local test dependencies are also
     # workspace members, but must not become runtime installation roots.
-    pythonSet.mkVirtualEnv name { ${projectName} = [ ]; };
+    assert lib.assertMsg (builtins.all
+      (group: builtins.elem group (workspace.deps.groups.${projectName} or [ ])) groups)
+      "mkPythonEnv: unknown dependency group for ${projectName}";
+    pythonSet.mkVirtualEnv name ({ ${projectName} = groups; } // lib.genAttrs extraPackages (_: [ ])));
+
+  # Like nixpkgs testers.*, these shared builders turn test declarations into
+  # ordinary derivations. Experiments supply data and hooks in tests/default.nix;
+  # overrideAttrs is the escape hatch, never test machinery in package.nix.
+  testers = {
+    pytest = { experiment, tests, env ? { }, preCheck ? "", flags ? [ ] }:
+      pkgs.stdenv.mkDerivation {
+        name = "${experiment.name}-pytest";
+        src = cleanImport "${experiment.name}-tests" tests;
+        nativeBuildInputs = [ (experiment.program.override { groups = [ "dev" ]; }) ];
+        inherit env;
+        dontBuild = true;
+        doCheck = true;
+        preCheck = ''export HOME="$TMPDIR"'' + "\n" + preCheck;
+        checkPhase = "runHook preCheck; python -m pytest ${lib.escapeShellArgs flags}; runHook postCheck";
+        installPhase = ''touch "$out"'';
+      };
+    # params is the complete condition; the smoke run never uses manifest initials.
+    smoke = { experiment, params, env ? { } }:
+      pkgs.testers.runCommand {
+        name = "${experiment.name}-smoke";
+        nativeBuildInputs = [ experiment.app adb-runner ];
+        inherit env;
+        inherit (experiment) manifest;
+        launcher = lib.getExe experiment.app;
+        sets = lib.escapeShellArgs (lib.concatMap
+          (n: [ "--set" "${n}=${builtins.toJSON params.${n}}" ])
+          (builtins.attrNames params));
+        script = builtins.readFile ./smoke.sh;
+      };
+  };
 
   # mkExperiment: the schema + program → a runnable flake app with the manifest JSON and
   # source identity baked in. `program` is whatever speaks the runner protocol (params
@@ -248,5 +286,6 @@ in
         '';
       };
     in
-    { inherit app manifest name readmeAssets source; };
+    { inherit app manifest name readmeAssets source; }
+    // lib.optionalAttrs (lib.isDerivation program) { inherit program; };
 }

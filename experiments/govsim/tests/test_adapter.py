@@ -1,13 +1,21 @@
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 import numpy as np
 import pandas as pd
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
+
+from adb_events.render import hint_paths
+from adb_events.testing import assert_conformant
+from adb_providers import PROVIDERS
+from adb_testing import assert_run_has_no_secrets
+from govsim_adapter.models import Payload
 
 from govsim_adapter.main import EXPERIMENTS, Params
 from govsim_adapter.metrics import compute_metrics, gini
@@ -36,7 +44,21 @@ def test_embedder_deterministic_normalized():
     assert not np.array_equal(a.embed("fish"), a.embed_retrieve("fish"))
 
 
-@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
+def test_installed_upstream_packages_and_config_resources():
+    from importlib.metadata import distribution
+    from importlib.resources import files
+    from govsim_adapter.main import _compose
+
+    installed = distribution("govsim")
+    roots = {str(path).split("/")[0] for path in installed.files}
+    assert "simulation" in roots
+    assert not {"utils", "subskills", "pathfinder"}.intersection(roots)
+    assert files("simulation.conf").joinpath("config.yaml").is_file()
+    config = _compose(Params(**params(experiment="pollution_perturbation_outsider", max_rounds=0)), seed=37)
+    assert config.experiment.env.max_num_rounds == 15
+    assert config.seed == 37
+
+
 def test_child_threads_and_pinned_embedder(tmp_path, event_capture):
     from govsim_adapter.embedder import MXBAI_MODEL, MXBAI_REVISION
 
@@ -135,7 +157,6 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     assert event_capture.read()[0]["agent"] == "framework"
 
 
-@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
 @pytest.mark.parametrize("name,query,agent", [
     ("John", "prompt_harvest", "persona_0"),
     ("framework", "prompt_summarize_conversation_in_one_sentence", "framework/summarize_conversation"),
@@ -143,7 +164,6 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     ("framework", "prompt_text_to_triple", "framework/text_to_triple"),
 ])
 def test_logger_attributes_queries_without_changing_api_request(monkeypatch, event_capture, name, query, agent):
-    monkeypatch.syspath_prepend(os.environ["GOVSIM_UPSTREAM"])
     from simulation.utils import WandbLogger
     from govsim_adapter.backend import ChatClientBackend
     from govsim_adapter.logger import AdbLogger
@@ -196,16 +216,10 @@ def test_backend_explicit_null_omits_upstream_sampling_defaults(
     assert captured["max_completion_tokens"] == 64
 
 
-@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
 @pytest.mark.parametrize("experiment", EXPERIMENTS)
 def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
-    config = tmp_path / "params.json"
-    config.write_text(json.dumps(params(experiment=experiment, temperature=None,
-                                        top_p=None, reasoning_effort="low")))
-    env = dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED=str(2**31 + 37),
-               HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
-    proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
-                          cwd=tmp_path, env=env, text=True, capture_output=True, timeout=120)
+    proc = _run_mock_pipeline(tmp_path, experiment=experiment, temperature=None,
+                              top_p=None, reasoning_effort="low")
     assert proc.returncode == 0, proc.stderr
     events = event_capture.read()
     metrics = {e["name"]: e["value"] for e in events if e["type"] == "result"}
@@ -222,6 +236,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
     assert {e["agent"] for e in calls} <= allowed_agents
     assert all(e["metadata"]["govsim.phase"] and e["metadata"]["govsim.query"] for e in calls)
     assert "UnsupportedFieldAttributeWarning" not in proc.stderr
+    assert "Defaults list is missing" not in proc.stderr
     assert any(e["type"] == "custom" and e["kind"] == "govsim.state" for e in events)
     from omegaconf import OmegaConf
     config = OmegaConf.create(next(e["data"] for e in events if e.get("kind") == "govsim.config"))
@@ -239,9 +254,66 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
     assert states[0]["resource"] == metrics["final_resource"]
     source_rows = json.loads((tmp_path / "govsim_storage" / experiment / "log_env.json").read_text())
     assert [e["data"] for e in events if e.get("kind") in {"govsim.record", "govsim.harvest", "govsim.utterance", "govsim.summary", "govsim.resource_limit"}] == source_rows
+    assert set(metrics) == {
+        "rounds", "collapsed", "survival_months", "total_harvest", "gain_per_agent",
+        "final_resource", "equality", "over_usage",
+    }
+    assert_conformant(events)
+    typed = [TypeAdapter(Payload).validate_python(event) for event in events]
+    customs = [event for event in typed if event.type == "custom"]
+    assert customs and all(isinstance(event.data, BaseModel) for event in customs)
+    # Preserve the former end-to-end fixture's hint contract. Native rows in
+    # no-language treatments intentionally omit optional labels such as agent_name.
+    if experiment == "fish_baseline_concurrent":
+        for event in customs:
+            for path in hint_paths(event.render):
+                value = event.model_dump(mode="json")
+                for part in path.split("."):
+                    assert part in value, (event.kind, path)
+                    value = value[part]
+    assert next(event.data.embedder for event in customs if event.kind == "govsim.config") == "hash"
+    if experiment == "fish_baseline_concurrent":
+        assert {event.kind for event in customs} == {
+            "govsim.config", "govsim.state", "govsim.upstream_log", "govsim.memory",
+            "govsim.harvest", "govsim.utterance", "govsim.summary", "govsim.resource_limit",
+        }
+        assert {call["agent"] for call in calls} == {
+            *(f"persona_{i}" for i in range(5)),
+            "framework/summarize_conversation", "framework/find_harvesting_limit",
+        }
+    assert not any(event.type == "run.status" for event in typed)
+    # The receiver fixture includes model defaults. Serialize as emit() does;
+    # optional fields disappear, while explicit JSON nulls in native rows stay.
+    for event in typed:
+        wire = event.model_dump(mode="json", exclude_none=True)
+        assert TypeAdapter(Payload).validate_python(wire) == event
+        if event.type == "llm.call":
+            _assert_no_null(wire)
+    storage = tmp_path / "govsim_storage" / experiment
+    personas = sorted(path for path in storage.glob("persona_*") if path.is_dir())
+    assert personas and all((path / "nodes.json").is_file() for path in personas)
+    markers = [(index, event.data) for index, event in enumerate(typed)
+               if event.type == "custom" and event.kind == "govsim.upstream_log"]
+    assert [data.source for _, data in markers] == [
+        "log_env.json", *(f"{path.name}/nodes.json" for path in personas),
+    ]
+    for index, data in markers:
+        raw = (storage / data.source).read_bytes()
+        rows = json.loads(raw)
+        assert data.bytes == len(raw)
+        assert data.sha256 == hashlib.sha256(raw).hexdigest()
+        assert data.records == len(rows)
+        following = typed[index + 1:index + 1 + data.records]
+        if data.source == "log_env.json":
+            assert [event.data.root for event in following] == rows
+        else:
+            persona = Path(data.source).parent.name
+            assert all(event.kind == "govsim.memory" and event.data.persona == persona
+                       for event in following)
+            assert [event.data.node.root for event in following] == rows
 
 
-@pytest.mark.skipif(not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout")
+
 @pytest.mark.parametrize("fail_simulation", [True, False])
 def test_failed_run_retains_config_and_raw_log(tmp_path, event_capture, fail_simulation):
     config = tmp_path / "params.json"
@@ -253,9 +325,6 @@ import os
 import sys
 from pathlib import Path
 from govsim_adapter.main import main
-
-# This fixture patches upstream before main() can add GOVSIM_UPSTREAM to sys.path.
-sys.path.insert(0, os.environ["GOVSIM_UPSTREAM"])
 
 def simulate(cfg, logger, wrappers, wrapper, embedder, storage):
     Path(storage, "log_env.json").write_text("unfinished checkpoint")
@@ -286,19 +355,6 @@ raise SystemExit(main())
     assert not any(e["type"] == "result" for e in events)
     if fail_simulation:
         assert "simulation failed after checkpoint" in proc.stderr
-
-
-def test_missing_upstream_exits_nonzero_with_traceback(tmp_path, event_capture):
-    config = tmp_path / "params.json"
-    config.write_text(json.dumps(params()))
-    env = dict(os.environ, ADB_RUN_DIR=str(tmp_path))
-    env.pop("GOVSIM_UPSTREAM", None)
-    proc = subprocess.run([sys.executable, "-c", "from govsim_adapter.main import main; raise SystemExit(main())", str(config)],
-                          cwd=tmp_path, env=env, text=True, capture_output=True, timeout=30)
-    assert proc.returncode != 0
-    events = event_capture.read()
-    assert not any(e["type"] == "result" and e["name"] == "status" for e in events)
-    assert "GOVSIM_UPSTREAM is not set" in proc.stderr
 
 
 def _reply(text):
@@ -339,3 +395,93 @@ def test_ingested_discussion_keeps_row_rounds_without_boundary_events(event_capt
     assert events[0]["data"]["source"] == "log_env.json"
     assert events[0]["data"]["records"] == len(rows)
     assert len(events) == len(rows) + 1
+
+
+def _run_mock_pipeline(tmp_path, *, setup="", **overrides):
+    config = tmp_path / "params.json"
+    config.write_text(json.dumps(params(**overrides)))
+    script = setup + "\nfrom govsim_adapter.main import main; raise SystemExit(main())"
+    return subprocess.run(
+        [sys.executable, "-c", script, str(config)], cwd=tmp_path,
+        env=dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED=str(2**31 + 37),
+                 HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1"),
+        text=True, capture_output=True, timeout=120,
+    )
+
+
+def _assert_no_null(value):
+    assert value is not None
+    if isinstance(value, dict):
+        for child in value.values():
+            _assert_no_null(child)
+    elif isinstance(value, list):
+        for child in value:
+            _assert_no_null(child)
+
+
+def test_resolved_config_copies_no_secrets(tmp_path, monkeypatch, event_capture):
+    # Replace credential-shaped host variables too, so the test never forwards
+    # real keys and short shell settings cannot accidentally match ordinary data.
+    credentials = {
+        name: f"fixture-env-{name}-" + "h" * 40 for name in os.environ
+        if re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", name, re.IGNORECASE)
+    } | {
+        key: value for name, provider in PROVIDERS.items() for key, value in (
+            (provider.api_key.name, f"sk-{name}-" + "a" * 40),
+            (provider.base_url.name, f"https://fixture-user:fixture-password@{name}.fixture.invalid/private-endpoint?token=hidden"),
+        )
+    } | {
+        "WANDB_API_KEY": "wandb-fixture-" + "b" * 40,
+        "HF_TOKEN": "hf_" + "c" * 40,
+        "ADB_TEST_SECRET": "fixture-secret-" + "d" * 40,
+        "ADB_TEST_PASSWORD": "fixture-password-" + "e" * 40,
+        "ADB_TEST_CREDENTIAL": "fixture-credential-" + "f" * 40,
+        "ADB_TEST_AUTH_TOKEN": "Bearer fixture-auth-" + "g" * 40,
+    }
+    for name, value in credentials.items():
+        monkeypatch.setenv(name, value)
+    # Assert in the child without writing the sentinel values to the workspace.
+    setup = "import os\n" + f"assert all(os.environ.get(k) == v for k, v in {credentials!r}.items())\n"
+    proc = _run_mock_pipeline(tmp_path, setup=setup)
+    assert proc.returncode == 0, proc.stderr
+    events = event_capture.read()
+    assert any(event.get("kind") == "govsim.config" for event in events)
+    assert any(event["type"] == "llm.call" for event in events)
+    (tmp_path / "events.jsonl").write_text("".join(
+        TypeAdapter(Payload).validate_python(event).model_dump_json(exclude_none=True) + "\n"
+        for event in events
+    ))
+    (tmp_path / "stdout.txt").write_text(proc.stdout)
+    (tmp_path / "stderr.txt").write_text(proc.stderr)
+    assert_run_has_no_secrets(tmp_path)
+
+
+def test_served_model_mismatch_fails_real_upstream_instead_of_using_default_answers(tmp_path, event_capture):
+    # Replace only the network. The real upstream wrapper normally catches model
+    # exceptions and supplies default answers; a routing error must stop this run.
+    setup = '''
+from adb_experiment.llm import ChatClient
+from openai.types.chat import ChatCompletion
+def wrong_model(self, kw):
+    self.is_mock = False
+    self._request = lambda kw: ChatCompletion.model_validate({
+        "id": "mismatch", "object": "chat.completion", "created": 0,
+        "model": "wrong-model", "choices": [{"index": 0, "finish_reason": "stop",
+            "message": {"role": "assistant", "content": "5"}}],
+    })
+    return self._create(**kw)
+ChatClient._mock_create = wrong_model
+'''
+    proc = _run_mock_pipeline(tmp_path, setup=setup)
+    assert proc.returncode != 0
+    events = event_capture.read()
+    assert not any(event["type"] == "result" and event["name"] == "status" for event in events)
+    calls = [event for event in events if event["type"] == "llm.call"]
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["output"]["model"] == "wrong-model"
+    assert call["call"]["response"]["model"] == "wrong-model"
+    assert events[events.index(call) + 1]["type"] == "log"
+    assert events[events.index(call) + 1]["level"] == "error"
+    assert "mock/model" in events[events.index(call) + 1]["message"]
+    assert "wrong-model" in events[events.index(call) + 1]["message"]

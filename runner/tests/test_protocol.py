@@ -129,7 +129,10 @@ def test_protocol_end_to_end(tmp_path):
     assert "[1, 2, 3]" in stdout_lines and "not json at all" in stdout_lines
     from adb_events import read_events
 
-    assert len(list(read_events(store.dir))) == len(envelopes)
+    records = list(read_events(store.dir))
+    assert [record.model_dump(mode="json", exclude_none=True) for record in records] == envelopes
+    assert not (store.dir / "schema.json").exists()
+    assert not (store.dir / "shared-schema.json").exists()
     # - stderr → stderr events, no invented level
     assert [p["line"] for p in by_type["stderr"]] == ["to stderr"]
 
@@ -148,9 +151,9 @@ def test_envelope_payload_schema_is_separate_from_manifest_version(tmp_path):
 
 
 def test_run_start_records_the_parameters_passed_to_the_child(tmp_path):
-    _, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\n", params={"x": 2})
+    _, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\n", params={"x": 2, "optional": None})
     start = envelopes[0]["event"]
-    assert start["params"] == {"x": 2}
+    assert start["params"] == {"x": 2, "optional": None}
     assert start["condition"] == "cid"
     assert start["source"] == "dirty:test"
     assert "fetch_ref" not in start
@@ -308,9 +311,12 @@ def test_runtime_records_only_endpoint_origins(tmp_path, monkeypatch, url, origi
 
 
 def test_nonzero_exit_is_failed(tmp_path):
-    result, envelopes, _ = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n")
+    result, envelopes, store = run_fixture(tmp_path, script="#!/bin/sh\nexit 3\n")
     assert result.state == "failed"
     assert envelopes[-1]["event"]["exit_code"] == 3
+    assert envelopes[-1]["event"]["state"] == "failed"
+    assert json.loads((store.dir / "run.json").read_text())["lifecycle"]["state"] == "failed"
+    assert not any(e["event"]["type"] == "result" for e in envelopes)
 
 
 def test_experiment_receives_params_and_env(tmp_path):
@@ -476,3 +482,24 @@ assert all(child.wait() == 0 for child in children)
         e["event"]["line"] for e in envelopes if e["event"]["type"] == "stdout"
     )
     assert not Path(socket_path).exists()
+
+
+def test_credential_env_reaches_child_without_entering_store(tmp_path):
+    from adb_events.secrets import assert_run_has_no_secrets
+    from adb_providers import PROVIDERS
+
+    credentials = {
+        provider.api_key.name: f"sk-{name}-" + "a" * 40
+        for name, provider in PROVIDERS.items()
+    } | {"ADB_TEST_SECRET": "fixture-secret-" + "b" * 40}
+    # The child proves receipt without echoing the values into stdout or events.
+    script = f"""#!{sys.executable}
+import os
+from adb_events import Status, emit
+assert all(os.environ.get(key) == value for key, value in {credentials!r}.items())
+emit(Status(detail="credentials received"))
+"""
+    result, envelopes, store = run_fixture(tmp_path, script=script, credential_env=credentials)
+    assert result.state == "completed"
+    assert {"type": "status", "detail": "credentials received"} in [e["event"] for e in envelopes]
+    assert_run_has_no_secrets(store.dir, environment=credentials)

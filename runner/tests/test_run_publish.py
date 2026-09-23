@@ -14,6 +14,10 @@ from test_verify import saved
 @pytest.fixture
 def launch(saved, tmp_path, monkeypatch):
     _, manifest = saved
+    # This fixture program only prints its environment; it declares no results.
+    declaration = json.loads(manifest.read_text())
+    declaration["results"] = []
+    manifest.write_text(json.dumps(declaration))
     program = tmp_path / "experiment"
     program.write_text("#!/bin/sh\nenv\n")
     program.chmod(0o755)

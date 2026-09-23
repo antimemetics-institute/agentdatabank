@@ -1,20 +1,13 @@
 """Seed propagation and contention checks against the pinned upstream code.
 
-Run with GOVSIM_UPSTREAM and PYTHONPATH pointing at the packaged checkout.
+Run in the experiment's Nix test environment.
 No model calls or embedding downloads are needed.
 """
-
-import os
 
 import numpy as np
 import pytest
 
-from govsim_adapter.main import EXPERIMENTS, Params, _compose, _upstream_root, run
-
-
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("GOVSIM_UPSTREAM"), reason="requires pinned upstream checkout"
-)
+from govsim_adapter.main import EXPERIMENTS, Params, _compose, run
 
 
 def parameters(experiment="fish_baseline_concurrent"):
@@ -63,7 +56,7 @@ def test_run_passes_effective_seed_to_environment(
 def test_explicit_seed_repeats_contended_allocations(tmp_path, allocation):
     from simulation.scenarios.fishing.environment import FishingConcurrentEnv
 
-    cfg = _compose(_upstream_root(), parameters(), seed=37)
+    cfg = _compose(parameters(), seed=37)
     names = {f"persona_{i}": f"Agent {i}" for i in range(5)}
 
     def sequence(global_seed):

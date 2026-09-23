@@ -2,50 +2,39 @@
 # experiment: 5 LLM personas share a common-pool resource — harvest, negotiate,
 # collapse or sustain.
 #
-# Upstream is pinned with one seed-forwarding patch: the checkout rides PYTHONPATH (GovSim
-# ships no pyproject, so it cannot be a uv dependency); its pathfinder DSL is a
-# proper uv git dependency (pinned in pyproject.toml). Other adaptation lives in
-# ./govsim_adapter: config composition (hydra compose over the upstream conf tree), model
-# injection (a ChatClient-backed pathfinder ModelAPI), embedder substitution
-# (deterministic hash embedder on the keyless path), wandb neutralization, and
-# metric extraction from the persisted log_env.json.
-{ adb, lib, writeShellApplication, applyPatches }:
+# Upstream is a package in the venv, built from the pinned checkout plus two
+# patches: seed.patch changes existing behavior, packaging.patch only supplies
+# missing packaging. Its pathfinder DSL is a uv git dependency. Other adaptation
+# lives in ./govsim_adapter: Hydra composition, model injection, hash embeddings
+# for keyless runs, wandb neutralization, and results from persisted native logs.
+{ adb, lib }:
 let
-  # the pin participates in condition identity via this file's text (package.nix
-  # is in src); fetchGit skips the pathfinder submodule — harmless, the empty dir
-  # cannot shadow the installed package (regular package beats namespace dir)
-  govsimSrc = applyPatches {
-    name = "govsim-seeded-source";
-    src = builtins.fetchGit {
-      url = "https://github.com/giorgiopiatti/GovSim";
-      ref = "main";
-      rev = "1d11adf047b24fa2ba0d44a1d4931015ea2e5210";
-    };
-    patches = [ ./seed.patch ];
-  };
+  govsimUpstream = final: final.callPackage
+    ({ stdenv, pyprojectHook, resolveBuildSystem }: stdenv.mkDerivation {
+      pname = "govsim";
+      version = "0-unstable-2025-01-19";
+      src = builtins.fetchGit {
+        url = "https://github.com/giorgiopiatti/GovSim";
+        ref = "main";
+        rev = "1d11adf047b24fa2ba0d44a1d4931015ea2e5210";
+      };
+      patches = [ ./seed.patch ./packaging.patch ];
+      nativeBuildInputs = [ pyprojectHook ] ++ resolveBuildSystem { setuptools = [ ]; };
+    }) { };
 
-  env = adb.mkPythonEnv {
+  overrides = final: prev:
+    # Legacy setup.py packages need their undeclared build system supplied.
+    lib.genAttrs [ "pathfinder" "antlr4-python3-runtime" ] (name:
+      prev.${name}.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or [ ])
+          ++ final.resolveBuildSystem { setuptools = [ ]; };
+      })) // { govsim = govsimUpstream final; };
+  env = (adb.mkPythonEnv {
     name = "govsim-env";
     workspaceRoot = ./.;
-    # legacy setup.py packages (no pyproject / undeclared backend) need
-    # setuptools injected as their build system (impossiblebench precedent):
-    # pathfinder is our git dep; antlr4-python3-runtime is hydra's sdist-only dep
-    overrides = final: prev:
-      lib.genAttrs [ "pathfinder" "antlr4-python3-runtime" ] (name:
-        prev.${name}.overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or [ ])
-            ++ final.resolveBuildSystem { setuptools = [ ]; };
-        }));
-  };
-
-  program = writeShellApplication {
-    name = "govsim-adapter";
-    text = ''
-      export GOVSIM_UPSTREAM=${govsimSrc}
-      export PYTHONPATH=${govsimSrc}''${PYTHONPATH:+:$PYTHONPATH}
-      exec ${lib.getExe' env "govsim"} "$@"
-    '';
-  };
+    extraPackages = [ "govsim" ];
+    inherit overrides;
+  }).overrideAttrs { meta.mainProgram = "govsim"; };
 
   mockSuggestion = {
     value = "mock/model";
@@ -59,7 +48,7 @@ in
     schemaPython = "${env}/bin/python";
     summary = "GovSim (NeurIPS 2024): 5 LLM personas share a common-pool resource — harvest, negotiate, collapse or sustain.";
     # identity = declaration + locks + code; README/docs/default.nix stay out
-    src = [ ./package.nix ./seed.patch ./pyproject.toml ./uv.lock ./govsim_adapter ];
+    src = [ ./package.nix ./seed.patch ./packaging.patch ./pyproject.toml ./uv.lock ./govsim_adapter ];
     links = [
       { label = "paper"; url = "https://arxiv.org/abs/2404.16698"; }
       { label = "source"; url = "https://github.com/giorgiopiatti/GovSim"; }
@@ -206,6 +195,6 @@ in
       }
     ];
     env.network = true; # hosted models and optional HuggingFace embedder downloads
-    program = program;
+    program = env;
   };
 }
