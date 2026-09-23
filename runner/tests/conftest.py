@@ -1,6 +1,17 @@
 import pytest
 
 
+@pytest.fixture(scope="module")
+def saved_template(tmp_path_factory):
+    """Build once per test module; saved gives every test its own disposable copy."""
+    from test_verify import _build_saved
+
+    root = tmp_path_factory.mktemp("saved-template")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        directory, _ = _build_saved(root, monkeypatch)
+    return root, directory.relative_to(root)
+
+
 @pytest.fixture
 def data_directory(request, tmp_path, monkeypatch):
     """Run each CLI with competing directory settings, including a relative flag."""

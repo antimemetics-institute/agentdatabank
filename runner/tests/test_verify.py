@@ -3,6 +3,7 @@
 import hashlib
 import json
 import shlex
+import shutil
 import sys
 
 import pytest
@@ -14,8 +15,7 @@ from adb_runner.card import derive_card
 from test_protocol import MANIFEST, run_fixture
 
 
-@pytest.fixture
-def saved(tmp_path, monkeypatch):
+def _build_saved(tmp_path, monkeypatch):
     monkeypatch.setenv("ADB_CREDENTIALS_FILE", str(tmp_path / "credentials.toml"))
     monkeypatch.delenv("ADB_MANIFEST", raising=False)
     monkeypatch.delenv("ADB_MANIFESTS", raising=False)
@@ -39,6 +39,17 @@ adb-emit result --name m --value 7
 adb-emit result --name missing --value 1.0
 ''')
     return store.dir, manifest
+
+
+@pytest.fixture
+def saved(saved_template, tmp_path, monkeypatch):
+    template, relative_run = saved_template
+    shutil.copytree(template, tmp_path, dirs_exist_ok=True)
+    monkeypatch.setenv("ADB_CREDENTIALS_FILE", str(tmp_path / "credentials.toml"))
+    monkeypatch.delenv("ADB_MANIFEST", raising=False)
+    monkeypatch.delenv("ADB_MANIFESTS", raising=False)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    return tmp_path / relative_run, tmp_path / "manifest.json"
 
 
 def digest_files(directory):

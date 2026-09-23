@@ -107,6 +107,8 @@ raise SystemExit(status)
                                    HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1"),
                           text=True, capture_output=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
+    assert "UnsupportedFieldAttributeWarning" not in proc.stderr
+    assert "Defaults list is missing" not in proc.stderr
     assert "THREADS 3" in proc.stdout.splitlines()
     encoder = next(json.loads(line.removeprefix("ENCODER "))
                    for line in proc.stdout.splitlines() if line.startswith("ENCODER "))
@@ -217,8 +219,8 @@ def test_backend_explicit_null_omits_upstream_sampling_defaults(
 
 
 @pytest.mark.parametrize("experiment", EXPERIMENTS)
-def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
-    proc = _run_mock_pipeline(tmp_path, experiment=experiment, temperature=None,
+def test_upstream_mock_pipeline(tmp_path, experiment, event_capture, warmed_run):
+    proc = _run_mock_pipeline(tmp_path, warmed_run, experiment=experiment, temperature=None,
                               top_p=None, reasoning_effort="low")
     assert proc.returncode == 0, proc.stderr
     events = event_capture.read()
@@ -315,7 +317,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture):
 
 
 @pytest.mark.parametrize("fail_simulation", [True, False])
-def test_failed_run_retains_config_and_raw_log(tmp_path, event_capture, fail_simulation):
+def test_failed_run_retains_config_and_raw_log(tmp_path, event_capture, fail_simulation, warmed_run):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params()))
     # A broken checkpoint remains inspectable in the transcript, without artifacts.
@@ -337,11 +339,10 @@ def simulate(cfg, logger, wrappers, wrapper, embedder, storage):
 importlib.import_module("simulation.scenarios.fishing.run").run = simulate
 raise SystemExit(main())
 '''.replace("FAIL_SIMULATION", repr(fail_simulation))
-    proc = subprocess.run(
-        [sys.executable, "-c", script, str(config)], cwd=tmp_path,
+    proc = warmed_run(
+        script, config, cwd=tmp_path,
         env=dict(os.environ, ADB_RUN_DIR=str(tmp_path), HF_HUB_OFFLINE="1",
                  TRANSFORMERS_OFFLINE="1"),
-        text=True, capture_output=True, timeout=120,
     )
     assert proc.returncode == 1, proc.stderr
     events = event_capture.read()
@@ -397,15 +398,14 @@ def test_ingested_discussion_keeps_row_rounds_without_boundary_events(event_capt
     assert len(events) == len(rows) + 1
 
 
-def _run_mock_pipeline(tmp_path, *, setup="", **overrides):
+def _run_mock_pipeline(tmp_path, warmed_run, *, setup="", **overrides):
     config = tmp_path / "params.json"
     config.write_text(json.dumps(params(**overrides)))
     script = setup + "\nfrom govsim_adapter.main import main; raise SystemExit(main())"
-    return subprocess.run(
-        [sys.executable, "-c", script, str(config)], cwd=tmp_path,
+    return warmed_run(
+        script, config, cwd=tmp_path,
         env=dict(os.environ, ADB_RUN_DIR=str(tmp_path), ADB_SEED=str(2**31 + 37),
                  HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1"),
-        text=True, capture_output=True, timeout=120,
     )
 
 
@@ -419,7 +419,7 @@ def _assert_no_null(value):
             _assert_no_null(child)
 
 
-def test_resolved_config_copies_no_secrets(tmp_path, monkeypatch, event_capture):
+def test_resolved_config_copies_no_secrets(tmp_path, monkeypatch, event_capture, warmed_run):
     # Replace credential-shaped host variables too, so the test never forwards
     # real keys and short shell settings cannot accidentally match ordinary data.
     credentials = {
@@ -442,7 +442,7 @@ def test_resolved_config_copies_no_secrets(tmp_path, monkeypatch, event_capture)
         monkeypatch.setenv(name, value)
     # Assert in the child without writing the sentinel values to the workspace.
     setup = "import os\n" + f"assert all(os.environ.get(k) == v for k, v in {credentials!r}.items())\n"
-    proc = _run_mock_pipeline(tmp_path, setup=setup)
+    proc = _run_mock_pipeline(tmp_path, warmed_run, setup=setup)
     assert proc.returncode == 0, proc.stderr
     events = event_capture.read()
     assert any(event.get("kind") == "govsim.config" for event in events)
@@ -456,7 +456,7 @@ def test_resolved_config_copies_no_secrets(tmp_path, monkeypatch, event_capture)
     assert_run_has_no_secrets(tmp_path)
 
 
-def test_served_model_mismatch_fails_real_upstream_instead_of_using_default_answers(tmp_path, event_capture):
+def test_served_model_mismatch_fails_real_upstream_instead_of_using_default_answers(tmp_path, event_capture, warmed_run):
     # Replace only the network. The real upstream wrapper normally catches model
     # exceptions and supplies default answers; a routing error must stop this run.
     setup = '''
@@ -472,7 +472,7 @@ def wrong_model(self, kw):
     return self._create(**kw)
 ChatClient._mock_create = wrong_model
 '''
-    proc = _run_mock_pipeline(tmp_path, setup=setup)
+    proc = _run_mock_pipeline(tmp_path, warmed_run, setup=setup)
     assert proc.returncode != 0
     events = event_capture.read()
     assert not any(event["type"] == "result" and event["name"] == "status" for event in events)
