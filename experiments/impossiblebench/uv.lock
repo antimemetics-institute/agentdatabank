@@ -26,6 +26,7 @@ dev = [
     { name = "adb-testing", editable = "../../lib/adb-testing" },
     { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "pytest", specifier = ">=8" },
+    { name = "pytest-xdist" },
 ]
 
 [[package]]
@@ -88,6 +89,7 @@ requires-dist = [
 dev = [
     { name = "adb-testing", editable = "../../lib/adb-testing" },
     { name = "pytest", specifier = ">=8" },
+    { name = "pytest-xdist" },
 ]
 
 [[package]]

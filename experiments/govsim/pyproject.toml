@@ -48,4 +48,7 @@ build-backend = "hatchling.build"
 packages = ["govsim_adapter"]
 
 [dependency-groups]
-dev = ["pytest>=8", "adb-testing"]
+dev = ["pytest>=8", "pytest-xdist", "adb-testing"]
+
+[tool.pytest.ini_options]
+addopts = "-n auto"

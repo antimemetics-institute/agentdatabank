@@ -23,6 +23,7 @@ llm = ["openai>=1.60"]
 dev = [
     "adb-testing",
     "pytest>=8",
+    "pytest-xdist",
     # mirrors the [llm] extra so `task typecheck` sees the SDK's real types;
     # consumers still opt in via adb-experiment[llm]
     "openai>=1.60",
@@ -46,3 +47,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["adb_experiment"]
+
+[tool.pytest.ini_options]
+addopts = "-n auto"

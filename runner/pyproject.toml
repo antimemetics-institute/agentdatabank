@@ -35,6 +35,7 @@ adb-emit = "adb_runner.emit:main"
 dev = [
     "adb-runner[publish]",
     "pytest>=8",
+    "pytest-xdist",
     "adb-testing",
     "moto[s3]>=5.2.3",
     "boto3-stubs-lite>=1.43.97",
@@ -47,3 +48,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/adb_runner"]
+
+[tool.pytest.ini_options]
+addopts = "-n auto"

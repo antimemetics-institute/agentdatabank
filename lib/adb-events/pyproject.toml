@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "adb-testing", "duckdb>=1.4,<2"]
+dev = ["pytest>=8", "pytest-xdist", "adb-testing", "duckdb>=1.4,<2"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,3 +26,6 @@ cache-keys = [{ file = "pyproject.toml" }, { file = "adb_events/**/*.py" }, { fi
 
 [tool.uv.sources]
 adb-testing = { path = "../adb-testing", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "-n auto"

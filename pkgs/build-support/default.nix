@@ -164,7 +164,9 @@ in
         dontBuild = true;
         doCheck = true;
         preCheck = ''export HOME="$TMPDIR"'' + "\n" + preCheck;
-        checkPhase = "runHook preCheck; python -m pytest ${lib.escapeShellArgs flags}; runHook postCheck";
+        # Bound concurrent numeric imports in the sandbox. Explicit flags can
+        # still select serial execution for debugging.
+        checkPhase = "runHook preCheck; python -m pytest ${lib.escapeShellArgs ([ "-n" "8" ] ++ flags)}; runHook postCheck";
         installPhase = ''touch "$out"'';
       };
     # params is the complete condition; the smoke run never uses manifest initials.

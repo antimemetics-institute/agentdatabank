@@ -168,6 +168,10 @@ for `nix flake check` and `task test:python`.
 
 `pytest` selects the Python program's `dev` group in its canonical Nix venv.
 Pass the test directory explicitly as `tests = ./.`; `flags` adds pytest arguments.
+Project test suites use `pytest-xdist` with `-n auto`; the Nix tester selects eight
+workers to bound concurrent numeric imports. Use `uv run pytest -n 0` when
+debugging a hang, or `uv run pytest -o addopts='' -p no:xdist` to disable the plugin
+entirely. In a Nix check, `flags = [ "-n" "0" ];` selects serial execution.
 Environment knobs such as `HF_HUB_OFFLINE` belong to the experiment: set `env` and
 `preCheck` in its `tests/default.nix`, like nixpkgs check hooks. `overrideAttrs`
 is the escape hatch. For example, Concordia's program is a shell adapter, so its
@@ -250,7 +254,7 @@ its lock. From `experiments/EXPERIMENT/pyproject.toml`, the local source is:
 
 ```toml
 [dependency-groups]
-dev = ["pytest>=8", "adb-testing"]
+dev = ["pytest>=8", "pytest-xdist", "adb-testing"]
 
 [tool.uv.sources]
 adb-testing = { path = "../../lib/adb-testing", editable = true }
