@@ -49,14 +49,17 @@ def load_capture(source):
     return metadata, events, files
 
 
-def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep=time.sleep):
+def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep=time.sleep, defaults=None):
     if not math.isfinite(speed) or speed <= 0:
         raise ValueError('speed must be positive and finite')
     source, destination = source.resolve(), destination.resolve()
     if destination == source or destination.is_relative_to(source) or source.is_relative_to(destination):
         raise ValueError('replay output must be separate from original run')
     metadata, events, files = load_capture(source)
-    if params != metadata['params']:
+    defaults = defaults or {}
+    if defaults.keys() & metadata['params'].keys():
+        raise ValueError('replay defaults must not override captured params')
+    if params != {**defaults, **metadata['params']}:
         raise ValueError('replay parameters must match captured params')
     # Validate all paths before creating any output or emitting payloads.
     for envelope in events:
@@ -68,10 +71,13 @@ def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep
                 raise ValueError('artifact would overwrite runner-owned metadata')
             contained(destination, event['path'])
     provenance_path = 'artifacts/docs-recording-replay.json'
-    if any(e['event'].get('path') == provenance_path for e in events):
+    if any(e['event'].get('path') == provenance_path or
+           (e['event'].get('type') == 'custom' and e['event'].get('kind') == 'docs.recording_replay')
+           for e in events):
         raise ValueError('capture uses reserved replay provenance artifact path')
     provenance = {
         'kind': 'saved-run-replay', 'original_run': metadata, 'speed': speed,
+        'added_defaults': defaults,
         'note': 'Recorded payloads replayed; no experiment or model was executed. Usage is historical.',
         'sha256': {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
                    for p in [*files,
@@ -81,8 +87,8 @@ def replay(source, destination, speed, params, emit, clock=time.monotonic, sleep
     path = contained(destination, provenance_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(provenance, indent=2) + '\n')
-    emit({'type': 'artifact', 'name': 'docs-recording-replay', 'path': provenance_path,
-          'media_type': 'application/json', 'bytes': path.stat().st_size})
+    emit({'type': 'custom', 'kind': 'docs.recording_replay',
+          'data': {'path': provenance_path, 'original_run': metadata['run'], 'speed': speed}})
     started = clock()
     baseline = events[0]['_time']
     for envelope in events:
@@ -105,9 +111,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--speed', type=float, default=1)
+    parser.add_argument('--defaults', type=json.loads, default={})
     args = parser.parse_args()
     replay(args.run, Path(os.environ['ADB_RUN_DIR']), args.speed, json.load(sys.stdin),
-           lambda event: emit(PRODUCER_ADAPTER.validate_python(event, strict=True)))
+           lambda event: emit(PRODUCER_ADAPTER.validate_python(event, strict=True)), defaults=args.defaults)
 
 
 if __name__ == '__main__':

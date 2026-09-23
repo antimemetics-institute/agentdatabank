@@ -16,12 +16,18 @@
    riding the real mouse events; its press animation is anchored at the arrow TIP so
    clicks don't jump. */
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright-core";
 
 const { BASE_URL, OUT_DIR, DARK, SCENARIO } = process.env;
 // Recording-only replay: original GovSim events, with no provider execution.
-const MODEL = "openai/gpt-6-astra";
+const records = readFileSync(join(process.env.ADB_DOCS_REPLAY_RUN, "events.jsonl"), "utf8")
+  .trim().split("\n").map(line => JSON.parse(line));
+const PARAMS = records.find(record => record.event.type === "run.start").event.params;
+const MODEL = PARAMS.model;
+if (!MODEL.startsWith("openai/") || PARAMS.temperature !== null || PARAMS.top_p !== null)
+  throw new Error("recording requires an OpenAI capture with null temperature and top_p");
 const EXAMPLE_KEY = "sk-example-not-a-real-api-key";
 let replayJobs = 0;
 
@@ -179,23 +185,25 @@ async function choose() {
   await page.waitForTimeout(1200);
   await glideClick(page.locator('a[href$="/experiments/govsim"]'));
   await page.waitForSelector('[data-param="model"] input');
-  await page.locator('[data-param="max_rounds"] input').fill("1");
+  await page.locator('[data-param="max_rounds"] input').fill(String(PARAMS.max_rounds));
   await page.waitForTimeout(5500);
 }
 
 async function configure(visible = false) {
-  await page.locator('[data-param="max_rounds"] input').fill("1");
-  await page.locator('[data-param="embedder"] select').selectOption("mxbai");
+  await page.locator('[data-param="experiment"] select').selectOption(PARAMS.experiment);
+  await page.locator('[data-param="max_rounds"] input').fill(String(PARAMS.max_rounds));
+  await page.locator('[data-param="max_tokens"] input').fill(String(PARAMS.max_tokens));
+  await page.locator('[data-param="embedder"] select').selectOption(PARAMS.embedder);
   await page.locator('[data-param="temperature"] input').fill("");
   await page.locator('[data-param="top_p"] input').fill("");
-  await page.locator('[data-param="reasoning_effort"] select').selectOption("low");
+  await page.locator('[data-param="reasoning_effort"] select').selectOption(PARAMS.reasoning_effort);
   const model = page.locator('[data-param="model"] input');
   if (visible) {
     await model.scrollIntoViewIfNeeded();
     await glideClick(model);
     await page.waitForSelector('[data-param="model"] li');
     await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.type("openai/gpt-6", { delay: 100 });
+    await page.keyboard.type(MODEL, { delay: 100 });
     await page.waitForTimeout(1200);
     await glideClick(page.locator('[data-param="model"] li').filter({ hasText: MODEL }).first());
     await page.waitForTimeout(700);
@@ -230,8 +238,10 @@ async function launch() {
   await page.waitForTimeout(1200);
   await launchJob(true);
   await glideClick(page.locator('[data-job] a[href^="#/runs/"]').first());
-  await page.waitForSelector('[data-filter="llm-calls"]');
-  await glideClick(page.locator('[data-filter="llm-calls"]'));
+  await page.waitForSelector('[data-tab="stream"]');
+  if (!(await page.locator('[data-filter="all"]').isVisible()))
+    await glideClick(page.locator('[data-tab="stream"]'));
+  await glideClick(page.locator('[data-filter="namespace:llm"]'));
   await page.waitForTimeout(10000);
 }
 
@@ -253,16 +263,20 @@ async function runView() {
 
   // straight into the run: the job panel's run link
   await glideClick(page.locator('[data-job] a[href^="#/runs/"]').first());
+  await page.waitForSelector('[data-run-tab="summary"]');
+  await page.waitForTimeout(2300);
+  await glideClick(page.locator('[data-tab="stream"]'));
   await page.waitForSelector('[data-filter="all"]', { timeout: 10000 });
   await page.waitForTimeout(1500);
 
   // narrow the feed with the filter chips: just the conversation, then just the
   // model calls, then everything again
-  await glideClick(page.locator('[data-filter="messages"]'));
+  await glideClick(page.locator('[data-filter="namespace:govsim"]'));
+  await glideClick(page.locator('[data-filter="kind:govsim.utterance"]'));
   await page.waitForTimeout(1000);
-  await glideClick(page.locator('summary[title^="message"]').filter({ hasText: "Mayor" }).first());
+  await glideClick(page.locator('summary').filter({ hasText: "Mayor" }).first());
   await page.waitForTimeout(2300);
-  await glideClick(page.locator('[data-filter="llm-calls"]'));
+  await glideClick(page.locator('[data-filter="namespace:llm"]'));
   await page.waitForTimeout(1600);
   await glideClick(page.locator('[data-filter="all"]'));
   await page.waitForTimeout(900);
@@ -296,7 +310,7 @@ if (expectedJobs) {
   if (!saved.includes("dirty:docs-recording-replay") || !saved.includes(MODEL))
     throw new Error("saved run lacks replay provenance or original model");
   if (!saved.includes('llm.call')) throw new Error("replay did not show live model calls");
-  if (SCENARIO === "run-view" && (!saved.includes('message') || !saved.includes('total_harvest')))
+  if (SCENARIO === "run-view" && (!saved.includes('govsim.utterance') || !saved.includes('total_harvest')))
     throw new Error("completed replay lacks conversations or simulation results");
 }
 console.log(`verified ${SCENARIO}: empty initial stores; ${expectedJobs} saved-event replay jobs`);

@@ -51,7 +51,7 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(emitted[1:], payloads[1:4])
         self.assertEqual((self.dest / 'artifacts/result.txt').read_text(), 'original')
         self.assertEqual(before, {p: p.read_bytes() for p in self.source.rglob('*') if p.is_file()})
-        provenance = json.loads((self.dest / emitted[0]['path']).read_text())
+        provenance = json.loads((self.dest / emitted[0]['data']['path']).read_text())
         self.assertEqual(provenance['original_run']['run'], 'old')
 
     def test_capture_preserves_metadata_and_progress(self):
@@ -65,7 +65,7 @@ class ReplayTests(unittest.TestCase):
         replay.replay(self.source, self.dest, 10000, self.params, emitted.append)
         self.assertEqual(emitted[1:], payloads)
         self.assertEqual(path.read_bytes(), original)
-        provenance = json.loads((self.dest / emitted[0]['path']).read_text())
+        provenance = json.loads((self.dest / emitted[0]['data']['path']).read_text())
         self.assertEqual(provenance['original_run']['params'], self.params)
         self.assertEqual(provenance['original_run']['state'], 'completed')
 
@@ -99,10 +99,36 @@ class ReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'runner-owned'):
             replay.replay(self.source, self.dest, 1, self.params, lambda _: None)
 
+    def test_reject_capture_that_already_contains_replay_provenance(self):
+        self.capture([{'type': 'custom', 'kind': 'docs.recording_replay',
+                       'data': {'path': 'artifacts/docs-recording-replay.json'}}])
+        with self.assertRaisesRegex(ValueError, 'reserved replay provenance'):
+            replay.replay(self.source, self.dest, 1, self.params, lambda _: None)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
     def test_reject_params_mismatch(self):
         self.capture([{'type': 'metric'}])
         with self.assertRaisesRegex(ValueError, 'parameters'):
             replay.replay(self.source, self.dest, 1, {'model': 'different'}, lambda _: None)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_new_defaults_are_recorded_without_changing_captured_inputs(self):
+        self.capture([{'type': 'status', 'detail': 'recorded'}])
+        emitted = []
+        replay.replay(self.source, self.dest, 10000, {**self.params, 'threads': 2}, emitted.append,
+                      defaults={'threads': 2})
+        provenance = json.loads((self.dest / emitted[0]['data']['path']).read_text())
+        self.assertEqual(provenance['original_run']['params'], self.params)
+        self.assertEqual(provenance['added_defaults'], {'threads': 2})
+
+    def test_defaults_cannot_override_capture_or_accept_changed_values(self):
+        self.capture([{'type': 'status', 'detail': 'recorded'}])
+        with self.assertRaisesRegex(ValueError, 'override'):
+            replay.replay(self.source, self.dest, 1, self.params, lambda _: None,
+                          defaults={'model': 'another-model'})
+        with self.assertRaisesRegex(ValueError, 'parameters'):
+            replay.replay(self.source, self.dest, 1, {**self.params, 'threads': 4}, lambda _: None,
+                          defaults={'threads': 2})
         self.assertEqual(list(self.dest.iterdir()), [])
 
     def test_reject_escape_paths_and_symlinks(self):

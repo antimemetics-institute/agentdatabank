@@ -34,8 +34,9 @@ if curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/experiments"; then
   echo "port $PORT is already serving an adb-web — kill it first" >&2; exit 1
 fi
 
-DIST=$(nix build .#adb-web-dist --print-out-paths --no-link)
-RUNNER=$(nix build .#adb-runner --print-out-paths --no-link)
+# The classic entrypoint includes local presentation assets not yet tracked by Git.
+DIST=$(nix-build --no-out-link -A adb-web-dist)
+RUNNER=$(nix-build --no-out-link -A adb-runner)
 PW_BROWSERS="$(nix build --inputs-from . nixpkgs#playwright-driver.browsers --print-out-paths --no-link)"
 STORE=
 SERVER=
@@ -86,7 +87,7 @@ record() { # record <scenario> <name> [DARK]
   start_server
   vid_dir=$(mktemp -d)
   PLAYWRIGHT_BROWSERS_PATH="$PW_BROWSERS" BASE_URL="http://127.0.0.1:$PORT" \
-    OUT_DIR="$vid_dir" DARK="$dark" SCENARIO="$scenario" \
+    OUT_DIR="$vid_dir" DARK="$dark" SCENARIO="$scenario" ADB_DOCS_REPLAY_RUN="$REPLAY_RUN" \
     node scripts/docs-gif/record.mjs
   drain_jobs
   cleanup
