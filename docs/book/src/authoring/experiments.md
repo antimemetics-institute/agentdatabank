@@ -314,6 +314,14 @@ Add exactly one readme in the experiment directory: `README.md` for ordinary Mar
 
 Describe what the new experiment or change does, the evidence it records, and the checks you ran. Include updated locks and fixtures needed to reproduce those checks. Submit the code and documentation through an ordinary repository pull request.
 
+### How do I give an experiment a thumbnail?
+
+Add `thumbnail.svg`, `thumbnail.png`, `thumbnail.jpg` or `thumbnail.webp` beside
+`package.nix`. The website bundles it during its build and shows it on the
+experiment's card, fitted inside a 2:1 frame without cropping. It is optional and
+stays outside the experiment's identity. GovSim reuses the thumbnail file as the
+first figure in its readme. Restart `task web:dev` after adding one.
+
 ### How can I weave charts into an experiment page?
 
 Charts require `README.mdx` beside `package.nix`. Each experiment has exactly one

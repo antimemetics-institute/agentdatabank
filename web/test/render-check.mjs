@@ -23,7 +23,7 @@ await build({
   // Browser-only charts are loaded in an effect, never by the SSR guard.
   external: ["vega-embed"],
   plugins: [{ name: "empty-narratives", setup(build) {
-    build.onResolve({ filter: /^virtual:experiment-pages$/ }, () => ({ path: "pages", namespace: "narratives" }));
+    build.onResolve({ filter: /^virtual:experiment-(pages|thumbnails)$/ }, () => ({ path: "pages", namespace: "narratives" }));
     build.onLoad({ filter: /.*/, namespace: "narratives" }, () => ({ contents: "export default {}" }));
   } }],
 });

@@ -2,10 +2,12 @@
    their pages (#/experiments/<name>). Every experiment in the manifest catalog
    gets a card — with zero runs it still appears (summary + a hint), so a fresh
    install shows what's runnable. Sorted by run count by default (the databank's
-   center of gravity first). The per-experiment detail (composer, runs) lives on the
+   center of gravity first). An experiment directory's optional thumbnail.<ext>
+   tops its card. The per-experiment detail (composer, runs) lives on the
    experiment page. */
 
 import { useState } from "react";
+import thumbnails from "virtual:experiment-thumbnails";
 import type { RunMeta, Manifest } from "@/shared/types";
 import { RenderBoundary, UnreadableRunLink, displayRun } from "@/components/read-errors";
 import { ArrowRight } from "lucide-react";
@@ -93,13 +95,18 @@ export function OverviewView({ runs: suppliedRuns, manifests }: { runs: RunMeta[
         {shown.map((exp) => {
           const rs = byExp[exp] ?? [];
           const summary = byName.get(exp)?.summary;
+          const thumbnail = thumbnails[exp];
           const counts: Record<string, number> = {};
           for (const r of rs) counts[displayState(r)] = (counts[displayState(r)] ?? 0) + 1;
           const last = lastOf(exp);
           return (
             <div key={exp} className="space-y-2">
               <a href={`#/experiments/${encodeURIComponent(exp)}`} className="block no-underline">
-                <Card className="flex h-full min-h-40 flex-col transition-colors hover:border-primary/50">
+                <Card className={`flex h-full min-h-40 flex-col overflow-hidden transition-colors hover:border-primary/50 ${thumbnail ? "pt-0" : ""}`}>
+                  {thumbnail && (
+                    <img src={thumbnail} alt="" loading="lazy"
+                      className="aspect-[2/1] w-full border-b bg-white object-contain" />
+                  )}
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-start justify-between gap-1.5 text-sm">
                       <span className="flex min-w-0 items-start gap-1.5">

@@ -11,7 +11,7 @@ License: [Creative Commons Attribution–ShareAlike 4.0 International](https://c
 as stated on the paper’s arXiv page. This attribution and license apply to the
 figure assets, independently of the surrounding code.
 
-- `figure-1.png`: [Original Figure 1](https://arxiv.org/html/2404.16698v4/govsim_pull_figure.png), overview of GovSim’s scenarios.
+- `../thumbnail.png`: [Original Figure 1](https://arxiv.org/html/2404.16698v4/govsim_pull_figure.png), overview of GovSim’s scenarios, shared by the README and experiment card.
 - `figure-2.png`: [Original Figure 2](https://arxiv.org/html/2404.16698v4/overview_fishing_simulation_prompts.png), fishing-agent cycle and prompt sketches.
 
 Retrieved 22 September 2026. Images retain their original pixels; the README

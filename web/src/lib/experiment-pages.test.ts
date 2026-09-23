@@ -18,3 +18,13 @@ test("narratives are discovered from README.mdx and absent for experiments witho
     assert.equal(hasNarrative("not-an-experiment"), false);
   } finally { await vite.close(); }
 });
+
+test("thumbnails are discovered from thumbnail.<ext> and absent for experiments without one", async () => {
+  const vite = await createServer({ logLevel: "silent", server: { middlewareMode: true, hmr: false, watch: null } });
+  try {
+    const { default: thumbnails } = await vite.ssrLoadModule("virtual:experiment-thumbnails") as { default: Record<string, string> };
+    assert.match(thumbnails.govsim!, /thumbnail\.png$/);
+    assert.ok(existsSync("../experiments/govsim/thumbnail.png"));
+    assert.ok(!("concordia" in thumbnails));
+  } finally { await vite.close(); }
+});
