@@ -111,7 +111,7 @@ in
   mkPythonEnv = lib.makeOverridable
     ({ name
     , workspaceRoot
-    , python ? pkgs.python313
+    , python
     , sourcePreference ? "wheel"
       # Upstreams without packaging cannot be uv dependencies. Define each
       # package in the experiment's overrides overlay and install it here.

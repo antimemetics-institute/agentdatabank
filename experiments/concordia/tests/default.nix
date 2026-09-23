@@ -1,4 +1,4 @@
-{ experiment, adb }: {
+{ experiment, adb, pkgs }: {
   pytest = (adb.testers.pytest {
     inherit experiment;
     tests = ./.;
@@ -10,6 +10,7 @@
     nativeBuildInputs = [ (adb.mkPythonEnv {
       name = "concordia-test-env";
       workspaceRoot = ../.;
+      python = pkgs.python313;
       groups = [ "dev" ];
     }) ];
   };

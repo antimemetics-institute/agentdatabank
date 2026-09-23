@@ -67,6 +67,7 @@ let
 in adb.mkPythonEnv {
   name = "source-fixture-env";
   workspaceRoot = /. + fixture;
+  python = pkgs.python313;
 }
 """)
     arguments = [
@@ -79,6 +80,12 @@ in adb.mkPythonEnv {
         str(app),
     ]
     before = output("nix-instantiate", *arguments, cwd=root)
+    declared = expression.read_text()
+    expression.write_text(declared.replace("  python = pkgs.python313;\n", ""))
+    missing = subprocess.run(["nix-instantiate", *arguments], cwd=root, text=True, capture_output=True)
+    assert missing.returncode != 0
+    assert "without required argument 'python'" in missing.stderr
+    expression.write_text(declared)
     for source in [app, root / "libs/events", root / "libs/experiment"]:
         (source / ".venv").mkdir()
         (source / ".venv/irrelevant").write_text("must not enter build inputs")

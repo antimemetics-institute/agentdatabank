@@ -5,10 +5,14 @@
 # extra in pyproject + relock + regen to enable them); sandbox needs come from the
 # eval's own declared runtime metadata. The bundled keyless `hello` smoke ships from
 # this family (hello_task/), so getting-started needs no key, network, or sandbox.
-{ adb, lib, writeShellApplication, jq }:
+{ adb, pkgs, lib, writeShellApplication, jq }:
 
 let
-  env = adb.mkPythonEnv { name = "adb-inspect-evals-env"; workspaceRoot = ./.; };
+  env = adb.mkPythonEnv {
+    name = "adb-inspect-evals-env";
+    workspaceRoot = ./.;
+    python = pkgs.python313;
+  };
 
   catalog = builtins.fromJSON (builtins.readFile ./task_catalog.json);
   # the typed sub-form schema for generate_args, generated from the pinned

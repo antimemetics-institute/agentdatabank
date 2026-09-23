@@ -9,12 +9,13 @@
 # Both run agentic coding loops inside an inspect sandbox: docker must be on the
 # host PATH (SWE-bench pulls per-instance images; the runner forwards PATH into the
 # experiment). VM-isolated execution (forest.nix) is the planned replacement.
-{ adb, lib, writeShellApplication, jq }:
+{ adb, pkgs, lib, writeShellApplication, jq }:
 
 let
   env = adb.mkPythonEnv {
     name = "adb-impossiblebench-env";
     workspaceRoot = ./.;
+    python = pkgs.python313;
     # the two git deps build from source (no wheels) and both use setuptools —
     # impossiblebench ships a legacy setup.py, inspect-evals declares the backend
     # without it being provided — so inject setuptools as their build system

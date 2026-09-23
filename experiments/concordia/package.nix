@@ -12,12 +12,13 @@
 # endpoint (`anthropic/`, `google/`, `groq/`, `mistral/`, `grok/`, `openrouter/`,
 # `azureai/` — see adb_experiment/providers.py) — endpoint and key come from the
 # credential store, never from params.
-{ adb, lib, writeShellApplication, jq }:
+{ adb, pkgs, lib, writeShellApplication, jq }:
 
 let
   env = adb.mkPythonEnv {
     name = "adb-concordia-env";
     workspaceRoot = ./.;
+    python = pkgs.python313;
   };
 
   mockSuggestion = {

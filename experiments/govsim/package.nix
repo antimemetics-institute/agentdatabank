@@ -7,7 +7,7 @@
 # missing packaging. Its pathfinder DSL is a uv git dependency. Other adaptation
 # lives in ./govsim_adapter: Hydra composition, model injection, hash embeddings
 # for keyless runs, wandb neutralization, and results from persisted native logs.
-{ adb, lib }:
+{ adb, pkgs, lib }:
 let
   govsimUpstream = final: final.callPackage
     ({ stdenv, pyprojectHook, resolveBuildSystem }: stdenv.mkDerivation {
@@ -32,6 +32,7 @@ let
   env = (adb.mkPythonEnv {
     name = "govsim-env";
     workspaceRoot = ./.;
+    python = pkgs.python313;
     extraPackages = [ "govsim" ];
     inherit overrides;
   }).overrideAttrs { meta.mainProgram = "govsim"; };
