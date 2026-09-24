@@ -9,18 +9,15 @@ export function GovSimFigure({ spec }: { spec: TopLevelSpec }) {
   const rows = useContext(RunDataContext);
   const [scenario, setScenario] = useState('fish');
   const [treatment, setTreatment] = useState('baseline_concurrent');
-  const [rounds, setRounds] = useState('0');
-  const [embedder, setEmbedder] = useState('all');
   const [metric, setMetric] = useState<Metric>('result_survival_months');
   if (rows === null) return <p>Loading run data…</p>;
-  const filters: Filters = { scenario, treatment, rounds, embedder };
+  const filters: Filters = { scenario, treatment, rounds: '0', embedder: 'all' };
   const base = rows.filter(row => matchesSettings(row, filters));
   const selected = base.filter(row => row.param_experiment === `${scenario}_${treatment}`);
   const { groups, points } = prepareFigure(selected, metric);
   const total = groups.reduce((sum, group) => sum + group.n, 0);
   const excluded = selected.length - total;
   const models = [...new Set(base.map(row => String(row.param_model)))].sort();
-  const roundOptions = [...new Set(rows.map(row => row.param_max_rounds).filter(value => typeof value === 'number'))].sort((a, b) => a - b);
   const embedders = [...new Set(rows.map(row => row.param_embedder).filter(value => typeof value === 'string'))].sort();
   const coverage = Object.entries(scenarios).flatMap(([key, name]) => Object.entries(treatments).flatMap(([variant, label]) => {
     const conditionRows = base.filter(row => row.param_experiment === `${key}_${variant}`);
@@ -35,7 +32,7 @@ export function GovSimFigure({ spec }: { spec: TopLevelSpec }) {
       text: `${scenarioLabel} · ${treatmentLabel}`,
       subtitle: [
         `${outcomes[metric].label} | ${total} completed runs | ${groups.length} model–condition groups`,
-        `Length: ${rounds === '0' ? 'full scenario' : rounds === 'all' ? 'all configured lengths' : `${rounds} months`} · Embedder: ${embedder === 'all' ? embedders.join(', ') || 'none recorded' : embedder}`,
+        `Length: full scenario · Embedder: ${embedders.join(', ') || 'none recorded'}`,
         'Dots: runs · Diamond: median · Bar: IQR · Shading: normalized KDE (n ≥ 5)',
       ],
       anchor: 'start', fontSize: 16, subtitleFontSize: 12, subtitleLineHeight: 18, offset: 18,
@@ -53,8 +50,6 @@ export function GovSimFigure({ spec }: { spec: TopLevelSpec }) {
         { label: 'Additional upstream variants', keys: ['perturbation_outsider_universalization', 'baseline_concurrent_paraphrase_1', 'baseline_concurrent_paraphrase_2'] },
       ].map(group => <optgroup key={group.label} label={group.label}>{group.keys.map(key => <option key={key} value={key}>{treatments[key as keyof typeof treatments]}</option>)}</optgroup>)}</select></label>
       <label>Outcome<select aria-label="Outcome" value={metric} onChange={event => setMetric(event.target.value as Metric)}>{Object.entries(outcomes).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-      <label>Run length<select aria-label="Run length" value={rounds} onChange={event => setRounds(event.target.value)}><option value="all">All configured lengths</option><option value="0">Full scenario</option>{roundOptions.filter(value => value !== 0).map(value => <option key={value} value={value}>{value} months</option>)}</select></label>
-      <label>Memory embedder<select aria-label="Memory embedder" value={embedder} onChange={event => setEmbedder(event.target.value)}><option value="all">All embedders</option>{embedders.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
     </div>
     {treatment.includes('paraphrase') && <p className="govsim-caption">Optional upstream variant, fishing only: alternative wording of the baseline instructions. Not listed in the authors’ <a href="https://github.com/giorgiopiatti/GovSim#table-of-experiments">table of paper experiments</a>.</p>}
     <p className="govsim-sample-note" role="status"><strong>{total} plotted runs</strong> across {groups.length} model–condition groups. {excluded} excluded ({groups.reduce((n, g) => n + g.incomplete, 0)} not completed; {groups.reduce((n, g) => n + g.missing, 0)} missing outcome). Each dot is one simulation run.</p>
@@ -74,7 +69,7 @@ export function GovSimFigure({ spec }: { spec: TopLevelSpec }) {
       <tbody>{groups.map(group => <tr key={group.model + group.condition}><th scope="row">{group.model}<a href={`#/conditions/${encodeURIComponent(group.condition)}`} title={group.condition}>Condition {group.condition.slice(0, 8)}</a></th><td>{group.n} / {group.total}</td><td>{group.seeds}</td><td>{fmt(group.median)}</td><td>{fmt(group.q1)}–{fmt(group.q3)}</td><td>{fmt(group.minimum)}–{fmt(group.maximum)}</td></tr>)}</tbody>
     </table></div>
     <h3>Sample sizes across conditions</h3>
-    <p className="govsim-caption"><strong>Plotted / total runs</strong> under the current outcome, length, and embedder filters. A dash means no runs. Select a row to compare it; distinct recorded conditions stay separate in the figure.</p>
+    <p className="govsim-caption"><strong>Plotted / total runs</strong> for full-scenario runs under the current outcome. A dash means no runs. Select a row to compare it; distinct recorded conditions stay separate in the figure.</p>
     <div className="govsim-table-scroll" tabIndex={0} role="region" aria-label="Sample sizes across scenarios and treatments"><table>
       <caption>Completed runs with a valid outcome / all recorded runs, by scenario, treatment, and model.</caption>
       <thead><tr><th scope="col">Scenario · treatment</th>{models.map(model => <th scope="col" key={model}>{model}</th>)}<th scope="col">Total</th></tr></thead>
