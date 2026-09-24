@@ -57,6 +57,26 @@ def digest_files(directory):
             for p in directory.rglob("*") if p.is_file()}
 
 
+def test_pre_hardware_stream_and_card_remain_verifiable(saved):
+    """Tier-1 schema 0 records omit hardware; reading must not add wire fields."""
+    directory, manifest = saved
+    def old_runtime(rows):
+        runtime = rows[0]["event"]["runtime"]
+        runtime.pop("cpu_model")
+        runtime.pop("cpu_count")
+    rewrite_stream(directory, old_runtime)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+    before = digest_files(directory)
+    records = list(read_events(directory))
+    assert records[0].event.runtime.cpu_model is None
+    assert records[0].event.runtime.cpu_count is None
+    assert [row.model_dump(mode="json", exclude_none=True) for row in records] == [
+        json.loads(line) for line in (directory / "events.jsonl").read_text().splitlines()
+    ]
+    verify_run(directory, manifest=manifest)
+    assert digest_files(directory) == before
+
+
 @pytest.mark.parametrize("relative", [False, True])
 def test_public_command_checks_all_three_and_preserves_every_file(saved, monkeypatch, capsys, relative):
     directory, manifest = saved

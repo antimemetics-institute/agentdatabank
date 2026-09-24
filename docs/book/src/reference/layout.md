@@ -81,8 +81,9 @@ its copies with `run.start` and recompute its derived block with `read_events`.
 The seed is the `--seed` argument unchanged, or a random non-negative 31-bit seed
 when omitted. Each launcher invocation executes one run.
 
-Provenance includes runtime `platform`, `runner_python_version`, optional
-`experiment_bin` and `runner_bin`, and `endpoints`. Executable paths are recorded
+Provenance includes runtime `platform`, `runner_python_version`, `cpu_model`,
+`cpu_count` (logical cores available to the process), optional `experiment_bin`
+and `runner_bin`, and `endpoints`. Older records omit the hardware fields. Executable paths are recorded
 only under `/nix/store/`; endpoint values contain only `scheme://host[:port]`,
 never userinfo, paths, query or fragment. A dirty or otherwise unpinned tree has
 no `fetch_ref`. `tree_hash` is included only where the launcher can compute it;

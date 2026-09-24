@@ -107,6 +107,8 @@ class Publisher:
         card: dict[str, Any] = json.loads((directory / "run.json").read_bytes())
         if card["lifecycle"]["state"] not in {"completed", "failed", "interrupted"}:
             raise PublishError("run is not terminal")
+        if not card.get("provenance", {}).get("fetch_ref"):
+            raise PublishError("run has no provenance.fetch_ref (pinned clean revision required)")
         audit = verify_run(directory, manifest=manifest)
         if audit.model_mismatches:
             raise PublishError("verify failed: served model mismatch")

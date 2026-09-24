@@ -41,6 +41,9 @@ def bucket(tmp_path, monkeypatch):
 @pytest.fixture
 def publication(saved, tmp_path, monkeypatch):
     directory, manifest = saved
+    # Publishable evidence records a pinned revision in both the stream and card.
+    rewrite_stream(directory, lambda rows: rows[0]["event"].update(fetch_ref="github:owner/repo/" + "a" * 40))
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
     home = tmp_path / "data dir's"
     directory.parents[2].rename(home)
     directory = home / "runs" / directory.parent.name / directory.name
@@ -112,6 +115,27 @@ def test_preview_prints_exact_keys_and_sizes_and_writes_nothing(publication, buc
         f"PLAN {base}/run.json {(directory / 'run.json').stat().st_size} bytes",
     ]
     assert objects(bucket) == {} and digest_files(directory.parents[2]) == before
+
+
+@pytest.mark.parametrize("preview", [False, True])
+@pytest.mark.parametrize("revision", [None, ""])
+def test_missing_fetch_ref_is_refused_per_run(publication, bucket, capsys, preview, revision):
+    directory, invoke = publication
+    good = clone(directory, 2)
+    def unpin(rows):
+        if revision is None:
+            rows[0]["event"].pop("fetch_ref")
+        else:
+            rows[0]["event"]["fetch_ref"] = revision
+    rewrite_stream(directory, unpin)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+    before = digest_files(directory)
+    assert invoke(*(["--dry-run"] if preview else [])) == 1
+    output = capsys.readouterr()
+    assert f"FAIL {directory.parent.name}/{directory.name}: run has no provenance.fetch_ref" in output.err
+    assert good.name in output.out
+    assert digest_files(directory) == before
+    assert len(objects(bucket)) == (0 if preview else 2)
 
 
 @pytest.mark.parametrize("option", ["--check", "--catalog"])

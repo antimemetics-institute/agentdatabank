@@ -21,6 +21,7 @@ import threading
 import time
 from collections.abc import Callable
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Literal, TextIO
 from urllib.parse import urlsplit
 
@@ -48,7 +49,7 @@ from .card import CardProjection
 # Nothing else ambient — credentials/endpoints reach a run ONLY through the
 # credential store (docs/book/src/running/secrets.md), so a stray key exported in the
 # shell can neither leak into a run nor shadow the stored value.
-ENV_ALLOWLIST = ["PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "DOCKER_HOST"]
+ENV_ALLOWLIST = ["PATH", "HOME", "TERM", "TMPDIR", "DOCKER_HOST"]
 
 # Refresh the index card from captured records while live, even during quiet periods.
 HEARTBEAT_S = 10.0
@@ -67,6 +68,18 @@ def validate_fetch_ref(ref: str | None) -> str | None:
 
 def _store_path(path: str | None) -> str | None:
     return path if path and path.startswith("/nix/store/") else None
+
+
+def _cpu_model() -> str:
+    """Linux exposes the model in procfs; retain a platform description elsewhere."""
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            key, _, value = line.partition(":")
+            if key.strip() in {"model name", "Hardware", "Processor"} and value.strip():
+                return value.strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine()
 
 
 def _endpoint_origins(
@@ -107,6 +120,8 @@ def child_env(
     env = {key: value for key, value in os.environ.items() if key in ENV_ALLOWLIST}
     env.update(credential_env or {})
     env.update(
+        LANG="C.UTF-8",
+        LC_ALL="C.UTF-8",
         ADB_RUN_ID=run_id,
         ADB_RUN_DIR=run_dir,
         ADB_SEED=str(seed),
@@ -201,6 +216,8 @@ def execute_run(
 
     runtime = RunEnvironment(
         platform=os.uname().sysname.lower() + "-" + os.uname().machine,
+        cpu_model=_cpu_model(),
+        cpu_count=os.process_cpu_count() or 1,
         experiment_bin=_store_path(program),
         runner_python_version=platform.python_version(),
         runner_bin=_store_path(os.environ.get("ADB_RUNNER_BIN")),

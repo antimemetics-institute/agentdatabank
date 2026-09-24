@@ -3,6 +3,7 @@ the contract (params on stdin, event payloads on a Unix socket). This is the sea
 experiment in any language crosses; no mocks, the fixture IS a minimal experiment."""
 
 import json
+import os
 import stat
 import shlex
 import sys
@@ -252,6 +253,8 @@ def test_provenance_is_saved_before_the_child_starts(tmp_path, monkeypatch):
     assert start.runtime.experiment_bin is None
     assert start.runtime.runner_bin == "/nix/store/fixture-runner/bin/adb-runner"
     assert start.runtime.runner_python_version
+    assert start.runtime.cpu_model
+    assert start.runtime.cpu_count == (os.process_cpu_count() or 1)
     assert start.seed == 42
     assert "must-not-be-recorded" not in (store.dir / "run.json").read_text()
 
@@ -426,6 +429,16 @@ def test_child_env_is_constructed_not_inherited(monkeypatch):
     stored = {"AWS_ACCESS_KEY_ID": "stored-access", "AWS_SECRET_ACCESS_KEY": "stored-secret"}
     env = child_env("rid", "/run/dir", 7, stored)
     assert {key: env[key] for key in stored} == stored
+
+
+@pytest.mark.parametrize("locale", ["C", "fr_FR.UTF-8"])
+def test_child_locale_is_pinned_regardless_of_parent(tmp_path, monkeypatch, locale):
+    monkeypatch.setenv("LANG", locale)
+    monkeypatch.setenv("LC_ALL", locale)
+    result, records, _ = run_fixture(tmp_path, script='#!/bin/sh\nprintf "%s %s\\n" "$LANG" "$LC_ALL"\n',
+                                    credential_env={"LANG": "other", "LC_ALL": "other"})
+    assert result.state == "completed"
+    assert {r["event"]["line"] for r in records if r["event"]["type"] == "stdout"} == {"C.UTF-8 C.UTF-8"}
 
 
 def test_saved_run_deserializes_with_public_models(tmp_path):

@@ -205,7 +205,7 @@ def test_lifecycle_models_contain_only_launch_and_process_facts():
     assert set(RunStart.model_fields) == {"type", "condition", "source", "fetch_ref", "tree_hash",
                                         "params", "seed", "runtime", "result_definitions"}
     assert set(RunEnd.model_fields) == {"type", "state", "duration_s", "exit_code"}
-    assert set(RunEnvironment.model_fields) == {"platform", "runner_python_version", "experiment_bin", "runner_bin", "endpoints"}
+    assert set(RunEnvironment.model_fields) == {"platform", "runner_python_version", "experiment_bin", "runner_bin", "endpoints", "cpu_model", "cpu_count"}
     with pytest.raises(ValidationError):
         RunStart.model_validate({**START, "replicate": 1})
     for field in ("summary", "usage_totals"):

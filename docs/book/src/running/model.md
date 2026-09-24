@@ -139,6 +139,8 @@ runs list shows them beside the requested model when they differ.
 Pilot each configuration for one round and verify its saved run before starting
 a sweep. Review the served model, retries, stop counts and any provider rejection.
 Keep generation settings explicit; changing settings creates a different condition.
+Launch sweeps from a clean tree, including untracked files; dry-run inspection
+remains available while editing.
 
 Use one runner process per run and stagger starts to spread provider traffic
 and local resource use. Invoke the same condition again for another run.

@@ -10,6 +10,9 @@ from ..render import RenderHint
 
 class RunEnvironment(Model):
     platform: str
+    # Absent on older records; new runners record the available hardware.
+    cpu_model: str | None = None
+    cpu_count: int | None = None
     experiment_bin: str | None = None
     runner_python_version: str
     # Supplied by the Nix launcher; absent for direct, unpackaged runner calls.

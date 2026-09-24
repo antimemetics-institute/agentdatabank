@@ -17,7 +17,7 @@ The runner invokes the executable without additional arguments, sets its working
 | `ADB_SEED` | Derived run seed as a decimal string. |
 | `ADB_EVENT_SOCKET` | Per-run Unix stream socket for structured events. |
 
-The child environment starts with only the host values of `PATH`, `HOME`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR` and `DOCKER_HOST`. The runner adds values from selected credential profiles, then its run variables. Arbitrary exported keys and endpoints are not inherited.
+The child environment starts with only the host values of `PATH`, `HOME`, `TERM`, `TMPDIR` and `DOCKER_HOST`. The runner adds values from selected credential profiles, pins `LANG` and `LC_ALL` to `C.UTF-8`, then adds its run variables. Arbitrary exported keys and endpoints are not inherited.
 
 A fresh directory and restricted environment are not an operating-system sandbox. The program runs as the launching user and can access resources available to that user. Some experiments use their own Docker-backed tasks; their daemon and service requirements must be met separately.
 

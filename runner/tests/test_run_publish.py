@@ -24,7 +24,7 @@ def launch(saved, tmp_path, monkeypatch):
     home = tmp_path / "run data's"
     monkeypatch.setenv("ADB_MANIFEST", str(manifest))
     monkeypatch.setenv("ADB_EXPERIMENT_BIN", str(program))
-    monkeypatch.delenv("ADB_FETCH_REF", raising=False)
+    monkeypatch.setenv("ADB_FETCH_REF", "github:owner/repo/" + "a" * 40)
     monkeypatch.setattr(cli, "resolve_viewer", lambda _: ("http://localhost", None))
     def invoke(*extra, profile="throwaway"):
         monkeypatch.setattr(sys, "argv", ["adb-runner", "--data-dir", str(home),
@@ -84,6 +84,18 @@ def test_failed_verification_skips_publishing_without_changing_exit(launch, buck
     assert "publish failed:" in capsys.readouterr().err
     [path] = home.glob("runs/*/*/run.json")
     assert json.loads(path.read_text())["lifecycle"]["state"] == "completed"
+
+
+def test_unpinned_completion_stays_local_without_changing_exit(launch, bucket, monkeypatch, capsys):
+    home, invoke, _ = launch
+    monkeypatch.delenv("ADB_FETCH_REF")
+    assert invoke() == 0
+    assert objects(bucket) == {}
+    assert "publish failed: run has no provenance.fetch_ref" in capsys.readouterr().err
+    [path] = home.glob("runs/*/*/run.json")
+    card = json.loads(path.read_text())
+    assert card["lifecycle"]["state"] == "completed"
+    assert "fetch_ref" not in card["provenance"]
 
 
 def test_publish_service_error_leaves_exit_zero_and_state_completed(launch, bucket, capsys):
