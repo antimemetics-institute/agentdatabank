@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from adb_runner.emit import main
+from adb_events.cli import main
 from adb_events import validate_event
 
 

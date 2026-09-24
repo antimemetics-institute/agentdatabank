@@ -6,7 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "rfc8785>=0.1.4",
     # the event vocabulary lives in adb-events (one definition, shared with every
-    # python experiment); the runner uses it for ingestion validation + `adb-emit`
+    # Python experiment); it also supplies the adb-emit console command.
     "adb-events",
     # the canonical provider registry (names + credential templates); the runner
     # uses it for the credential store's prompt templates and the missing-set gate
@@ -29,7 +29,6 @@ adb-providers = { path = "../lib/adb-providers" }
 
 [project.scripts]
 adb-runner = "adb_runner.cli:main"
-adb-emit = "adb_runner.emit:main"
 
 [dependency-groups]
 dev = [

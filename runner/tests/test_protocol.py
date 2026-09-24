@@ -53,7 +53,7 @@ def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=N
                 credential_env=None, fetch_ref=None, tree_hash=None):
     prog = tmp_path / "exp.sh"
     # Exercise the real CLI using this test environment's Python.
-    cli = f'adb-emit() {{ {shlex.quote(sys.executable)} -m adb_runner.emit "$@"; }}\n'
+    cli = f'adb-emit() {{ {shlex.quote(sys.executable)} -m adb_events.cli "$@"; }}\n'
     prog.write_text(script.replace("#!/bin/sh\n", "#!/bin/sh\n" + cli, 1))
     prog.chmod(prog.stat().st_mode | stat.S_IEXEC)
     store = RunStore(tmp_path / "home", "cid", "20260916t120000z-012345abcdef",

@@ -250,11 +250,10 @@ emitting its pointer. `adb_experiment.deposit_artifact` requires the custom
 
 ## Emission tools
 
-`adb-emit` validates a producer payload, sends it to `ADB_EVENT_SOCKET`, and waits for acknowledgement. It is installed in the runner package, alongside `adb-runner`. The following checkout commands only inspect a schema; they do not launch an experiment:
+`adb-emit` validates a producer payload, sends it to `ADB_EVENT_SOCKET`, and waits for acknowledgement. The `adb-events` package installs it without depending on the runner. It is also available in the runner's environment through that dependency. The following checkout command only inspects a schema; it does not launch an experiment:
 
 ```sh
-nix-build -A adb-runner
-./result/bin/adb-emit schema llm.call
+uv run --project lib/adb-events adb-emit schema llm.call
 ```
 
 In the experiment program, invoke `adb-emit result --name score --value 1` to record a value.

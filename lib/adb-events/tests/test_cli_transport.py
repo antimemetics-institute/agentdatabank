@@ -1,12 +1,27 @@
-"""The runner CLI and Python producers share the reference receiver."""
+"""The event CLI and Python producers share the reference receiver."""
 
 import subprocess
 import sys
+from importlib.metadata import distribution
+import json
+from pathlib import Path
 
 import pytest
 
 from adb_events import EventTransportError, Result, emit
 from adb_events.event_socket import event_socket
+
+
+def test_installed_command_belongs_to_adb_events():
+    entry, = [entry for entry in distribution("adb-events").entry_points if entry.name == "adb-emit"]
+    assert entry.group == "console_scripts"
+    assert entry.value == "adb_events.cli:main"
+    completed = subprocess.run(
+        [str(Path(sys.executable).parent / "adb-emit"), "schema", "result"],
+        capture_output=True, text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["properties"]["type"]["const"] == "result"
 
 
 def test_cli_and_python_use_socket_without_stdout(monkeypatch, capsys):
@@ -18,7 +33,7 @@ def test_cli_and_python_use_socket_without_stdout(monkeypatch, capsys):
             [
                 sys.executable,
                 "-m",
-                "adb_runner.emit",
+                "adb_events.cli",
                 "result",
                 "--name",
                 "cli",
@@ -42,7 +57,7 @@ def test_missing_socket_is_loud(monkeypatch):
         [
             sys.executable,
             "-m",
-            "adb_runner.emit",
+            "adb_events.cli",
             "result",
             "--name",
             "n",

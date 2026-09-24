@@ -228,7 +228,7 @@ def test_score_reproducible(inspect_ok, tmp_path, event_capture):
 
 def test_events_conform_to_schema(inspect_ok, tmp_path, capsys, event_capture):
     """Every emitted event validates against `adb-emit schema` (skip if adb-emit
-    isn't on PATH — it ships with adb-runner, present in the devshell)."""
+    isn't on PATH — it ships with adb-events, also installed in this environment)."""
     if not shutil.which("adb-emit"):
         pytest.skip("adb-emit not on PATH")
     import jsonschema  # inspect_ai pulls this in

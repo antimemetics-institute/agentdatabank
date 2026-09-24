@@ -25,7 +25,7 @@ Save this as `experiments/example-count/package.nix`:
 let
   program = writeShellApplication {
     name = "example-count-program";
-    runtimeInputs = [ jq adb-runner ]; # adb-runner supplies the adb-emit CLI
+    runtimeInputs = [ jq adb-runner ]; # the runner's environment includes adb-events' CLI
     text = ''
       count="$(jq -er '.count')"
       adb-emit result --name count --value "$count"
@@ -73,7 +73,7 @@ The generated launcher provides the manifest, source identity, and program path
 to the runner. Do not invoke `adb-runner`, build its execution environment by
 hand, or start the underlying program directly to create a run.
 
-The runner starts the program in a fresh workspace, sends the complete parameter object as JSON on standard input, and provides the run directory and seed in environment variables. Use `adb_events.emit()` in Python or the `adb-emit` CLI in other languages. The shell example reads its input with `jq` and calls `adb-emit` to record a metric matching its declared result name. Its `adb-runner` package dependency supplies that CLI; the program never invokes the runner itself. Ordinary stdout/stderr is captured as text, including printed JSON.
+The runner starts the program in a fresh workspace, sends the complete parameter object as JSON on standard input, and provides the run directory and seed in environment variables. Use `adb_events.emit()` in Python or the `adb-emit` CLI in other languages. The shell example reads its input with `jq` and calls `adb-emit` to record a result matching its declared result name. The CLI belongs to `adb-events`; this shell example obtains it through the runner's environment, and never invokes the runner itself. Ordinary stdout/stderr is captured as text, including printed JSON.
 
 For a larger program, put the implementation beside `package.nix` and have the adapter invoke its packaged executable. Pin dependencies in the package definition and dependency lock. Python experiments can use `adb.mkPythonEnv` to build a `pyproject.toml`/`uv.lock` workspace, and `adb-events` for validated event emission. `adb-experiment` provides a shared parameter-reading scaffold and artifact helper; see its [failure behavior](../reference/protocol.md#how-can-python-experiments-emit-validated-events) before adopting it.
 Each call to `adb.mkPythonEnv` must declare `python` explicitly, for example

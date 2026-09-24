@@ -124,7 +124,7 @@ validation or run-function exceptions to stderr, and returns `1` on those
 errors. A run-function exception also emits any supplied fallback metrics.
 Successful execution returns `0`.
 
-For other languages, invoke `adb-emit`, packaged with `adb-runner`. It handles validation and delivery for you. The [event reference](events.md#emission-tools) describes that CLI and its schema output.
+For other languages, invoke `adb-emit`, installed by `adb-events` and also included in the runner's environment. It handles validation and delivery for you. The [event reference](events.md#emission-tools) describes that CLI and its schema output.
 
 
 ## Reading runs in Python

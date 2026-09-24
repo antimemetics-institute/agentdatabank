@@ -7,6 +7,9 @@ dependencies = [
     "pydantic>=2.12,<3",
 ]
 
+[project.scripts]
+adb-emit = "adb_events.cli:main"
+
 [dependency-groups]
 dev = ["pytest>=8", "pytest-xdist", "adb-testing", "duckdb>=1.4,<2"]
 
