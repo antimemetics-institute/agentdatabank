@@ -287,8 +287,7 @@ class ChatClient:
             finally:
                 retries = self._retry_count.get()
                 self._retry_count.reset(token)
-                if retries:
-                    event.metadata = {**(event.metadata or {}), "adb_experiment.retries": retries}
+                event.retries = retries or None
         except Exception as exc:
             event.error = str(exc)
             event.working_time = time.monotonic() - started

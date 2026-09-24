@@ -132,7 +132,8 @@ def test_llm_call_shape(inspect_ok, tmp_path, capsys, event_capture):
         assert isinstance(c["input"], list) and c["input"]
         assert all(isinstance(m, dict) and "role" in m and "content" in m for m in c["input"])
         assert "input_refs" not in c
-        assert not {"params", "instance_id", "repeat", "role", "retries", "cache"} & c.keys()
+        assert not {"params", "instance_id", "repeat", "role", "cache"} & c.keys()
+        assert c["retries"] is None
         assert "choices" in c["output"]
 
 

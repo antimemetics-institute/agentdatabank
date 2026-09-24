@@ -42,8 +42,10 @@
 # Drop ChatMessageBase.source, ToolCall.view and its ToolCallContent viewer model;
 # keep ToolCall.parse_error as boundary parsing evidence. ToolCallError.type is str:
 # boundary producers report API errors; harness adapters retain native error types.
-# LLMCall drops role, retries, cache, params and its temperature/max_tokens
-# properties, plus deferred instance_id/repeat attribution (see models/llm.py).
+# LLMCall drops role, cache, params and its temperature/max_tokens properties,
+# plus deferred instance_id/repeat attribution. Its optional retries counter
+# records observed HTTP 429/5xx responses, not Inspect runtime bookkeeping
+# (see models/llm.py).
 # ModelUsage token counters must be non-negative.
 # UtcDatetime is imported from ADB's models/base.py; its validator and serializer
 # reject naive inputs and write UTC with six fractional digits + Z.

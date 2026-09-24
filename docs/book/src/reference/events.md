@@ -191,9 +191,10 @@ The event library depends only on Pydantic. There is no tracing runtime.
 | `output` | Required `ModelOutput`: all choices, completion text, optional usage, fallback, time, metadata and error. Failed calls can have empty choices. |
 | `call` | Optional raw provider request/response, error flag and timing, using Inspect's `ModelCall` fields. |
 | `error` | Optional error string. |
+| `retries` | Optional positive integer counting observed HTTP 429/5xx responses, including the final rejection on exhaustion. Defaults to `None` (omitted on the wire) when none are observed. Does not count connection failures or timeouts. The Python property falls back to historical `metadata["adb_experiment.retries"]` when the wire field is absent or null. |
 | `completed`, `working_time` | Optional UTC completion datetime and working duration in seconds. |
 | `metadata` | Producer notes with producer-prefixed keys; shared readers and web views do not depend on keys. A key needed by two producers becomes a field. |
-| `agent` | Optional attribution and the only ADB-added data field. The shared client uses its constructed agent; Inspect uses the model role when set, otherwise the caller's agent. |
+| `agent` | Optional attribution. The shared client uses its constructed agent; Inspect uses the model role when set, otherwise the caller's agent. |
 
 Messages have system, user, assistant or tool roles. Content is text or typed
 blocks for text, reasoning, images, audio, video, documents, server-side tool use,

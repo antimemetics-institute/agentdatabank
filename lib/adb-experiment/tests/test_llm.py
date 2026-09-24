@@ -57,7 +57,8 @@ def test_capture_matches_effective_sdk_request_and_original_response(event_captu
     )
     event = event_capture.read()[0]
     assert event["call"]["request"] == sent
-    assert not {"params", "role", "retries", "cache", "instance_id", "repeat"} & event.keys()
+    assert not {"params", "role", "cache", "instance_id", "repeat"} & event.keys()
+    assert event["retries"] is None
     assert event["input"][0]["content"] == "hello"
     assert event["call"]["request"]["temperature"] == 0.2
     assert event["call"]["request"]["max_completion_tokens"] == 80

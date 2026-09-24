@@ -51,6 +51,7 @@ FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("--call", "call", "json"),
         ("--working-time", "working_time", "json"),
         ("--error", "error", "str"),
+        ("--retries", "retries", "json"),
     ],
     "custom": [("--kind", "kind", "str"), ("--data", "data", "json")],
 }

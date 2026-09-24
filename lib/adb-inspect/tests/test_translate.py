@@ -192,7 +192,8 @@ def test_cached_model_events_and_role_attribution(event_capture, role, expected_
     assert raw["kind"] == "inspect.event" and closeout["kind"] == "inspect.sample"
     assert raw["data"] == event.model_dump(mode="json", exclude_none=True)
     assert call["type"] == "llm.call" and call["agent"] == expected_agent
-    assert not {"role", "cache", "retries", "params", "config", "instance_id", "repeat"} & call.keys()
+    assert not {"role", "cache", "params", "config", "instance_id", "repeat"} & call.keys()
+    assert call["retries"] is None  # Inspect's runtime count is retained in the raw event.
     assert call["metadata"].get("inspect.cache") == cache
     assert call["metadata"]["inspect.sample_id"] == sample.id
     assert call["metadata"]["inspect.epoch"] == sample.epoch

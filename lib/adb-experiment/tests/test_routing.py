@@ -105,8 +105,9 @@ def test_sdk_retries_are_per_call_including_overlapping_calls(event_capture, mon
     call("next")
     events = {e["call"]["request"]["messages"][0]["content"]: e for e in event_capture.read()}
     assert attempts == {"retry": 3, "clean": 1, "next": 1}
-    assert events["retry"]["metadata"]["adb_experiment.retries"] == 2
-    assert all("adb_experiment.retries" not in events[name]["metadata"] for name in ("clean", "next"))
+    assert events["retry"]["retries"] == 2
+    assert all(events[name]["retries"] is None for name in ("clean", "next"))
+    assert all("adb_experiment.retries" not in (event.get("metadata") or {}) for event in events.values())
 
 
 def test_exhausted_retries_retained_and_do_not_consume_first_success_check(event_capture, monkeypatch):
@@ -125,8 +126,10 @@ def test_exhausted_retries_retained_and_do_not_consume_first_success_check(event
     with pytest.raises(ServedModelMismatch):
         client.chat.completions.create(model="alias", messages=[])
     failure, success, log = event_capture.read()
-    assert failure["metadata"]["adb_experiment.retries"] == 9
+    assert failure["retries"] == 9
+    assert "adb_experiment.retries" not in (failure.get("metadata") or {})
     assert failure["error"] and failure["call"]["error"]
     assert failure["output"]["model"] == ""
-    assert "adb_experiment.retries" not in success["metadata"]
+    assert success["retries"] is None
+    assert "adb_experiment.retries" not in (success.get("metadata") or {})
     assert log["level"] == "error"

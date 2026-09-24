@@ -65,6 +65,8 @@ def test_llm_call_body_on_stdin(capsys, monkeypatch, event_capture):
         "a",
         "--model",
         "mock/x",
+        "--retries",
+        "2",
         stdin=json.dumps(body),
         monkeypatch=monkeypatch,
     )
@@ -72,6 +74,7 @@ def test_llm_call_body_on_stdin(capsys, monkeypatch, event_capture):
     event = json.loads(out)
     assert event["type"] == "llm.call" and event["model"] == "mock/x"
     assert event["input"][0]["content"] == "q"
+    assert event["retries"] == 2
     assert validate_event(event) == []
 
 

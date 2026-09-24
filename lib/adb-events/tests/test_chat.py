@@ -77,16 +77,16 @@ assert not any(name.split('.')[0] in {'inspect_ai', 'openai', 'opentelemetry'} f
 
 
 def test_llm_call_has_only_boundary_fields():
-    assert set(LLMCall.model_fields) == {
+    assert {field.alias or name for name, field in LLMCall.model_fields.items()} == {
         "type", "model", "input", "tools", "tool_choice", "output", "call",
-        "error", "completed", "working_time", "metadata", "agent",
+        "error", "retries", "completed", "working_time", "metadata", "agent",
     }
     event = parse_event(FIXTURE.read_text())
     assert not hasattr(event, "temperature") and not hasattr(event, "max_tokens")
 
 
 @pytest.mark.parametrize("field,value", [
-    ("role", "grader"), ("retries", 2), ("cache", "read"),
+    ("role", "grader"), ("cache", "read"),
     ("instance_id", "s"), ("repeat", 1), ("params", {"temperature": 0.2}),
 ])
 def test_removed_harness_fields_are_rejected(field, value):
@@ -94,6 +94,57 @@ def test_removed_harness_fields_are_rejected(field, value):
     payload[field] = value
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         parse_event(json.dumps(payload))
+
+
+def test_retries_default_to_none_and_round_trip():
+    event = parse_event(FIXTURE.read_text())
+    assert event.retries is None
+    assert json.loads(event.model_dump_json(by_alias=True))["retries"] is None
+    assert "retries" not in json.loads(event.model_dump_json(by_alias=True, exclude_none=True))
+    for retries in (None, 1, 2):
+        event.retries = retries
+        assert event.retries_ == retries
+        wire = event.model_dump_json(by_alias=True, exclude_none=True)
+        assert parse_event(wire) == event
+        assert json.loads(wire).get("retries") == retries
+        assert "retries_" not in json.loads(wire)
+
+
+@pytest.mark.parametrize("retries", [0, -1, 1.5, "2", True])
+def test_retries_reject_invalid_counts(retries):
+    payload = json.loads(FIXTURE.read_text())
+    payload["retries"] = retries
+    with pytest.raises(ValidationError):
+        parse_event(json.dumps(payload))
+    event = parse_event(FIXTURE.read_text())
+    with pytest.raises(ValidationError):
+        event.retries = retries
+
+
+@pytest.mark.parametrize("legacy", [3, "3"])
+def test_retries_read_legacy_metadata_without_rewriting_it(legacy):
+    payload = json.loads(FIXTURE.read_text())
+    payload["metadata"] = {"adb_experiment.retries": legacy}
+    event = parse_event(json.dumps(payload))
+    assert event.retries == 3
+    assert event.retries_ is None
+    wire = event.model_dump_json(by_alias=True, exclude_none=True)
+    assert "retries" not in json.loads(wire)
+    assert json.loads(wire)["metadata"] == payload["metadata"]
+    assert parse_event(wire).retries == 3
+
+
+def test_retries_wire_field_and_setter_take_precedence_over_metadata():
+    payload = json.loads(FIXTURE.read_text())
+    payload.update(retries=2, metadata={"adb_experiment.retries": 3})
+    event = parse_event(json.dumps(payload))
+    assert event.retries == 2
+    event.retries = 4
+    assert event.retries == event.retries_ == 4
+    assert json.loads(event.model_dump_json(by_alias=True))["retries"] == 4
+    event.retries = None
+    assert event.retries_ is None
+    assert event.retries == 3
 
 
 @pytest.mark.parametrize("error_type", ["error", "timeout", "harness_specific"])

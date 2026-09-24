@@ -39,7 +39,7 @@ readers use to locate and pool runs; it is not precedent for other derived value
 ## 1. Model calls
 
 `LLMCall` carries `model`, `input`, `tools`, `tool_choice`, `output`, `call`,
-`error`, `completed`, `working_time`, `metadata`, and ADB's `agent` attribution.
+`error`, `retries`, `completed`, `working_time`, `metadata`, and ADB's `agent` attribution.
 Chat, content, citation, tool, output and usage models come from Inspect AI
 0.3.263, vendored in [inspect_chat.py](../../lib/adb-events/adb_events/inspect_chat.py).
 
@@ -64,8 +64,15 @@ SDK objects, not HTTP bytes. Tool requests do not establish execution.
 `input_tokens` excludes cached tokens; add cache read/write counts for total
 input usage. Missing usage is unknown.
 
-Failed requests retain available input and error. Internal SDK retries count
-separately only if observed individually. Completion-time capture cannot preserve
+Failed requests retain available input and error. The optional positive integer
+`retries` field records observed HTTP 429/5xx responses, including the final
+rejection on exhaustion. It defaults to `None` and is omitted from JSONL when
+none are observed; connection failures and timeouts are not counted. This
+promotes the former `adb_experiment.retries` metadata note to a typed field.
+The Python `retries` property prefers that field and falls back to the historical
+metadata note when absent or null, without rewriting the stored record.
+Internal SDK attempts become separate calls only if observed individually.
+Completion-time capture cannot preserve
 an operation whose process dies awaiting a response. ChatClient records the
 original response before stripping think blocks from returned text; a changed
 return sets `metadata["adb_experiment.returned_text_stripped"] = true`.

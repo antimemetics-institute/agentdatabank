@@ -1304,6 +1304,20 @@
           "default": null,
           "title": "Error"
         },
+        "retries": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Observed HTTP 429/5xx responses, including the final rejection on exhaustion; absent when none observed.",
+          "title": "Retries"
+        },
         "completed": {
           "anyOf": [
             {
