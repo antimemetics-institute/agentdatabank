@@ -106,6 +106,7 @@ def test_schema_output_is_json_schema(capsys):
         "custom",
         "run.start",
         "run.end",
+        "producer.python",
     }
 
 

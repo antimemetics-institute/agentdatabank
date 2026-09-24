@@ -2312,6 +2312,98 @@
       "title": "ModelUsage",
       "type": "object"
     },
+    "ProducerPython": {
+      "additionalProperties": false,
+      "description": "The producing interpreter's toolchain, emitted once before its observations.",
+      "properties": {
+        "type": {
+          "const": "producer.python",
+          "default": "producer.python",
+          "title": "Type",
+          "type": "string"
+        },
+        "implementation": {
+          "title": "Implementation",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "executable": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Executable"
+        },
+        "platform": {
+          "title": "Platform",
+          "type": "string"
+        },
+        "libc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Libc"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "hash_seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hash Seed"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "implementation",
+        "version",
+        "platform",
+        "flags"
+      ],
+      "title": "ProducerPython",
+      "type": "object",
+      "x-adb-render": {
+        "body": "{implementation} {version}",
+        "format": "text",
+        "icon": "code"
+      }
+    },
     "RecordData": {
       "additionalProperties": {
         "$ref": "#/$defs/JsonValue"
@@ -3020,6 +3112,7 @@
       "custom": "#/$defs/GovsimCustom",
       "llm.call": "#/$defs/LLMCall",
       "log": "#/$defs/Log",
+      "producer.python": "#/$defs/ProducerPython",
       "result": "#/$defs/Result",
       "run.end": "#/$defs/RunEnd",
       "run.start": "#/$defs/RunStart",
@@ -3053,6 +3146,9 @@
     },
     {
       "$ref": "#/$defs/CapturedLine"
+    },
+    {
+      "$ref": "#/$defs/ProducerPython"
     }
   ]
 }

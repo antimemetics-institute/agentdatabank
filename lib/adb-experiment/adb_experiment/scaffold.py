@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
-from adb_events import CustomEvent, Result, emit
+from adb_events import CustomEvent, Result, emit, emit_producer
 
 
 class SupportsModelValidate(Protocol):
@@ -62,6 +62,7 @@ def experiment_main(params_model: SupportsModelValidate,
         return 1
     os.environ.setdefault("ADB_RUN_DIR", ".")
     try:
+        emit_producer()
         run(params)
     except Exception:
         traceback.print_exc()

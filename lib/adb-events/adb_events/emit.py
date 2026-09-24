@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
+import locale
+import os
+import platform
+import sys
 from typing import Any
 
 from .transport import send_event
-from .models import CustomEvent, PRODUCER_ADAPTER, PRODUCER_MODELS, ProducerPayload
+from .models import CustomEvent, PRODUCER_ADAPTER, PRODUCER_MODELS, ProducerPayload, ProducerPython
+
+
+def emit_producer() -> None:
+    """Record this interpreter. Call once per run, before other producer events."""
+    try:
+        hash_seed = int(os.environ["PYTHONHASHSEED"])
+    except (KeyError, ValueError):
+        hash_seed = None
+    emit(ProducerPython(
+        implementation=platform.python_implementation(),
+        version=platform.python_version(),
+        executable=sys.executable or None,
+        platform=platform.platform(),
+        libc=" ".join(platform.libc_ver()).strip() or None,
+        locale=locale.getlocale()[0],
+        hash_seed=hash_seed,
+        flags=sorted(name for name in dir(sys.flags)
+                     if not name.startswith(("_", "n_"))
+                     and isinstance(getattr(sys.flags, name), int) and getattr(sys.flags, name)),
+    ))
 
 
 def emit(event: ProducerPayload | CustomEvent[Any]) -> None:

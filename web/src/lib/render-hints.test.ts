@@ -49,7 +49,7 @@ test("actor registries seed silent actors, then row labels apply in transcript o
 
 test("exported schemas supply facets and field-dependent hints", () => {
   assert.deepEqual(schemaKinds(definitions).sort(), ["run.start", "run.end", "llm.call",
-    "custom", "result", "status", "log", "stdout", "stderr", "test.message"].sort());
+    "custom", "result", "status", "log", "stdout", "stderr", "producer.python", "test.message"].sort());
   assert.equal(renderHint({ type: "log", level: "warn" }, definitions)?.icon, "triangle-alert");
   assert.equal(renderHint({ type: "log" }, definitions)?.icon, "info");
   assert.equal(renderHint({ type: "stderr" }, definitions)?.body, "line");

@@ -10,8 +10,26 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 
 import pytest
+
+
+def test_main_emits_producer_first(tmp_path, monkeypatch, event_capture):
+    from adb_events import Status, emit
+    from adb_inspect import main as entry
+
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"task": "mock-task", "model": "mockllm/model"}))
+    monkeypatch.setattr(sys, "argv", ["adb-inspect-eval", str(config)])
+
+    def run(params):
+        emit(Status(detail="running"))
+        return 0
+
+    monkeypatch.setattr(entry, "run", run)
+    assert entry.main() == 0
+    assert [e["type"] for e in event_capture.read()] == ["producer.python", "status"]
 
 
 @pytest.fixture(scope="module")

@@ -22,7 +22,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from adb_events import CustomEvent, CapturedLine, Log, Result, Status, emit
+from adb_events import CustomEvent, CapturedLine, Log, Result, Status, emit, emit_producer
 from .models import Params, inspect_model
 from .sandbox_status import sandbox_provisioning_status
 from .translate import (emit_aggregate, emit_provenance,
@@ -253,6 +253,7 @@ def main() -> int:
         traceback.print_exc()
         return 1
     try:
+        emit_producer()
         return run(params)
     except Exception:
         traceback.print_exc()

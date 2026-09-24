@@ -136,10 +136,11 @@ def test_registry_is_derived_from_union_discriminators():
     )
 
 
-def test_v0_has_exactly_the_nine_shared_tags():
+def test_v0_has_exactly_the_ten_shared_tags():
     assert set(EVENT_MODELS) == {
         "run.start", "run.end", "llm.call", "custom", "result",
         "status", "log", "stdout", "stderr",
+        "producer.python",
     }
 
 

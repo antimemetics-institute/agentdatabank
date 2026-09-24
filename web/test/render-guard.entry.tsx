@@ -579,6 +579,15 @@ assert.ok(!beforeRaw(sharedView(sharedRows[1]!)).includes("data-latest-status"))
 assert.match(beforeRaw(sharedView(sharedRows[10]!)), /data-latest-status/);
 console.log("shared row guard ok — structured lifecycle, derived totals, typed results, latest status, log levels, clean terminal lines");
 
+// Producer toolchains use the shared schema hint without a bespoke renderer.
+const producer = envelope({ type: "producer.python", implementation: "CPython", version: "3.13.14",
+  platform: "Linux", flags: [] });
+const producerView = renderToStaticMarkup(<EventStream review events={[producer]}
+  definitions={hintDefinitions} state="completed" />);
+assert.match(producerView, /data-event-renderer="hint"/);
+assert.ok(htmlText(producerView).includes("CPython 3.13.14"));
+assert.ok(!producerView.includes('data-event-renderer="raw"'));
+
 // Native rows use the actual exported templates and never the unhinted fallback.
 const govsimRows = events.filter((e) => e.event.kind?.startsWith("govsim."));
 assert.ok(!govsimDefinitions.some((d) => d.kind === "govsim.pool"));

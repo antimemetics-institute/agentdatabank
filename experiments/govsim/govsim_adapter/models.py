@@ -4,7 +4,7 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, JsonValue, RootModel
 
-from adb_events import ActorRegistry, CapturedLine, CustomEvent, RenderHint, LLMCall, Log, Result, RunEnd, RunStart, Status
+from adb_events import ActorRegistry, CapturedLine, CustomEvent, RenderHint, LLMCall, Log, ProducerPython, Result, RunEnd, RunStart, Status
 from adb_events.models.base import Model, NonNegativeInt
 
 
@@ -169,6 +169,6 @@ type GovsimCustom = Annotated[
 ]
 type Payload = Annotated[
     RunStart | RunEnd | LLMCall | GovsimCustom | Result
-    | Status | Log | CapturedLine,
+    | Status | Log | CapturedLine | ProducerPython,
     Field(discriminator="type"),
 ]

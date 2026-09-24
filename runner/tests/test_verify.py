@@ -5,6 +5,7 @@ import json
 import shlex
 import shutil
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +14,87 @@ from adb_runner.verify import VerificationError, verify_run
 from adb_events import LLMCall, ModelOutput, ChatCompletionChoice, ChatMessageAssistant, read_events
 from adb_runner.card import derive_card
 from test_protocol import MANIFEST, run_fixture
+
+
+VENV = "/nix/store/" + "a" * 32 + "-experiment-env"
+WRAPPER = "/nix/store/" + "b" * 32 + "-adapter/bin/adapter"
+OTHER_VENV = "/nix/store/" + "c" * 32 + "-another-env"
+
+
+def with_producer(directory, *, index=1, count=1, program=None, executable=None):
+    def insert(rows):
+        if program is not None:
+            rows[0]["event"]["runtime"]["experiment_bin"] = program
+        event = {"type": "producer.python", "implementation": "CPython", "version": "3.13.14",
+                 "platform": "Linux", "flags": []}
+        if executable is not None:
+            event["executable"] = executable
+        rows[index:index] = [{**rows[0], "event": event} for _ in range(count)]
+        for seq, row in enumerate(rows):
+            row["seq"] = seq
+    rewrite_stream(directory, insert)
+    (directory / "run.json").write_text(json.dumps(derive_card(read_events(directory))))
+
+
+@pytest.fixture
+def nix_wrapper(monkeypatch, tmp_path):
+    """Model read-only Nix store files without creating or mutating store objects."""
+    script = tmp_path / "adapter"
+    script.write_text(f'#!/bin/sh\n{VENV}/bin/experiment "$@"\n')
+    is_file, path_open = Path.is_file, Path.open
+    monkeypatch.setattr(Path, "is_file", lambda path: str(path) == VENV + "/pyvenv.cfg" or is_file(path))
+    monkeypatch.setattr(Path, "open", lambda path, *args, **kw:
+                        path_open(script if str(path) == WRAPPER else path, *args, **kw))
+
+
+@pytest.mark.parametrize("program", [VENV + "/bin/experiment", WRAPPER])
+@pytest.mark.parametrize("matching", [True, False])
+def test_producer_executable_must_belong_to_launch_venv(saved, nix_wrapper, program, matching):
+    directory, manifest = saved
+    with_producer(directory, program=program, executable=(VENV if matching else OTHER_VENV) + "/bin/python")
+    before = digest_files(directory)
+    if matching:
+        assert verify_run(directory, manifest=manifest, environment={}).producer_warnings == ()
+    else:
+        with pytest.raises(VerificationError, match="outside experiment_bin's Python venv"):
+            verify_run(directory, manifest=manifest, environment={})
+    assert digest_files(directory) == before
+
+
+def test_producer_unrecognized_launcher_notes_containment_skip(saved):
+    directory, manifest = saved
+    with_producer(directory, program=WRAPPER, executable=VENV + "/bin/python")
+    result = verify_run(directory, manifest=manifest, environment={})
+    assert len(result.producer_warnings) == 1
+    assert "containment skipped" in result.producer_warnings[0]
+
+
+@pytest.mark.parametrize("index,count,reason", [
+    (1, 2, "exactly one"), (2, 1, "precede every other producer event"),
+])
+def test_producer_must_be_unique_and_first(saved, index, count, reason):
+    directory, manifest = saved
+    with_producer(directory, index=index, count=count)
+    with pytest.raises(VerificationError, match=reason):
+        verify_run(directory, manifest=manifest, environment={})
+
+
+def test_captured_import_noise_can_precede_producer(saved):
+    directory, manifest = saved
+    rewrite_stream(directory, lambda rows: rows[1].update(event={"type": "stderr", "line": "import warning"}))
+    with_producer(directory, index=2)
+    assert verify_run(directory, manifest=manifest, environment={}).producer_warnings == ()
+
+
+def test_legacy_producer_absence_warns_without_failing(saved, monkeypatch, capsys):
+    directory, manifest = saved
+    before = digest_files(directory)
+    monkeypatch.setattr(sys, "argv", ["adb-runner", "verify", str(directory), "--manifest", str(manifest)])
+    assert cli.main() == 0
+    output = capsys.readouterr()
+    assert "WARN: producer.python absent (older producer)" in output.err
+    assert "producer audit" in output.out and "verify: PASS:" in output.out
+    assert digest_files(directory) == before
 
 
 def _build_saved(tmp_path, monkeypatch):

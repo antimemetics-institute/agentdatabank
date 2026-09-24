@@ -17,6 +17,7 @@ from .models import (
     Result,
     Payload,
     ProducerPayload,
+    ProducerPython,
     RunEnd,
     RunEnvironment,
     RunStart,
@@ -32,13 +33,15 @@ from .inspect_chat import (
     ChatMessageUser,
     ModelCall, ModelOutput, ModelUsage, ChatCompletionChoice, ToolInfo, ToolFunction,
 )
-from .emit import emit
+from .emit import emit, emit_producer
 from .transport import EventTransportError
 from .read import EventReadError, parse_event, read_events
 from .render import ActorRegistry, RenderHint, export_schema
 
 __all__ = [
     "emit",
+    "emit_producer",
+    "ProducerPython",
     "parse_event",
     "read_events",
     "EventReadError",

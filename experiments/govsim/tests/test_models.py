@@ -10,6 +10,12 @@ from adb_events.render import hint_path_declared, hint_paths
 from govsim_adapter.models import GovsimConfig, GovsimState, Payload, StateData, ACTION_MODELS
 
 
+def test_union_includes_every_shared_tag():
+    from adb_events import EVENT_MODELS
+
+    assert set(TypeAdapter(Payload).json_schema()["discriminator"]["mapping"]) == set(EVENT_MODELS)
+
+
 def test_config_hint_exports_the_persona_registry():
     hint = export_schema(Payload)["$defs"]["GovsimConfig"]["x-adb-render"]
     assert hint["actor_registry"] == {"path": "data.experiment.personas", "label": "name"}

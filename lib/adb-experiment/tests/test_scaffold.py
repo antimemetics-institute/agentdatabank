@@ -42,4 +42,20 @@ raise SystemExit(experiment_main(Params, run, prog="crashing-experiment",
     assert proc.returncode == 1
     assert "RuntimeError: simulation crashed after observation" in proc.stderr
     events = event_capture.read()
-    assert [(e['name'], e['value']) for e in events] == [('observations', 3), ('errors', 1)]
+    assert events[0]["type"] == "producer.python"
+    assert [(e['name'], e['value']) for e in events[1:]] == [('observations', 3), ('errors', 1)]
+
+
+def test_experiment_main_emits_producer_first(tmp_path, event_capture):
+    from adb_events import Status, emit
+    from adb_experiment import experiment_main
+    from pydantic import BaseModel
+
+    class Params(BaseModel):
+        n: int
+
+    config = tmp_path / "config.json"
+    config.write_text('{"n": 1}')
+    assert experiment_main(Params, lambda _: emit(Status(detail="running")),
+                           prog="mock", argv=[str(config)]) == 0
+    assert [e["type"] for e in event_capture.read()] == ["producer.python", "status"]

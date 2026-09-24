@@ -199,6 +199,7 @@ def test_json_schema_exposes_wire_discriminators_and_constraints():
         "custom",
         "run.start",
         "run.end",
+        "producer.python",
     }
     assert schemas["custom"]["properties"]["type"]["const"] == "custom"
     assert "data" in schemas["custom"]["required"]

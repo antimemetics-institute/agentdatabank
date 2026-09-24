@@ -34,6 +34,7 @@ class Verification:
     model_mismatches: tuple[tuple[str, str], ...]
     max_tokens_stops: int
     content_filter_stops: int
+    producer_warnings: tuple[str, ...]
 
 
 # Invoke only the current build's interpreter and declared union, never code paths
@@ -140,6 +141,67 @@ def _validate_union(run_dir: Path, manifest: Manifest, records: list[Envelope[An
         raise VerificationError(message)
 
 
+_STORE_ROOT = r"/nix/store/[a-z0-9]{32}-[^/\s\"']+"
+
+
+def _store_root(path: str | None) -> str | None:
+    if path and (match := re.match(_STORE_ROOT + r"(?=/|$)", os.path.normpath(path))):
+        return match[0]
+    return None
+
+
+def _python_venvs(program: str, seen: set[str] | None = None) -> set[str]:
+    """Read Nix wrapper references without executing them or resolving Python symlinks.
+
+    A venv's bin/python can link to the base interpreter; its lexical store root
+    is the environment we need to compare. Shell adapters reference that venv's
+    console entrypoint. Unavailable or unrecognized launchers remain unaudited.
+    """
+    root = _store_root(program)
+    if root is None:
+        return set()
+    if (Path(root) / "pyvenv.cfg").is_file():
+        return {root}
+    seen = set() if seen is None else seen
+    if program in seen or len(seen) >= 8:
+        return set()
+    seen.add(program)
+    try:
+        with Path(program).open() as file:
+            script = file.read(65536)
+    except (OSError, UnicodeError):
+        return set()
+    if not script.startswith("#!"):
+        return set()
+    roots: set[str] = set()
+    for reference in re.findall(_STORE_ROOT + r"/bin/[A-Za-z0-9._+-]+", script):
+        roots.update(_python_venvs(reference, seen))
+    return roots
+
+
+def _audit_producer(records: list[Envelope[Any]]) -> tuple[str, ...]:
+    producers = [record for record in records if record.event.type == "producer.python"]
+    if not producers:
+        return ("producer.python absent (older producer); producer audit unavailable",)
+    if len(producers) != 1:
+        raise VerificationError("producer audit: expected exactly one producer.python record")
+    producer = producers[0]
+    # Stdio is captured asynchronously, including import-time dependency noise;
+    # it does not establish the order of explicit producer submissions.
+    if any(record.event.type not in {"run.start", "stdout", "stderr"}
+           for record in records[:producer.seq]):
+        raise VerificationError("producer audit: producer.python must precede every other producer event")
+    executable = _store_root(producer.event.executable)
+    program = records[0].event.runtime.experiment_bin
+    if executable is not None and program is not None and _store_root(program) is not None:
+        roots = _python_venvs(program)
+        if not roots:
+            return ("producer audit: executable containment skipped; launcher Python venv could not be recovered",)
+        if executable not in roots:
+            raise VerificationError("producer audit: executable is outside experiment_bin's Python venv")
+    return ()
+
+
 def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | None = None,
                environment: Mapping[str, str] | None = None) -> Verification:
     """Audit saved files, typed records, identity/order, the card, and declared results.
@@ -171,6 +233,7 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
     for section in expected:
         if json.dumps(card[section], sort_keys=True) != json.dumps(expected[section], sort_keys=True):
             raise VerificationError(f"run.json.{section} differs from the stream projection")
+    producer_warnings = _audit_producer(records)
     declared_results = {result["name"] for result in declaration.get("results", [])}
     reported_results = set(expected["derived"]["results"])
     if reported_results != declared_results:
@@ -191,7 +254,7 @@ def verify_run(run_dir: Path, *, manifest: Path | None = None, catalog: Path | N
     stops = sum(any(choice.stop_reason == "max_tokens" for choice in call.output.choices) for call in calls)
     filtered = sum(any(choice.stop_reason == "content_filter" for choice in call.output.choices) for call in calls)
     return Verification(len(records), len({value for value in values.values() if value}),
-                        tuple(sorted(mismatches)), stops, filtered)
+                        tuple(sorted(mismatches)), stops, filtered, producer_warnings)
 
 
 def verify_cli(argv: list[str]) -> int:
@@ -222,9 +285,11 @@ def verify_cli(argv: list[str]) -> int:
         return 1
     for requested, served in result.model_mismatches:
         print(f"verify: WARN: served model mismatch: requested {requested!r}, served {served!r}", file=sys.stderr)
+    for warning in result.producer_warnings:
+        print(f"verify: WARN: {warning}", file=sys.stderr)
     print(f"verify: max_tokens stops: {result.max_tokens_stops}; "
           f"content_filter stops: {result.content_filter_stops} (llm.call records)")
     state = "FAIL" if result.model_mismatches else "PASS"
     print(f"verify: {state}: {result.records} records; experiment union, secrets scan "
-          f"({result.credential_values} known credential values), card match, declared results, and request seeds match")
+          f"({result.credential_values} known credential values), card match, producer audit, declared results, and request seeds match")
     return int(bool(result.model_mismatches))

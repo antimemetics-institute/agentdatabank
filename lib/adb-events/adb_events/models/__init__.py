@@ -11,6 +11,7 @@ from ..identity import RunId
 from .base import Event, Model, NonNegativeInt, UtcDatetime
 from .base import Json as Json, Scalar as Scalar
 from .common import (
+    ProducerPython as ProducerPython,
     Status as Status,
     Log as Log,
     CapturedLine as CapturedLine,
@@ -33,7 +34,8 @@ LLMCall.render = RenderHint(icon="sparkles", actor="agent")
 # These unions are the authority. The registry used for per-type schema export
 # is derived from their literal tags, rather than maintaining a second list.
 type ProducerPayload = Annotated[
-    Status
+    ProducerPython
+    | Status
     | Log
     | CapturedLine
     | Result
