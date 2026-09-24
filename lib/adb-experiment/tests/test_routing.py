@@ -107,7 +107,7 @@ def test_sdk_retries_are_per_call_including_overlapping_calls(event_capture, mon
     assert attempts == {"retry": 3, "clean": 1, "next": 1}
     assert events["retry"]["retries"] == 2
     assert all(events[name]["retries"] == 0 for name in ("clean", "next"))
-    assert all("adb_experiment.retries" not in (event.get("metadata") or {}) for event in events.values())
+    assert all(event["metadata"] is None for event in events.values())
 
 
 def test_exhausted_retries_retained_and_do_not_consume_first_success_check(event_capture, monkeypatch):
@@ -127,9 +127,9 @@ def test_exhausted_retries_retained_and_do_not_consume_first_success_check(event
         client.chat.completions.create(model="alias", messages=[])
     failure, success, log = event_capture.read()
     assert failure["retries"] == 9
-    assert "adb_experiment.retries" not in (failure.get("metadata") or {})
+    assert failure["metadata"] is None
     assert failure["error"] and failure["call"]["error"]
     assert failure["output"]["model"] == ""
     assert success["retries"] == 0
-    assert "adb_experiment.retries" not in (success.get("metadata") or {})
+    assert success["metadata"] is None
     assert log["level"] == "error"

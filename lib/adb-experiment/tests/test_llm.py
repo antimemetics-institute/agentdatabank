@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from openai.types.chat import ChatCompletion
 
+from adb_events.inspect_chat import ChatMessageAssistant, ContentReasoning, ContentText
 from adb_experiment.llm import ChatClient
 
 
@@ -66,9 +67,12 @@ def test_capture_matches_effective_sdk_request_and_original_response(event_captu
     assert event["call"]["response"] == original
     assert event["output"]["model"] == "alias-2026-09-16"
     assert event["call"]["response"]["system_fingerprint"] == "fp_123"
-    assert event["output"]["choices"][0]["message"]["content"] == original["choices"][0]["message"]["content"]
+    assert ChatMessageAssistant.model_validate(event["output"]["choices"][0]["message"]).content == [
+        ContentReasoning(reasoning="private"), ContentText(text="answer"),
+    ]
+    assert event["output"]["completion"] == "answer"
     assert result.choices[0].message.content == "answer"
-    assert event["metadata"]["adb_experiment.returned_text_stripped"] is True
+    assert event["metadata"] is None
     assert event["output"]["usage"]["input_tokens"] == 3
     assert event["output"]["usage"]["output_tokens"] == 5
 
@@ -106,8 +110,7 @@ def test_producer_metadata_is_snapshotted_and_stays_out_of_request(event_capture
     client._request = request
     client.chat.completions.create(model="sent", messages=[])
     [event] = event_capture.read()
-    assert event["metadata"]["test.context"] == {"phase": "first"}
-    assert "adb_experiment.backend" not in event["metadata"]
+    assert event["metadata"] == {"test.context": {"phase": "first"}}
 
 
 def test_mock_records_effective_parameters(event_capture):
@@ -120,19 +123,68 @@ def test_mock_records_effective_parameters(event_capture):
         "temperature": 0.2,
         "max_completion_tokens": 80,
     }
-    assert event["metadata"] == {}
+    assert event["metadata"] is None
     assert event["retries"] == 0
 
 
 @pytest.mark.parametrize("mock", [True, False])
-@pytest.mark.parametrize("text,returned", [
-    ("answer", "answer"),
-    ("<think>reasoning</think>answer", "answer"),
-    ("<think>truncated", ""),
-    ("</think>answer", "answer"),
-    (" answer ", "answer"),
+@pytest.mark.parametrize("text,content,returned", [
+    ("answer", "answer", "answer"),
+    ("<think>reasoning</think>answer", [ContentReasoning(reasoning="reasoning"), ContentText(text="answer")], "answer"),
+    ("<think>x</think>\n\nAnswer: 5", [ContentReasoning(reasoning="x"), ContentText(text="\n\nAnswer: 5")], "\n\nAnswer: 5"),
+    (" \n<think> x </think>\n ", [ContentReasoning(reasoning=" x "), ContentText(text=" \n\n ")], " \n\n "),
+    ("<think>truncated\n", "<think>truncated\n", "<think>truncated\n"),
+    ('<think mode="deep">reasoning\ncontinued</think>answer',
+     [ContentReasoning(reasoning="reasoning\ncontinued"), ContentText(text="answer")], "answer"),
+    ('<think mode="deep">truncated', '<think mode="deep">truncated', '<think mode="deep">truncated'),
+    ("<think>reasoning</think>", [ContentReasoning(reasoning="reasoning"), ContentText(text="")], ""),
+    ("</think>answer", "</think>answer", "</think>answer"),
+    # Unmatched closing tags remain literal text. The former stripper removed
+    # every closing tag, including these mid-prose and quoted occurrences.
+    pytest.param("Before </think> after", "Before </think> after", "Before </think> after",
+                 id="unmatched-close-mid-prose"),
+    pytest.param("</think>", "</think>", "</think>", id="unmatched-close-only"),
+    pytest.param("answer</think>", "answer</think>", "answer</think>",
+                 id="unmatched-close-at-end"),
+    pytest.param("A</think>B</think>C", "A</think>B</think>C", "A</think>B</think>C",
+                 id="repeated-unmatched-closes"),
+    pytest.param("Use `</think>` to close it.", "Use `</think>` to close it.", "Use `</think>` to close it.",
+                 id="quoted-close-in-prose"),
+    pytest.param("x</think>\n\nAnswer: 5", "x</think>\n\nAnswer: 5", "x</think>\n\nAnswer: 5",
+                 id="implicit-opening-is-not-inferred"),
+    pytest.param("<think>x</think>\n\nAnswer: 5</think>",
+                 [ContentReasoning(reasoning="x"), ContentText(text="\n\nAnswer: 5</think>")],
+                 "\n\nAnswer: 5</think>", id="extra-close-after-reasoning"),
+    pytest.param("Before </think> <think>x</think> after",
+                 [ContentReasoning(reasoning="x"), ContentText(text="Before </think>  after")],
+                 "Before </think>  after", id="unmatched-close-before-valid-block"),
+    pytest.param("Before <think>x</think> after",
+                 [ContentReasoning(reasoning="x"), ContentText(text="Before  after")],
+                 "Before  after", id="text-on-both-sides-of-reasoning"),
+    pytest.param("<think>x</think>answer<think>cutoff",
+                 [ContentReasoning(reasoning="x"), ContentText(text="answer<think>cutoff")],
+                 "answer<think>cutoff", id="closed-then-unclosed-block"),
+    pytest.param("<think>Answer: 5.", "<think>Answer: 5.", "<think>Answer: 5.",
+                 id="unclosed-think-at-start"),
+    pytest.param("\n<think>Answer: 5.", "\n<think>Answer: 5.", "\n<think>Answer: 5.",
+                 id="unclosed-think-after-newline"),
+    pytest.param("Answer: <think>5.", "Answer: <think>5.", "Answer: <think>5.",
+                 id="unclosed-think-in-middle"),
+    pytest.param("Answer: 5.<think>", "Answer: 5.<think>", "Answer: 5.<think>",
+                 id="unclosed-think-at-end"),
+    pytest.param("<thinking>x</thinking>y", "<thinking>x</thinking>y", "<thinking>x</thinking>y",
+                 id="different-tag-stays-literal"),
+    pytest.param("a<think>x</think>b", [ContentReasoning(reasoning="x"), ContentText(text="ab")],
+                 "ab", id="surrounding-text-concatenated"),
+    pytest.param('<think signature="s">x</think>y', [ContentReasoning(reasoning="x"), ContentText(text="y")],
+                 "y", id="think-with-attributes"),
+    pytest.param("<think>x</think>a<think>y</think>b",
+                 [ContentReasoning(reasoning="x"), ContentText(text="a<think>y</think>b")],
+                 "a<think>y</think>b", id="only-first-block-extracted"),
+    (" answer ", " answer ", " answer "),
+    ("Rating: 9\n\n", "Rating: 9\n\n", "Rating: 9\n\n"),
 ])
-def test_stripping_flag_describes_returned_text_without_changing_evidence(event_capture, mock, text, returned):
+def test_reasoning_parts_determine_completion_and_returned_text(event_capture, mock, text, content, returned):
     client, reply = client_and_reply()
     client.is_mock = mock
     client._mock_responder = lambda messages: text
@@ -141,10 +193,31 @@ def test_stripping_flag_describes_returned_text_without_changing_evidence(event_
     result = client.chat.completions.create(model="served", messages=[])
     [event] = event_capture.read()
     assert result.choices[0].message.content == returned
-    assert event["output"]["choices"][0]["message"]["content"] == text
-    assert event["metadata"].get("adb_experiment.returned_text_stripped", False) == (text != returned)
+    assert ChatMessageAssistant.model_validate(event["output"]["choices"][0]["message"]).content == content
+    assert event["output"]["completion"] == ChatMessageAssistant(content=content).text
+    assert event["metadata"] is None
     if not mock:
         assert event["call"]["response"]["choices"][0]["message"]["content"] == text
+
+
+@pytest.mark.parametrize("text", ["answer", " answer ", None])
+def test_provider_reasoning_content_is_preserved_separately(event_capture, text):
+    client, reply = client_and_reply()
+    data = reply.model_dump(mode="json")
+    data["choices"][0]["message"].update(content=text, reasoning_content="Consider the evidence")
+    reply = ChatCompletion.model_validate(data)
+    original = reply.model_dump(mode="json")
+    client._request = lambda kw: reply
+    result = client.chat.completions.create(model="served", messages=[])
+    [event] = event_capture.read()
+    expected = [ContentReasoning(reasoning="Consider the evidence")]
+    if text:
+        expected.append(ContentText(text=text))
+    assert ChatMessageAssistant.model_validate(event["output"]["choices"][0]["message"]).content == expected
+    assert event["output"]["completion"] == (text or "")
+    assert result.choices[0].message.content == (text or "")
+    assert event["call"]["response"] == original
+    assert event["metadata"] is None
 
 
 @pytest.mark.parametrize("thinking", [None, True, False])

@@ -84,4 +84,6 @@ class ChatClientBackend(ModelAPI):
             max_tokens=max_tokens,
             seed=self.seed,
         )
-        return out.choices[0].message.content or ""
+        # Pathfinder anchors prefix removal and stop-pattern matches at position 0;
+        # API providers add leading whitespace that local generation never does.
+        return (out.choices[0].message.content or "").strip()

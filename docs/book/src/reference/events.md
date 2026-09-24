@@ -217,6 +217,13 @@ Read generation settings, including temperature and token limits, from
 `GenerateConfig` is retained only in the raw `inspect.event` record. The
 OpenAI-compatible client converts SDK messages, tools, choices and usage at the
 capture boundary and keeps the full SDK request/response in `call`.
+The first well-formed `<think>…</think>` block in assistant text is reasoning
+(Inspect's rule), provider `reasoning_content` is reasoning, and everything else
+is text, untrimmed. GovSim trims at its Pathfinder backend for parity with local
+generation and anchored parsing.
+`call.response` retains the original SDK response and its unmodified content
+strings. Existing stored messages are read unchanged, including historical
+inline reasoning strings.
 
 File deduplication references (`input_refs`), tracebacks, streaming state (`pending`,
 `working_start`), and Inspect's event identity/timestamps are omitted from the

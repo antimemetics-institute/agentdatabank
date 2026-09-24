@@ -134,7 +134,35 @@ def test_collapse_and_outsider_denominator():
     assert gini(np.array([0, 0])) == 0
 
 
-def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
+@pytest.mark.parametrize("text,completion,returned", [
+    (" answer ", " answer ", "answer"),
+    ("Rating: 9\n\n", "Rating: 9\n\n", "Rating: 9"),
+    ("<think>Choose five.</think>\n\nAnswer: 5.", "\n\nAnswer: 5.", "Answer: 5."),
+    pytest.param("</think>Answer: 5.", "</think>Answer: 5.", "</think>Answer: 5.",
+                 id="lone-close-at-start"),
+    pytest.param("\n</think>Answer: 5.", "\n</think>Answer: 5.", "</think>Answer: 5.",
+                 id="lone-close-after-newline"),
+    pytest.param("Answer: </think>5.", "Answer: </think>5.", "Answer: </think>5.",
+                 id="lone-close-in-middle"),
+    pytest.param("Answer: 5.</think>", "Answer: 5.</think>", "Answer: 5.</think>",
+                 id="lone-close-at-end"),
+    pytest.param("<think>Answer: 5.", "<think>Answer: 5.", "<think>Answer: 5.",
+                 id="unclosed-think-at-start"),
+    pytest.param("\n<think>Answer: 5.", "\n<think>Answer: 5.", "<think>Answer: 5.",
+                 id="unclosed-think-after-newline"),
+    pytest.param("Answer: <think>5.", "Answer: <think>5.", "Answer: <think>5.",
+                 id="unclosed-think-in-middle"),
+    pytest.param("Answer: 5.<think>", "Answer: 5.<think>", "Answer: 5.<think>",
+                 id="unclosed-think-at-end"),
+    pytest.param("<thinking>x</thinking>y", "<thinking>x</thinking>y", "<thinking>x</thinking>y",
+                 id="different-tag-stays-literal"),
+    pytest.param("a<think>x</think>b", "ab", "ab", id="surrounding-text-concatenated"),
+    pytest.param('<think signature="s">x</think>y', "y", "y", id="think-with-attributes"),
+    pytest.param("<think>x</think>a<think>y</think>b", "a<think>y</think>b", "a<think>y</think>b",
+                 id="only-first-block-extracted"),
+    ("", "", ""),
+])
+def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture, text, completion, returned):
     from govsim_adapter.backend import ChatClientBackend
     backend = ChatClientBackend("mock/model", 42, temperature=0.2, max_tokens=64)
     # Replace transport only: exercise the real adapter and shared client's
@@ -142,12 +170,12 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     captured = {}
     def transport(kw):
         captured.update(kw)
-        return _reply("Answer: 5.")
+        return _reply(text)
     backend.client.is_mock = False
     backend.client._request = transport
     chat = [{"role": "user", "content": "test"},
             {"role": "assistant", "content": "Answer: "}]
-    assert backend.request_api(chat, 0.9, 0.75, 8000) == "Answer: 5."
+    assert backend.request_api(chat, 0.9, 0.75, 8000) == returned
     assert captured["model"] == "model"
     assert captured["temperature"] == 0.2
     assert captured["top_p"] == 0.75
@@ -156,7 +184,10 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture):
     assert captured["messages"][-1]["content"] == "Answer:"
     assert chat[-1]["content"] == "Answer: "
     assert backend.client.n_calls == 1
-    assert event_capture.read()[0]["agent"] == "framework"
+    [event] = event_capture.read()
+    assert event["agent"] == "framework"
+    assert event["output"]["completion"] == completion
+    assert event["call"]["response"]["choices"][0]["message"]["content"] == text
 
 
 @pytest.mark.parametrize("name,query,agent", [
@@ -237,6 +268,7 @@ def test_upstream_mock_pipeline(tmp_path, experiment, event_capture, warmed_run)
                       "framework/text_to_triple"}
     assert {e["agent"] for e in calls} <= allowed_agents
     assert all(e["metadata"]["govsim.phase"] and e["metadata"]["govsim.query"] for e in calls)
+    assert all(set(e["metadata"]) == {"govsim.phase", "govsim.query"} for e in calls)
     assert "UnsupportedFieldAttributeWarning" not in proc.stderr
     assert "Defaults list is missing" not in proc.stderr
     assert any(e["type"] == "custom" and e["kind"] == "govsim.state" for e in events)

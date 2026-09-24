@@ -74,9 +74,13 @@ metadata note when absent or null, then to zero if the historical
 `adb_experiment.backend` key is present, without rewriting the stored record.
 Internal SDK attempts become separate calls only if observed individually.
 Completion-time capture cannot preserve
-an operation whose process dies awaiting a response. ChatClient records the
-original response before stripping think blocks from returned text; a changed
-return sets `metadata["adb_experiment.returned_text_stripped"] = true`.
+an operation whose process dies awaiting a response. The first well-formed
+`<think>…</think>` block in assistant text is reasoning (Inspect's rule), provider
+`reasoning_content` is reasoning, and everything else is text, untrimmed.
+GovSim trims at its Pathfinder backend for parity with local generation and
+anchored parsing.
+`call.response` retains the original SDK response, including its unmodified
+content strings.
 
 ## 2. Results
 

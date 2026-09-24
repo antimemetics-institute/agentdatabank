@@ -15,8 +15,10 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
   * run-level generation params apply uniformly: `temperature` overrides (it is the
     run's declared axis), `seed` fills in when the caller passes none, `max_tokens`
     caps whatever the caller asks for;
-  * ``<think>`` blocks are stripped from the content handed back (the event keeps
-    the reply verbatim). Request-side reasoning settings are caller-owned.
+  * inline ``<think>`` blocks and provider reasoning become reasoning content
+    parts; callers receive only text parts, with whitespace preserved.
+    The raw SDK response is unchanged.
+    Request-side reasoning settings are caller-owned.
 
 Needs the ``openai`` SDK — depend on ``adb-experiment[llm]``. Import stays inside this
 module so the base package adds no requirement.
@@ -47,18 +49,6 @@ from adb_events.inspect_chat import (
 )
 
 from .providers import resolve
-
-_THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
-_THINK_OPEN = re.compile(r"<think>.*$", re.DOTALL)  # unclosed (truncated) reasoning
-
-
-def strip_think(text: str) -> str:
-    """Strip a reasoning model's <think> blocks — complete pairs, an unclosed block
-    left by a token cutoff, and any stray closing tag."""
-    text = _THINK.sub("", text)
-    text = _THINK_OPEN.sub("", text)
-    return text.replace("</think>", "").strip()
-
 
 # neutral deterministic lines for the default mock responder — enough variety that
 # loops which detect repetition still make progress
@@ -126,9 +116,14 @@ def _tool_call(call: dict[str, Any]) -> ToolCall:
 
 
 def _assistant_message(message: dict[str, Any]) -> ChatMessageAssistant:
-    content = _content(message.get("content"))
+    content: str | list[Content] = _content(message.get("content"))
     reasoning = message.get("reasoning_content") or message.get("reasoning")
     refusal = message.get("refusal")
+    if isinstance(content, str):
+        # Inspect 0.3.263's first-block grammar, preserving text whitespace.
+        if block := re.search(r"<think([^>]*)>(.*?)</think>", content, re.DOTALL):
+            content = [ContentReasoning(reasoning=block.group(2)),
+                       ContentText(text=content[:block.start()] + content[block.end():])]
     if reasoning or refusal:
         parts: list[Content] = []
         if isinstance(reasoning, str):
@@ -320,12 +315,6 @@ class ChatClient:
         )
         if event.call is not None:
             event.call.response = response.model_dump(mode="json")
-        returned_text = ""
-        if response.choices:
-            original_text = response.choices[0].message.content or ""
-            returned_text = strip_think(original_text)
-            if returned_text != original_text:
-                event.metadata = {**(event.metadata or {}), "adb_experiment.returned_text_stripped": True}
         # Check the first successful response for each client/model in the run.
         # The verifier checks every recorded call, including later alias drift.
         # Serialize capture with the check so overlapping responses cannot race
@@ -339,7 +328,7 @@ class ChatClient:
                     raise ServedModelMismatch(message)
                 self._model_checked = True
         if response.choices:
-            response.choices[0].message.content = returned_text
+            response.choices[0].message.content = event.output.completion
         return response
 
     # -- the mock backend -----------------------------------------------------
@@ -353,18 +342,16 @@ class ChatClient:
         text = self._mock_responder(kw.get("messages") or [])
         event = self._event(kw)
         event.retries = 0
+        message = _assistant_message({"content": text})
         event.output = ModelOutput(
-            model=self.served_model, completion=text,
-            choices=[ChatCompletionChoice(message=ChatMessageAssistant(content=text), stop_reason="stop")],
+            model=self.served_model, completion=message.text,
+            choices=[ChatCompletionChoice(message=message, stop_reason="stop")],
         )
-        returned_text = strip_think(text)
-        if returned_text != text:
-            event.metadata = {**(event.metadata or {}), "adb_experiment.returned_text_stripped": True}
         self._emit(event)
         # the OpenAI response shape consumers read: choices[0].message.content
         return types.SimpleNamespace(
             choices=[types.SimpleNamespace(
-                message=types.SimpleNamespace(role="assistant", content=returned_text),
+                message=types.SimpleNamespace(role="assistant", content=event.output.completion),
                 finish_reason="stop",
             )],
             usage=None,
@@ -384,7 +371,7 @@ class ChatClient:
             # name into evidence or the card's observed served-model set.
             output=ModelOutput(),
             call=ModelCall(request=snapshot),
-            metadata=deepcopy(self.metadata),
+            metadata=deepcopy(self.metadata) or None,
         )
 
     def _emit(self, event: LLMCall) -> None:
