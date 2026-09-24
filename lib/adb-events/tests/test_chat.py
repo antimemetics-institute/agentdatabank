@@ -101,7 +101,7 @@ def test_retries_default_to_none_and_round_trip():
     assert event.retries is None
     assert json.loads(event.model_dump_json(by_alias=True))["retries"] is None
     assert "retries" not in json.loads(event.model_dump_json(by_alias=True, exclude_none=True))
-    for retries in (None, 1, 2):
+    for retries in (None, 0, 1, 2):
         event.retries = retries
         assert event.retries_ == retries
         wire = event.model_dump_json(by_alias=True, exclude_none=True)
@@ -110,7 +110,7 @@ def test_retries_default_to_none_and_round_trip():
         assert "retries_" not in json.loads(wire)
 
 
-@pytest.mark.parametrize("retries", [0, -1, 1.5, "2", True])
+@pytest.mark.parametrize("retries", [-1, 1.5, "2", True])
 def test_retries_reject_invalid_counts(retries):
     payload = json.loads(FIXTURE.read_text())
     payload["retries"] = retries
@@ -124,7 +124,7 @@ def test_retries_reject_invalid_counts(retries):
 @pytest.mark.parametrize("legacy", [3, "3"])
 def test_retries_read_legacy_metadata_without_rewriting_it(legacy):
     payload = json.loads(FIXTURE.read_text())
-    payload["metadata"] = {"adb_experiment.retries": legacy}
+    payload["metadata"] = {"adb_experiment.retries": legacy, "adb_experiment.backend": "openai-chat"}
     event = parse_event(json.dumps(payload))
     assert event.retries == 3
     assert event.retries_ is None
@@ -134,11 +134,29 @@ def test_retries_read_legacy_metadata_without_rewriting_it(legacy):
     assert parse_event(wire).retries == 3
 
 
+@pytest.mark.parametrize("metadata,expected", [
+    ({"adb_experiment.backend": "mock"}, 0),
+    ({"adb_experiment.backend": "openai-chat"}, 0),
+    ({}, None),
+    (None, None),
+])
+def test_legacy_backend_marker_distinguishes_zero_retries_from_unknown(metadata, expected):
+    payload = json.loads(FIXTURE.read_text())
+    payload["metadata"] = metadata
+    event = parse_event(json.dumps(payload))
+    assert event.retries == expected
+    assert event.retries_ is None
+    wire = event.model_dump_json(by_alias=True, exclude_none=True)
+    assert "retries" not in json.loads(wire)
+    assert json.loads(wire).get("metadata") == metadata
+    assert parse_event(wire).retries == expected
+
+
 def test_retries_wire_field_and_setter_take_precedence_over_metadata():
     payload = json.loads(FIXTURE.read_text())
-    payload.update(retries=2, metadata={"adb_experiment.retries": 3})
+    payload.update(retries=0, metadata={"adb_experiment.retries": 3, "adb_experiment.backend": "openai-chat"})
     event = parse_event(json.dumps(payload))
-    assert event.retries == 2
+    assert event.retries == 0
     event.retries = 4
     assert event.retries == event.retries_ == 4
     assert json.loads(event.model_dump_json(by_alias=True))["retries"] == 4

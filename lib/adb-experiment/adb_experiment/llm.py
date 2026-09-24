@@ -287,7 +287,7 @@ class ChatClient:
             finally:
                 retries = self._retry_count.get()
                 self._retry_count.reset(token)
-                event.retries = retries or None
+                event.retries = retries
         except Exception as exc:
             event.error = str(exc)
             event.working_time = time.monotonic() - started
@@ -352,6 +352,7 @@ class ChatClient:
     def _mock_create(self, kw: dict[str, Any]) -> Any:
         text = self._mock_responder(kw.get("messages") or [])
         event = self._event(kw)
+        event.retries = 0
         event.output = ModelOutput(
             model=self.served_model, completion=text,
             choices=[ChatCompletionChoice(message=ChatMessageAssistant(content=text), stop_reason="stop")],

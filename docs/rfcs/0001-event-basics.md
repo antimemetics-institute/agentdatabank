@@ -64,13 +64,14 @@ SDK objects, not HTTP bytes. Tool requests do not establish execution.
 `input_tokens` excludes cached tokens; add cache read/write counts for total
 input usage. Missing usage is unknown.
 
-Failed requests retain available input and error. The optional positive integer
+Failed requests retain available input and error. The optional non-negative integer
 `retries` field records observed HTTP 429/5xx responses, including the final
-rejection on exhaustion. It defaults to `None` and is omitted from JSONL when
-none are observed; connection failures and timeouts are not counted. This
+rejection on exhaustion. Zero means none; it defaults to `None` and is omitted
+from JSONL when unknown. Connection failures and timeouts are not counted. This
 promotes the former `adb_experiment.retries` metadata note to a typed field.
 The Python `retries` property prefers that field and falls back to the historical
-metadata note when absent or null, without rewriting the stored record.
+metadata note when absent or null, then to zero if the historical
+`adb_experiment.backend` key is present, without rewriting the stored record.
 Internal SDK attempts become separate calls only if observed individually.
 Completion-time capture cannot preserve
 an operation whose process dies awaiting a response. ChatClient records the

@@ -58,7 +58,7 @@ def test_capture_matches_effective_sdk_request_and_original_response(event_captu
     event = event_capture.read()[0]
     assert event["call"]["request"] == sent
     assert not {"params", "role", "cache", "instance_id", "repeat"} & event.keys()
-    assert event["retries"] is None
+    assert event["retries"] == 0
     assert event["input"][0]["content"] == "hello"
     assert event["call"]["request"]["temperature"] == 0.2
     assert event["call"]["request"]["max_completion_tokens"] == 80
@@ -121,6 +121,7 @@ def test_mock_records_effective_parameters(event_capture):
         "max_completion_tokens": 80,
     }
     assert event["metadata"] == {}
+    assert event["retries"] == 0
 
 
 @pytest.mark.parametrize("mock", [True, False])

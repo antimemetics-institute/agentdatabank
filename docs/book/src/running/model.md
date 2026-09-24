@@ -126,11 +126,13 @@ distinguish them. See [Azure's 429 troubleshooting table](https://learn.microsof
 
 The shared client permits eight SDK retries, with unchanged SDK timeouts. SDK
 attempts are otherwise invisible: one `llm.call` contains the final outcome.
-When nonzero, the typed `llm.call.retries` field counts HTTP 429 and 5xx
+The typed `llm.call.retries` field counts HTTP 429 and 5xx
 responses during that call, including the last rejected response when retries
 are exhausted. This is the only record of rate limiting; it also includes server
 errors and excludes connection failures, timeouts and other retryable statuses.
-It defaults to `None` when none are observed and is then omitted from JSONL.
+The shared client records zero when none occur. Other producers may leave it
+`None` (omitted from JSONL) when unknown. For historical records, the Python
+property reads the old retry note, or infers zero from the old backend marker.
 Intermediate response bodies and headers are not retained. The card's
 `derived.served_models` lists the endpoint-returned names across the run; the
 runs list shows them beside the requested model when they differ.
