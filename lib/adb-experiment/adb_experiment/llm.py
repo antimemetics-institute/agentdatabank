@@ -383,8 +383,7 @@ class ChatClient:
             # name into evidence or the card's observed served-model set.
             output=ModelOutput(),
             call=ModelCall(request=snapshot),
-            metadata={**deepcopy(self.metadata),
-                      "adb_experiment.backend": "mock" if self.is_mock else "openai-chat"},
+            metadata=deepcopy(self.metadata),
         )
 
     def _emit(self, event: LLMCall) -> None:

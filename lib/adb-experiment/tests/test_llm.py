@@ -107,7 +107,7 @@ def test_producer_metadata_is_snapshotted_and_stays_out_of_request(event_capture
     client.chat.completions.create(model="sent", messages=[])
     [event] = event_capture.read()
     assert event["metadata"]["test.context"] == {"phase": "first"}
-    assert event["metadata"]["adb_experiment.backend"] == "openai-chat"
+    assert "adb_experiment.backend" not in event["metadata"]
 
 
 def test_mock_records_effective_parameters(event_capture):
@@ -120,7 +120,7 @@ def test_mock_records_effective_parameters(event_capture):
         "temperature": 0.2,
         "max_completion_tokens": 80,
     }
-    assert event["metadata"]["adb_experiment.backend"] == "mock"
+    assert event["metadata"] == {}
 
 
 @pytest.mark.parametrize("mock", [True, False])
