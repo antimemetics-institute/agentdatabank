@@ -47,7 +47,7 @@ export function GovSimFigure({ spec }: { spec: TopLevelSpec }) {
       <label>Scenario<select aria-label="Scenario" value={scenario} onChange={event => setScenario(event.target.value)}>{Object.entries(scenarios).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
       <label>Treatment<select aria-label="Treatment" value={treatment} onChange={event => setTreatment(event.target.value)}>{[
         { label: 'Main treatments', keys: ['baseline_concurrent', 'baseline_concurrent_universalization', 'perturbation_no_language', 'perturbation_outsider'] },
-        { label: 'Additional upstream variants', keys: ['perturbation_outsider_universalization', 'baseline_concurrent_paraphrase_1', 'baseline_concurrent_paraphrase_2'] },
+        { label: 'Not reported in the paper', keys: ['perturbation_outsider_universalization'] },
       ].map(group => <optgroup key={group.label} label={group.label}>{group.keys.map(key => <option key={key} value={key}>{treatments[key as keyof typeof treatments]}</option>)}</optgroup>)}</select></label>
       <label>Outcome<select aria-label="Outcome" value={metric} onChange={event => setMetric(event.target.value as Metric)}>{Object.entries(outcomes).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
     </div>
