@@ -39,8 +39,8 @@ def test_every_file_is_scanned(tmp_path, relative):
     ("sk-abcdEFGH1234", "API key"),
     ('"api_key":"sk-12345678"', "API key"),
     (" \tsk-12345678", "API key"),
-    ("Bearer opaque-credential", "Bearer credential"),
-    ("Bearer\nopaque-credential", "Bearer credential"),
+    ("Bearer " + "a" * 24, "Bearer credential"),
+    ("Bearer\n" + "a" * 24, "Bearer credential"),
     ("https://user:password@host.invalid/path", "URL userinfo"),
     ("ftp://user@host.invalid", "URL userinfo"),
     ("http://:password@[::1]:8080", "URL userinfo"),
@@ -94,6 +94,20 @@ def test_clean_run_ignores_empty_secrets_and_noncredential_environment(tmp_path)
 ])
 @pytest.mark.parametrize("suffix", ["txt", "jsonl"])
 def test_key_pattern_does_not_match_inside_prose(tmp_path, text, suffix):
+    (tmp_path / f"output.{suffix}").write_text(
+        json.dumps({"text": text}) if suffix == "jsonl" else text,
+    )
+    assert_run_has_no_secrets(tmp_path, environment={})
+
+
+@pytest.mark.parametrize("text", [
+    "the bearer of long-term consequences",
+    "bearer bonds",
+    "Bearer token",
+    "Bearer abc",
+])
+@pytest.mark.parametrize("suffix", ["txt", "jsonl"])
+def test_bearer_pattern_ignores_prose_and_short_values(tmp_path, text, suffix):
     (tmp_path / f"output.{suffix}").write_text(
         json.dumps({"text": text}) if suffix == "jsonl" else text,
     )

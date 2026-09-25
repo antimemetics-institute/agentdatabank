@@ -18,7 +18,8 @@ _PATTERNS = (
         r"|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}"
         r"|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|hf_[A-Za-z0-9]{30,})"
     )),
-    ("Bearer credential", re.compile(r"Bearer\s+\S+", re.IGNORECASE)),
+    # A bearer token is >=20 token characters; "bearer of ..." is prose.
+    ("Bearer credential", re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE)),
     ("URL userinfo", re.compile(r'(?:[A-Za-z][A-Za-z0-9+.-]*:)?//[^/?#\s<>"\\]*@')),
 )
 
