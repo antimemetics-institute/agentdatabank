@@ -52,26 +52,32 @@ exit 0
 def run_fixture(tmp_path, script=FIXTURE, params=None, manifest=None, on_event=None,
                 credential_env=None, fetch_ref=None, tree_hash=None):
     prog = tmp_path / "exp.sh"
-    # Exercise the real CLI using this test environment's Python.
-    cli = f'adb-emit() {{ {shlex.quote(sys.executable)} -m adb_events.cli "$@"; }}\n'
-    prog.write_text(script.replace("#!/bin/sh\n", "#!/bin/sh\n" + cli, 1))
+    # Mirror runtimeInputs: adb-emit is a PATH executable, not a shell function.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    cli = bin_dir / "adb-emit"
+    cli.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -m adb_events.cli "$@"\n')
+    cli.chmod(cli.stat().st_mode | stat.S_IEXEC)
+    prog.write_text(script)
     prog.chmod(prog.stat().st_mode | stat.S_IEXEC)
     store = RunStore(tmp_path / "home", "cid", "20260916t120000z-012345abcdef",
                      experiment=(manifest or MANIFEST)["name"])
-    result = execute_run(
-        program=str(prog),
-        manifest=MANIFEST if manifest is None else manifest,
-        params=params or {"x": 1},
-        condition_id="cid",
-        source="dirty:test",
-        fetch_ref=fetch_ref,
-        tree_hash=tree_hash,
-        seed=42,
-        store=store,
-        run_id="20260916t120000z-012345abcdef",
-        on_event=on_event,
-        credential_env=credential_env,
-    )
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+        result = execute_run(
+            program=str(prog),
+            manifest=MANIFEST if manifest is None else manifest,
+            params=params or {"x": 1},
+            condition_id="cid",
+            source="dirty:test",
+            fetch_ref=fetch_ref,
+            tree_hash=tree_hash,
+            seed=42,
+            store=store,
+            run_id="20260916t120000z-012345abcdef",
+            on_event=on_event,
+            credential_env=credential_env,
+        )
     envelopes = [
         json.loads(line)
         for f in sorted(store.dir.glob("events.jsonl"))
