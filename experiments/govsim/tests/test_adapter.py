@@ -181,13 +181,39 @@ def test_backend_forwards_sampling_and_caps_tokens(monkeypatch, event_capture, t
     assert captured["top_p"] == 0.75
     assert captured["max_completion_tokens"] == 64
     assert captured["seed"] == 42
-    assert captured["messages"][-1]["content"] == "Answer:"
+    assert captured["messages"][-1] == {"role": "assistant", "content": "Answer:"}
     assert chat[-1]["content"] == "Answer: "
     assert backend.client.n_calls == 1
     [event] = event_capture.read()
     assert event["agent"] == "framework"
     assert event["output"]["completion"] == completion
     assert event["call"]["response"]["choices"][0]["message"]["content"] == text
+
+
+@pytest.mark.parametrize("echo_prefix", [True, False])
+def test_mistral_prefill_response_parses_through_pathfinder(echo_prefix, event_capture):
+    from pathfinder import assistant, gen, select, user
+    from govsim_adapter.backend import ChatClientBackend
+
+    captured = []
+    def respond(messages):
+        captured.append(messages)
+        return ("Answer: " if echo_prefix else "") + "We should share.\nRating: 5"
+
+    backend = ChatClientBackend("mock/mistral-medium-3-5", 42, mock_responder=respond)
+    lm = backend
+    with user():
+        lm += "Give a reason and a rating."
+    with assistant():
+        lm += "Answer: "
+        lm += gen(name="reason", stop_regex=r"\.")
+        lm += ".\nRating: "
+        lm += select([str(i) for i in range(1, 11)], name="rating")
+    assert lm["reason"].strip() == "We should share"
+    assert lm["rating"] == "5"
+    assert len(captured) == 1  # gen and select share one completion buffer
+    assert captured[0][-1] == {"role": "assistant", "content": "Answer:", "prefix": True}
+    assert "prefix" not in lm.chat[-1]
 
 
 @pytest.mark.parametrize("name,query,agent", [

@@ -9,6 +9,7 @@ from openai.types.chat import ChatCompletion
 
 from adb_events.inspect_chat import ChatMessageAssistant, ContentReasoning, ContentText
 from adb_experiment.llm import ChatClient
+from adb_providers import PROVIDERS
 
 
 def client_and_reply():
@@ -125,6 +126,76 @@ def test_mock_records_effective_parameters(event_capture):
     }
     assert event["metadata"] is None
     assert event["retries"] == 0
+
+
+@pytest.mark.parametrize("model_id,needs_prefix", [
+    ("azure/mistral-medium-3-5", True),
+    ("azure/codestral-2501", True),
+    ("azure/Ministral-3B", True),
+    ("azureai/Mistral-large", True),
+    ("mistral/mistral-small-latest", True),
+    ("mistral/codestral-latest", True),
+    ("azure/gpt-4.1", False),
+    ("anthropic/claude-sonnet-4-5", False),
+])
+@pytest.mark.parametrize("last_role", ["assistant", "user"])
+@pytest.mark.parametrize("mock", [False, True])
+def test_mistral_prefill_flag_on_wire_and_mock(monkeypatch, event_capture, model_id, needs_prefix, last_role, mock):
+    import httpx
+    import openai
+
+    provider_name, served_model = model_id.split("/", 1)
+    provider = PROVIDERS[provider_name]
+    monkeypatch.setenv(provider.api_key.name, "test-key")
+    monkeypatch.setenv(provider.base_url.name, "https://example.invalid/v1")
+    captured = []
+    def transport(request):
+        body = json.loads(request.content)
+        captured.append(body)
+        _, reply = client_and_reply()
+        reply.model = body["model"]
+        reply.choices[0].message.content = "Answer: 5"
+        return httpx.Response(200, json=reply.model_dump(mode="json"))
+
+    # Keep the real SDK serializer: only its HTTP transport is replaced.
+    http_client = openai.DefaultHttpxClient
+    monkeypatch.setattr(openai, "DefaultHttpxClient", lambda **kw: http_client(
+        transport=httpx.MockTransport(transport), **kw,
+    ))
+    def respond(messages):
+        captured.append({"messages": deepcopy(messages)})
+        return "Answer: 5"
+
+    client = ChatClient("mock/" + served_model if mock else model_id,
+                        seed=42, max_tokens=64, mock_responder=respond)
+    chat = [{"role": "user", "content": "Earlier question "},
+            {"role": "assistant", "content": "Earlier answer "},
+            {"role": "user", "content": "Choose a number \n"}]
+    if last_role == "assistant":
+        chat.append({"role": "assistant", "content": " Answer: \n\t"})
+    original = deepcopy(chat)
+    out = client.chat.completions.create(model=served_model, messages=chat, max_tokens=64)
+    assert out.choices[0].message.content == "Answer: 5"
+    [body] = captured
+    expected = deepcopy(original)
+    if last_role == "assistant" and needs_prefix:
+        expected[-1]["prefix"] = True
+    assert body["messages"] == expected
+    assert "prefix" not in body
+    assert chat == original
+    [event] = event_capture.read()
+    assert event["call"]["request"]["messages"] == expected
+
+
+@pytest.mark.parametrize("content", [None, [{"type": "text", "text": "Answer: "}]])
+def test_prefill_keeps_non_string_content(event_capture, content):
+    client = ChatClient("mock/mistral-medium-3-5", mock_responder=lambda _: "5")
+    chat = [{"role": "assistant", "content": content}]
+    original = deepcopy(chat)
+    client.chat.completions.create(model=client.served_model, messages=chat)
+    [event] = event_capture.read()
+    assert event["call"]["request"]["messages"] == [original[0] | {"prefix": True}]
+    assert chat == original
 
 
 @pytest.mark.parametrize("mock", [True, False])

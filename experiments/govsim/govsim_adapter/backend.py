@@ -47,9 +47,8 @@ class ChatClientBackend(ModelAPI):
         max_tokens: int | None = None,
         mock_responder: Callable[[list[dict]], str] | None = None,
     ) -> None:
-        # api_assistant=True: OpenAI-style trailing-assistant continuation — fine
-        # for the mock and OpenAI-compatible mounts. A server that rejects a
-        # trailing assistant message would need api_assistant=False (not built).
+        # api_assistant=True: upstream's assistant prefills are sent as a trailing
+        # assistant message; ChatClient adds Mistral's prefix flag where required.
         super().__init__(model_id, seed, api_assistant=True)
         # The upstream wrapper replaces top_p=None with 1.0 (and select uses
         # fixed sampling values). Honor explicit run-level omission here.

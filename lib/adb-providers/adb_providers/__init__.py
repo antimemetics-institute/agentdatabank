@@ -14,6 +14,7 @@ saved-run audits use the same interpretation of routing prefixes.
 from __future__ import annotations
 
 import tomllib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -92,3 +93,12 @@ def served_model_matches(requested: str, served: str) -> bool:
     """Allow case differences and a snapshot suffix when resolving an alias."""
     name = requested_model_name(requested)
     return bool(name) and served.casefold().startswith(name.casefold())
+
+
+def model_family(served_model: str) -> str | None:
+    """Recognize a model family by served name, independently of routing prefixes.
+    Only families with wire-level quirks are named; everything else is None."""
+    name = served_model.casefold()
+    if re.match(r"(mistral|ministral|codestral|devstral|magistral|pixtral|voxtral)", name):
+        return "mistral"
+    return None

@@ -20,6 +20,11 @@ frameworks actually use, ``.chat.completions.create``. In exchange:
     The raw SDK response is unchanged.
     Request-side reasoning settings are caller-owned.
 
+A trailing assistant message is a prefill to continue. Mistral's serving API
+only accepts one flagged ``prefix: True`` (message-level, not a generation
+parameter), so the client adds the flag for the Mistral family before recording
+and sending; other providers receive the message as given.
+
 Needs the ``openai`` SDK — depend on ``adb-experiment[llm]``. Import stays inside this
 module so the base package adds no requirement.
 """
@@ -40,7 +45,7 @@ from typing import Any, cast
 from pydantic import JsonValue
 
 from adb_events import LLMCall, Log, emit
-from adb_providers import served_model_matches
+from adb_providers import model_family, served_model_matches
 from adb_events.inspect_chat import (
     ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageTool,
     ChatMessageUser, Content, ContentAudio, ContentData, ContentDocument,
@@ -260,6 +265,10 @@ class ChatClient:
     # -- the instrumented create ---------------------------------------------
 
     def _create(self, **kw: Any) -> Any:
+        messages = kw.get("messages")
+        if (messages and messages[-1]["role"] == "assistant"
+                and model_family(self.served_model) == "mistral"):
+            kw["messages"] = [*messages[:-1], {**messages[-1], "prefix": True}]
         # the run's declared generation params, applied uniformly
         if self._temperature is not None:
             kw["temperature"] = self._temperature
