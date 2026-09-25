@@ -1841,6 +1841,20 @@
           ],
           "default": null,
           "title": "Agent"
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Observed HTTP 429/5xx responses, including the final rejection on exhaustion; zero when none, absent when unknown.",
+          "title": "Retries"
         }
       },
       "required": [
