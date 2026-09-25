@@ -104,6 +104,7 @@ let
   defaultSharedSrcs = [
     ../../lib/adb-events/adb_events
     ../../lib/adb-experiment/adb_experiment
+    ../../lib/adb-providers/adb_providers
   ];
 in
 {
